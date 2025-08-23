@@ -11,7 +11,7 @@ export default function DocumentationPage() {
         <div className="text-center mb-12">
           <div className="flex items-center justify-center mb-6">
             <Building2 className="h-12 w-12 text-blue-600 mr-4" />
-            <h1 className="text-4xl font-bold text-gray-900">ProLeveler Documentation</h1>
+            <h1 className="text-4xl font-bold text-gray-900">Levelr Documentation</h1>
           </div>
           <p className="text-xl text-gray-600 max-w-3xl mx-auto">
             Comprehensive guide to construction bid analysis, CSI benchmarking, and professional reporting
@@ -27,7 +27,7 @@ export default function DocumentationPage() {
           
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-3">What ProLeveler Does</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-3">What Levelr Does</h3>
               <ul className="space-y-2 text-gray-700">
                 <li className="flex items-start">
                   <div className="w-2 h-2 bg-blue-600 rounded-full mt-2 mr-3 flex-shrink-0"></div>
@@ -82,11 +82,11 @@ export default function DocumentationPage() {
           <div className="mb-6">
             <p className="text-gray-700 mb-4">
               The Construction Specifications Institute (CSI) provides standardized divisions for organizing construction work. 
-              ProLeveler uses <strong>MasterFormat 2018</strong> (50-division system) for accurate modern classification and maps bid costs to these divisions for industry benchmarking.
+              Levelr uses <strong>MasterFormat 2018</strong> (50-division system) for accurate modern classification and maps bid costs to these divisions for industry benchmarking.
             </p>
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
               <p className="text-sm text-blue-800">
-                <strong>Note:</strong> ProLeveler uses the current MasterFormat 2018 standard, which separates mechanical systems into distinct divisions: 
+                <strong>Note:</strong> Levelr uses the current MasterFormat 2018 standard, which separates mechanical systems into distinct divisions: 
                 Plumbing (22), HVAC (23), and Electrical (26) for more precise cost analysis.
               </p>
             </div>
@@ -384,7 +384,7 @@ export default function DocumentationPage() {
         <section className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg shadow-md p-8 text-white">
           <h2 className="text-2xl font-bold mb-4">Ready to Start Analyzing?</h2>
           <p className="text-blue-100 mb-6">
-            Upload your construction bid documents and let ProLeveler provide comprehensive analysis and professional reports.
+            Upload your construction bid documents and let Levelr provide comprehensive analysis and professional reports.
           </p>
           <div className="flex flex-col sm:flex-row gap-4">
             <Link 

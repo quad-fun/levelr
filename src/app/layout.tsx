@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "ProLeveler - Construction Bid Analysis Platform",
+  title: "Levelr - Construction Bid Analysis Platform",
   description: "Secure construction bid analysis platform with CSI division benchmarking and market variance analysis",
 };
 

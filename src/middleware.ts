@@ -16,7 +16,7 @@ export function middleware(request: NextRequest) {
     return new NextResponse('Authentication required', {
       status: 401,
       headers: {
-        'WWW-Authenticate': 'Basic realm="ProLeveler MVP"',
+        'WWW-Authenticate': 'Basic realm="Levelr MVP"',
       },
     });
   }
@@ -37,7 +37,7 @@ export function middleware(request: NextRequest) {
     return new NextResponse('Invalid credentials', {
       status: 401,
       headers: {
-        'WWW-Authenticate': 'Basic realm="ProLeveler MVP"',
+        'WWW-Authenticate': 'Basic realm="Levelr MVP"',
       },
     });
   }

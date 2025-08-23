@@ -33,7 +33,7 @@ export default function PricingPage() {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <Link href="/" className="text-2xl font-bold text-blue-600">
-                ProLeveler
+                Levelr
               </Link>
             </div>
             <nav className="flex items-center space-x-8">
@@ -191,7 +191,7 @@ export default function PricingPage() {
             <div className="space-y-6">
               <div className="text-center">
                 <div className="text-4xl font-bold text-blue-600 mb-2">$2.3M</div>
-                <p className="text-gray-700">Average cost overrun ProLeveler helps prevent</p>
+                <p className="text-gray-700">Average cost overrun Levelr helps prevent</p>
               </div>
               
               <div className="text-center">

@@ -90,7 +90,7 @@ export default function AnalyzePage() {
           <div className="flex justify-between items-center py-6">
             <div className="flex items-center">
               <div className="text-2xl font-bold text-blue-600">
-                ProLeveler
+                Levelr
               </div>
             </div>
             <div className="flex items-center space-x-4">

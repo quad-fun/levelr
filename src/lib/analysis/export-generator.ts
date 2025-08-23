@@ -39,7 +39,7 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
-  doc.text('ProLeveler Analysis Report', margin, 25);
+  doc.text('Levelr Analysis Report', margin, 25);
   
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
@@ -592,18 +592,18 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
     
     doc.setFontSize(9);
     doc.setTextColor(100, 100, 100);
-    doc.text('ProLeveler Analysis Report - Confidential', margin, pageHeight - 15);
+    doc.text('Levelr Analysis Report - Confidential', margin, pageHeight - 15);
     doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin - 30, pageHeight - 15);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, margin, pageHeight - 8);
     
     // Branding
-    doc.text('Powered by ProLeveler Platform | MasterFormat 2018 Compliant', pageWidth - margin - 120, pageHeight - 8);
+    doc.text('Powered by Levelr Platform | MasterFormat 2018 Compliant', pageWidth - margin - 120, pageHeight - 8);
   }
 
   // Generate filename and save
   const sanitizedContractorName = analysis.contractor_name.replace(/[^a-zA-Z0-9]/g, '_');
   const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const fileName = `ProLeveler_Analysis_${sanitizedContractorName}_${timestamp}.pdf`;
+  const fileName = `Levelr_Analysis_${sanitizedContractorName}_${timestamp}.pdf`;
   
   doc.save(fileName);
 }
@@ -1408,7 +1408,7 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   
   // Save the file with timestamp
   const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const fileName = `ProLeveler_Leveling_Analysis_${timestamp}.xlsx`;
+  const fileName = `Levelr_Leveling_Analysis_${timestamp}.xlsx`;
   XLSX.writeFile(wb, fileName);
 }
 

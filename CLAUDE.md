@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-ProLeveler is a **secure, browser-only real estate document analysis platform** that processes construction bid documents locally with no server storage. It uses Claude AI for analysis while keeping all data in the user's browser for maximum security.
+Levelr is a **secure, browser-only real estate document analysis platform** that processes construction bid documents locally with no server storage. It uses Claude AI for analysis while keeping all data in the user's browser for maximum security.
 
 **Primary Message**: "Prevent million-dollar bid mistakes with AI-powered risk analysis"
 **Security Promise**: "Documents encrypted during AI analysis, immediately deleted after processing"
