@@ -1,0 +1,29 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { del } from '@vercel/blob';
+
+export async function POST(request: NextRequest) {
+  try {
+    const { blobUrl } = await request.json();
+    
+    if (!blobUrl) {
+      return NextResponse.json(
+        { error: 'Blob URL is required' },
+        { status: 400 }
+      );
+    }
+
+    // Delete the blob from storage
+    await del(blobUrl);
+    
+    console.log('Blob deleted:', blobUrl);
+
+    return NextResponse.json({ success: true });
+
+  } catch (error) {
+    console.error('Blob deletion error:', error);
+    return NextResponse.json(
+      { error: 'Failed to delete temporary file' },
+      { status: 500 }
+    );
+  }
+}

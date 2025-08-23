@@ -1,0 +1,38 @@
+{
+  "functions": {
+    "src/app/api/claude/route.ts": {
+      "maxDuration": 300,
+      "memory": 3008
+    },
+    "src/app/api/stripe/checkout/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/blob/upload/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/blob/delete/route.ts": {
+      "maxDuration": 30,
+      "memory": 512
+    }
+  },
+  "build": {
+    "env": {
+      "NEXT_PUBLIC_ENABLE_AUTH": "false",
+      "NEXT_PUBLIC_ENABLE_USAGE_LIMITS": "false",
+      "NEXT_PUBLIC_ENABLE_PAYMENTS": "false",
+      "NEXT_PUBLIC_ENABLE_TEAMS": "false"
+    }
+  },
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "X-Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://api.anthropic.com https://api.stripe.com;"
+        }
+      ]
+    }
+  ]
+}
