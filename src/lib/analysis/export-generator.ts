@@ -1747,7 +1747,7 @@ function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) 
   }
   
   // Set up merges for header rows
-  const merges = [];
+  const merges: XLSX.Range[] = [];
   
   // Row 1 merges (bidder names across 3 columns)
   let mergeCol = 1;
