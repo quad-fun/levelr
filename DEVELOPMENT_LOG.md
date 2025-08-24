@@ -1,4 +1,4 @@
-# ProLeveler Development Log
+# Levelr Development Log
 
 ## Overview
 Browser-only real estate document analysis platform with Claude AI integration for CSI division mapping and bid leveling.
@@ -31,21 +31,39 @@ Browser-only real estate document analysis platform with Claude AI integration f
 - CSI division comparison matrix
 - Professional Excel/PDF export with multiple analysis sheets
 
+### 5. Enhanced Leveling Exports (December 2024)
+**Major Improvements**:
+- **Professional Leveled Comparison Sheet**: New primary export with side-by-side bid comparison
+- **Complete Cost Breakdown**: Shows all CSI divisions with cost, cost/SF, and intelligent comments
+- **Markup Transparency**: Added CM Fee, Insurance, Bond, General Conditions rows between totals
+- **Soft Costs Separation**: Distinguishes administrative costs from construction items
+- **Legacy Division Cleanup**: Removed confusing 15/16 divisions, uses modern MasterFormat 2018
+- **Smart Comments**: Contextual explanations (e.g., "Excluded per bid (Security)", "5.23% of Trades Subtotal")
+
+**Technical Enhancements**:
+- Added `gross_sqft` and `proposal_date` fields for cost/SF calculations
+- Created `classifyItemType()` function for soft costs identification
+- Enhanced Claude prompt to separate soft costs, CSI divisions, and uncategorized items
+- Professional Excel formatting with freeze panes, merged headers, currency formatting
+- Comprehensive Grand Total: Trades + Overhead + Soft Costs + Uncategorized
+
 ## Current Architecture
 
 ### Core Components
 - **Document Processing**: `src/lib/document-processor.ts` - Handles file type detection and content extraction
-- **Claude Integration**: `src/lib/claude.ts` - AI analysis with proper document/image handling
+- **Claude Integration**: `src/lib/claude.ts` - AI analysis with enhanced soft costs separation
 - **Storage**: Browser-only localStorage with `src/lib/storage.ts`
-- **CSI Analysis**: `src/lib/analysis/csi-analyzer.ts` - Construction division mapping
+- **CSI Analysis**: `src/lib/analysis/csi-analyzer.ts` - MasterFormat 2018 division mapping with soft costs classification
 - **Risk Assessment**: `src/lib/analysis/risk-analyzer.ts` - Project risk calculation
-- **Export Generation**: `src/lib/analysis/export-generator.ts` - Professional PDF/Excel reports
+- **Export Generation**: `src/lib/analysis/export-generator.ts` - Professional leveled comparison sheets and analysis reports
 
 ### Key Features
 - **Secure**: Browser-only, no server-side storage
 - **Multi-format**: Excel, PDF, images, text support
-- **Professional Reports**: Client-ready exports with market analysis
-- **Real-time Analysis**: Instant CSI division mapping and risk assessment
+- **Professional Leveled Comparison**: Side-by-side bid analysis with cost/SF calculations
+- **Intelligent Cost Classification**: Separates CSI divisions, soft costs, and uncategorized items
+- **Complete Transparency**: Shows markup breakdown (CM fees, insurance, bonds) with percentages
+- **Real-time Analysis**: Instant MasterFormat 2018 division mapping and risk assessment
 
 ## Technical Decisions
 
@@ -81,7 +99,25 @@ Browser-only real estate document analysis platform with Claude AI integration f
 - 5 bid maximum for leveling comparison
 - Browser localStorage dependency for persistence
 
+## Recent Development Activity
+
+### Enhanced Leveling Branch (December 2024)
+**Branch**: `enhanced-leveling`  
+**Status**: Active development  
+**Key Commits**:
+- Added leveling export foundation with gross_sqft and proposal_date fields
+- Implemented professional leveled comparison sheet with 3-row headers
+- Fixed legacy division duplicates (removed 15/16, kept modern 21-28)
+- Added markup transparency with CM Fee, Insurance, Bond breakdown
+- Implemented soft costs separation from uncategorized items
+- Enhanced Claude prompt for three-way cost classification
+
+### Known Issues
+- **Soft costs data**: New analyses needed to populate itemized soft costs
+- **Subcontractor null values**: Some legacy data may have null total_amount causing toLocaleString() errors
+- **Cost/SF calculations**: Require gross_sqft field to be extracted by Claude
+
 ## Deployment Status
-✅ Live: https://powerbid-j3xexehh9-quad-funs-projects.vercel.app  
-✅ GitHub: https://github.com/quad-fun/powerbid  
-✅ All features operational
+✅ Main: https://levelr-quad-funs-projects.vercel.app  
+✅ GitHub: https://github.com/quad-fun/levelr  
+✅ Enhanced leveling features in development
