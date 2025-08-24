@@ -392,6 +392,48 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
         </div>
       </div>
 
+      {/* Soft Costs Section */}
+      {analysis.softCosts && analysis.softCosts.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <Building className="h-5 w-5 text-purple-600 mr-2" />
+              <h3 className="text-xl font-bold text-gray-900">
+                Soft Costs - ${(analysis.softCostsTotal || 0).toLocaleString()}
+                <span className="text-sm font-normal text-gray-600 ml-2">
+                  ({((analysis.softCostsTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of total)
+                </span>
+              </h3>
+            </div>
+          </div>
+
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+            <p className="text-sm text-purple-800">
+              <strong>Soft Costs:</strong> Administrative, professional, and non-construction expenses including design fees, permits, bonds, insurance, and professional services.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <h4 className="font-semibold text-gray-900 border-b border-gray-200 pb-2">
+              Itemized Soft Costs
+            </h4>
+            {analysis.softCosts.map((item, index) => (
+              <div key={index} className="flex justify-between items-center p-3 bg-purple-50 rounded-lg">
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900">{item.description}</p>
+                </div>
+                <div className="text-right ml-4">
+                  <p className="font-semibold text-gray-900">${item.cost.toLocaleString()}</p>
+                  <p className="text-sm text-gray-600">
+                    {(item.cost / analysis.total_amount * 100).toFixed(1)}%
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Project Overhead Section */}
       {analysis.project_overhead && (
         <div className="bg-white rounded-lg shadow-md p-6">

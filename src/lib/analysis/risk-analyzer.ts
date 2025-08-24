@@ -67,11 +67,23 @@ export function calculateProjectRisk(
     }
   });
   
-  // Calculate coverage for more nuanced risk assessment
+  // Calculate comprehensive coverage including soft costs
   const totalIdentifiedCost = Object.values(categories).reduce((sum, cost) => sum + cost, 0);
-  const coveragePercentage = (totalIdentifiedCost / totalCost) * 100;
+  const softCostsTotal = analysisResult?.softCostsTotal || 0;
+  const totalCoveredCost = totalIdentifiedCost + softCostsTotal + uncategorizedTotal;
+  const coveragePercentage = (totalCoveredCost / totalCost) * 100;
   const uncategorizedPercentage = (uncategorizedTotal / totalCost) * 100;
   
+  // Soft costs validation
+  const softCostsPercentage = (softCostsTotal / totalCost) * 100;
+  if (softCostsPercentage > 20) {
+    riskScore += (softCostsPercentage - 20) * 2;
+    risks.push(`High soft costs: ${softCostsPercentage.toFixed(1)}% may indicate excessive overhead`);
+  } else if (softCostsPercentage < 2 && totalCost > 1000000) {
+    riskScore += 10;
+    risks.push(`Low soft costs: ${softCostsPercentage.toFixed(1)}% may indicate missing professional fees`);
+  }
+
   // Risk assessment for uncategorized costs
   if (uncategorizedPercentage > 25) {
     riskScore += (uncategorizedPercentage - 25) * 1.5;
@@ -81,10 +93,10 @@ export function calculateProjectRisk(
     risks.push(`Moderate uncategorized costs: ${uncategorizedPercentage.toFixed(1)}% should be reviewed for proper classification`);
   }
   
-  // Only penalize if coverage is very low AND major divisions are missing
-  if (coveragePercentage < 70) {
-    riskScore += (70 - coveragePercentage) * 0.5; // Reduced penalty
-    risks.push(`Incomplete cost breakdown: ${coveragePercentage.toFixed(1)}% of costs categorized`);
+  // Coverage risk assessment
+  if (coveragePercentage < 85) {
+    riskScore += (85 - coveragePercentage) * 1.5;
+    risks.push(`Low cost coverage: ${coveragePercentage.toFixed(1)}% may indicate incomplete extraction`);
   } else if (coveragePercentage >= 90) {
     // Bonus for good coverage
     riskScore = Math.max(0, riskScore - 10);

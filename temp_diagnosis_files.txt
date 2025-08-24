@@ -1,0 +1,4550 @@
+=== src/app/api/claude/route.ts ===
+import { NextRequest, NextResponse } from 'next/server';
+import { del } from '@vercel/blob';
+
+// Route configuration for Vercel Pro large file handling
+export const config = {
+  maxDuration: 300,
+  runtime: 'nodejs18.x'  // Required for large request bodies
+};
+
+const isDev = process.env.NODE_ENV !== 'production';
+
+function safeLog(message: string, data?: unknown) {
+  if (isDev) {
+    if (data !== undefined) {
+      console.log(message, typeof data === 'string' && data.length > 1000 
+        ? data.substring(0, 1000) + '...' 
+        : data);
+    } else {
+      console.log(message);
+    }
+  }
+}
+
+export async function POST(request: NextRequest) {
+  let blobUrl: string | null = null;
+  
+  try {
+    // Log request size for debugging
+    const contentLength = request.headers.get('content-length');
+    safeLog('Request size:', contentLength ? `${(parseInt(contentLength) / 1024 / 1024).toFixed(1)}MB` : 'unknown');
+    
+    // Use Vercel Pro 100MB limit
+    if (contentLength && parseInt(contentLength) > 100 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: 'File too large. Please use files smaller than 75MB.' },
+        { status: 413 }
+      );
+    }
+
+    // Parse the request body
+    let body;
+    try {
+      const chunks = [];
+      const reader = request.body?.getReader();
+      
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          chunks.push(value);
+        }
+      }
+      
+      const bodyBuffer = Buffer.concat(chunks);
+      const bodyText = bodyBuffer.toString();
+      body = JSON.parse(bodyText);
+      
+      safeLog('Manual parsing successful, body size:', `${Math.round(bodyBuffer.length / (1024 * 1024))}MB`);
+    } catch (error) {
+      console.error('Body parsing error:', error);
+      return NextResponse.json(
+        { 
+          error: 'Invalid request format. Please try uploading your file again.',
+          details: error instanceof Error ? error.message : 'Unknown parsing error'
+        },
+        { status: 400 }
+      );
+    }
+
+    const { processedDoc } = body;
+
+    if (!processedDoc || !processedDoc.content) {
+      return NextResponse.json(
+        { error: 'Processed document is required. Please select a file to upload.' },
+        { status: 400 }
+      );
+    }
+
+    let finalProcessedDoc = processedDoc;
+
+    // Handle blob storage files
+    if (processedDoc.useBlobStorage) {
+      safeLog('Processing blob storage file:', processedDoc.content);
+      blobUrl = processedDoc.content;
+      
+      try {
+        let blobResponse: Response | null = null;
+        let retryCount = 0;
+        const maxRetries = 3;
+        
+        while (retryCount < maxRetries) {
+          safeLog(`Fetching blob content (attempt ${retryCount + 1}/${maxRetries}):`, processedDoc.content);
+          blobResponse = await fetch(processedDoc.content);
+          
+          if (blobResponse.ok) {
+            break;
+          }
+          
+          retryCount++;
+          if (retryCount < maxRetries) {
+            safeLog(`Blob fetch failed with ${blobResponse.status}, retrying in 2s...`);
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+        
+        if (!blobResponse || !blobResponse.ok) {
+          throw new Error(`Failed to fetch blob after ${maxRetries} attempts: ${blobResponse?.status || 'unknown'}`);
+        }
+        
+        const arrayBuffer = await blobResponse.arrayBuffer();
+        const buffer = Buffer.from(arrayBuffer);
+        const base64Content = buffer.toString('base64');
+        
+        finalProcessedDoc = {
+          ...processedDoc,
+          content: base64Content,
+          isBase64: true,
+          useBlobStorage: false
+        };
+        
+        safeLog('Blob content fetched successfully:', `${Math.round(buffer.length / (1024 * 1024))}MB`);
+        
+      } catch (error) {
+        console.error('Failed to fetch blob content:', error);
+        return NextResponse.json(
+          { error: 'Failed to retrieve uploaded file. The file may still be processing. Please wait a moment and try again.' },
+          { status: 500 }
+        );
+      }
+    } else {
+      if (processedDoc.content.length > 90 * 1024 * 1024) {
+        return NextResponse.json(
+          { error: 'File content too large. Please use a file smaller than 70MB.' },
+          { status: 413 }
+        );
+      }
+      
+      safeLog('Processed document size:', `${Math.round(processedDoc.content.length / (1024 * 1024))}MB`);
+    }
+
+    // Check API key
+    if (!process.env.CLAUDE_API_KEY) {
+      console.error('Missing CLAUDE_API_KEY environment variable');
+      return NextResponse.json(
+        { error: 'Service temporarily unavailable. Please try again later.' },
+        { status: 503 }
+      );
+    }
+
+    // Analyze document with Claude - call our new direct analysis function
+    safeLog('Analyzing document:', `${finalProcessedDoc.fileName} (Type: ${finalProcessedDoc.fileType})`);
+    const analysis = await analyzeDocumentDirectly(finalProcessedDoc);
+
+    // Clean up blob storage if used
+    if (blobUrl) {
+      try {
+        await del(blobUrl);
+        safeLog('Blob cleanup completed:', blobUrl);
+      } catch (cleanupError) {
+        console.error('Blob cleanup failed (non-critical):', cleanupError);
+      }
+    }
+
+    return NextResponse.json({ analysis });
+    
+  } catch (error) {
+    // Clean up blob storage if used (even in error cases)
+    if (typeof blobUrl === 'string' && blobUrl) {
+      try {
+        await del(blobUrl);
+        safeLog('Blob cleanup completed after error:', blobUrl);
+      } catch (cleanupError) {
+        console.error('Blob cleanup failed after error (non-critical):', cleanupError);
+      }
+    }
+
+    console.error('Claude API route error:', {
+      message: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack?.substring(0, 500) : 'No stack trace',
+      type: typeof error
+    });
+    
+    // Better error handling
+    if (error instanceof Error) {
+      if (error.message?.includes('PayloadTooLargeError') || error.message?.includes('413')) {
+        return NextResponse.json(
+          { error: 'File too large for processing. Please use a file smaller than 100MB.' },
+          { status: 413 }
+        );
+      }
+      if (error.message.includes('rate limit')) {
+        return NextResponse.json(
+          { error: 'Too many requests. Please wait a moment and try again.' },
+          { status: 429 }
+        );
+      }
+      if (error.message.includes('context length')) {
+        return NextResponse.json(
+          { error: 'Document too long for analysis. Please use a shorter document.' },
+          { status: 413 }
+        );
+      }
+      if (error.message.includes('authentication') || error.message.includes('API key')) {
+        return NextResponse.json(
+          { error: 'Service configuration error. Please contact support.' },
+          { status: 503 }
+        );
+      }
+      if (error.message.includes('JSON') || error.message.includes('parse')) {
+        return NextResponse.json(
+          { 
+            error: 'Analysis response format error. Please try again.',
+            details: isDev ? error.message : undefined
+          },
+          { status: 502 }
+        );
+      }
+    }
+    
+    return NextResponse.json(
+      { 
+        error: 'Analysis failed. Please try again or contact support if the problem persists.',
+        details: isDev && error instanceof Error ? error.message : undefined
+      },
+      { status: 500 }
+    );
+  }
+}
+
+// Direct Claude API integration with proper error handling
+async function analyzeDocumentDirectly(processedDoc: {
+  fileName: string;
+  fileType: string;
+  content: string;
+  isBase64?: boolean;
+}) {
+  const prompt = `
+You are analyzing a construction bid document. Extract ALL cost information and map to MasterFormat 2018 CSI divisions.
+
+CRITICAL: Use MasterFormat 2018 (50-Division System) - NOT the old 16-division format!
+
+FACILITY CONSTRUCTION DIVISIONS (01-14):
+01 - General Requirements (project management, permits, supervision, overhead, bonds)
+02 - Existing Conditions (demolition, site clearing, hazmat, abatement)  
+03 - Concrete (ALL structural work, foundations, construction, assembly, concrete, precast)
+04 - Masonry (brick, block, stone masonry work)
+05 - Metals (structural steel, metal work, steel framing)
+06 - Wood, Plastics, and Composites (carpentry, framing, millwork)
+07 - Thermal and Moisture Protection (roofing, waterproofing, insulation)
+08 - Openings (doors, windows, glazing)
+09 - Finishes (flooring, paint, ceilings, interior finishes)
+10 - Specialties (toilet accessories, signage, partitions)
+11 - Equipment (kitchen equipment, lab equipment, built-in appliances)
+12 - Furnishings (furniture, window treatments)
+13 - Special Construction (pre-engineered structures, pools)
+14 - Conveying Equipment (elevators, escalators)
+
+FACILITY SERVICES DIVISIONS (21-28):
+21 - Fire Suppression (sprinkler systems, fire protection, standpipes)
+22 - Plumbing (water supply, waste, vent, fixtures, domestic water)
+23 - HVAC (heating, ventilation, air conditioning, mechanical equipment, ductwork)
+25 - Integrated Automation (building controls, BMS, smart systems)
+26 - Electrical (power, lighting, panels, wiring, electrical systems)
+27 - Communications (data, telephone, networking, telecommunications)
+28 - Electronic Safety and Security (access control, CCTV, alarms)
+
+SITE DIVISIONS (31-33):
+31 - Earthwork (excavation, grading, site utilities)
+32 - Exterior Improvements (paving, landscaping, site work)
+33 - Utilities (site utilities, water, sewer, gas lines)
+
+Return ONLY valid JSON with this exact structure:
+{
+  "contractor_name": "ACTUAL_COMPANY_NAME_FROM_DOCUMENT",
+  "total_amount": 2850000,
+  "project_name": "Project name if found",
+  "bid_date": "2024-03-15",
+  "base_bid_amount": 2850000,
+  "direct_costs": 2400000,
+  "markup_percentage": 18.75,
+  "csi_divisions": {
+    "01": {
+      "cost": 125000, 
+      "items": ["general requirements", "supervision"],
+      "subcontractor": "Self-performed"
+    },
+    "03": {
+      "cost": 450000, 
+      "items": ["foundations", "structural concrete"],
+      "subcontractor": "ABC Concrete Co."
+    }
+  },
+  "subcontractors": [
+    {"name": "ABC Concrete Co.", "trade": "Concrete", "divisions": ["03"], "total_amount": 450000}
+  ],
+  "uncategorizedCosts": [
+    {"description": "Miscellaneous items", "cost": 25000}
+  ],
+  "uncategorizedTotal": 25000,
+  "categorizationPercentage": 91.2,
+  "timeline": "12 months",
+  "exclusions": ["site utilities", "permits"],
+  "assumptions": ["normal soil conditions"],
+  "document_quality": "professional_typed"
+}
+
+Document: ${processedDoc.fileName}
+File Type: ${processedDoc.fileType}
+`;
+
+  // Prepare message content based on file type
+  let messageContent;
+  
+  if (processedDoc.isBase64 && (processedDoc.fileType === 'image' || processedDoc.fileType === 'pdf')) {
+    let base64Data: string;
+    
+    if (processedDoc.content.startsWith('data:')) {
+      base64Data = processedDoc.content.split(',')[1];
+    } else {
+      base64Data = processedDoc.content;
+    }
+    
+    if (!base64Data || base64Data.length === 0) {
+      throw new Error('Base64 data is empty or missing');
+    }
+    
+    let mediaType: string;
+    let contentType: string;
+    
+    if (processedDoc.fileType === 'pdf') {
+      mediaType = 'application/pdf';
+      contentType = 'document';
+    } else {
+      const mimeMatch = processedDoc.content.match(/data:([^;]+)/);
+      mediaType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+      contentType = 'image';
+    }
+    
+    messageContent = [
+      {
+        type: 'text',
+        text: prompt
+      },
+      {
+        type: contentType,
+        source: {
+          type: 'base64',
+          media_type: mediaType,
+          data: base64Data
+        }
+      }
+    ];
+  } else {
+    messageContent = prompt + '\n\n' + processedDoc.content;
+  }
+
+  // Prepare the payload
+  const payload = {
+    model: 'claude-3-5-sonnet-20241022',
+    max_tokens: 2000,
+    messages: [
+      {
+        role: 'user',
+        content: messageContent
+      }
+    ]
+  };
+
+  // Log payload for debugging (dev only)
+  safeLog("Claude request payload:", {
+    model: payload.model,
+    max_tokens: payload.max_tokens,
+    messageContentType: Array.isArray(messageContent) ? 'multipart' : 'text',
+    messageLength: Array.isArray(messageContent) 
+      ? messageContent.length 
+      : (typeof messageContent === 'string' ? messageContent.length : 0)
+  });
+
+  // Make the request to Claude
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': process.env.CLAUDE_API_KEY!,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json'
+    },
+    body: JSON.stringify(payload)
+  });
+
+  // Get raw response text first
+  const rawText = await response.text();
+  safeLog("Claude raw response status:", response.status);
+  safeLog("Claude raw response:", rawText.substring(0, 500));
+
+  // Handle non-200 responses
+  if (!response.ok) {
+    console.error('Claude API error:', response.status, rawText);
+    
+    if (response.status === 413) {
+      throw new Error('File too large for analysis. Please use a file smaller than 75MB or compress your document.');
+    }
+    
+    throw new Error(`Claude API error: ${response.status} - ${rawText}`);
+  }
+
+  // Parse the response
+  let data;
+  try {
+    data = JSON.parse(rawText);
+  } catch (parseError) {
+    console.error('JSON parse error:', parseError);
+    console.error('Raw response that failed to parse:', rawText);
+    throw new Error(`Failed to parse Claude API response: ${parseError instanceof Error ? parseError.message : 'Unknown parse error'}`);
+  }
+
+  const content = data.content?.[0];
+  
+  if (!content || content.type !== 'text') {
+    throw new Error('Unexpected response format from Claude API');
+  }
+
+  // Extract JSON from response
+  const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    safeLog("Claude response text (no JSON found):", content.text);
+    throw new Error('No valid JSON found in Claude response');
+  }
+
+  // Parse the extracted JSON
+  let analysisResult;
+  try {
+    analysisResult = JSON.parse(jsonMatch[0]);
+  } catch (jsonError) {
+    console.error('Analysis JSON parse error:', jsonError);
+    console.error('JSON string that failed to parse:', jsonMatch[0].substring(0, 500));
+    throw new Error(`Failed to parse analysis JSON: ${jsonError instanceof Error ? jsonError.message : 'Unknown JSON error'}`);
+  }
+  
+  // Validate required fields
+  if (!analysisResult.contractor_name || !analysisResult.total_amount) {
+    throw new Error('Missing required fields in analysis result');
+  }
+
+  safeLog("Analysis result parsed successfully:", {
+    contractor: analysisResult.contractor_name,
+    total: analysisResult.total_amount,
+    divisions: Object.keys(analysisResult.csi_divisions || {}).length
+  });
+
+  return analysisResult;
+}
+=== src/lib/claude.ts ===
+import { AnalysisResult, Subcontractor } from '@/types/analysis';
+import { ProcessedDocument } from './document-processor';
+
+export async function analyzeDocumentWithClaude(processedDoc: ProcessedDocument): Promise<AnalysisResult> {
+  const prompt = `
+You are analyzing a construction bid document. Extract ALL cost information and map to MasterFormat 2018 CSI divisions.
+
+CRITICAL: Use MasterFormat 2018 (50-Division System) - NOT the old 16-division format!
+
+FACILITY CONSTRUCTION DIVISIONS (01-14):
+01 - General Requirements (project management, permits, supervision, overhead, bonds)
+02 - Existing Conditions (demolition, site clearing, hazmat, abatement)  
+03 - Concrete (ALL structural work, foundations, construction, assembly, concrete, precast)
+04 - Masonry (brick, block, stone masonry work)
+05 - Metals (structural steel, metal work, steel framing)
+06 - Wood, Plastics, and Composites (carpentry, framing, millwork)
+07 - Thermal and Moisture Protection (roofing, waterproofing, insulation)
+08 - Openings (doors, windows, glazing)
+09 - Finishes (flooring, paint, ceilings, interior finishes)
+10 - Specialties (toilet accessories, signage, partitions)
+11 - Equipment (kitchen equipment, lab equipment, built-in appliances)
+12 - Furnishings (furniture, window treatments)
+13 - Special Construction (pre-engineered structures, pools)
+14 - Conveying Equipment (elevators, escalators)
+
+FACILITY SERVICES DIVISIONS (21-28):
+21 - Fire Suppression (sprinkler systems, fire protection, standpipes)
+22 - Plumbing (water supply, waste, vent, fixtures, domestic water)
+23 - HVAC (heating, ventilation, air conditioning, mechanical equipment, ductwork)
+25 - Integrated Automation (building controls, BMS, smart systems)
+26 - Electrical (power, lighting, panels, wiring, electrical systems)
+27 - Communications (data, telephone, networking, telecommunications)
+28 - Electronic Safety and Security (access control, CCTV, alarms)
+
+SITE DIVISIONS (31-33):
+31 - Earthwork (excavation, grading, site utilities)
+32 - Exterior Improvements (paving, landscaping, site work)
+33 - Utilities (site utilities, water, sewer, gas lines)
+
+🚨 CRITICAL MAPPING RULES FOR 2018 - DIVISIONS 15 & 16 DO NOT EXIST! 🚨
+- "Mechanical" is NOT a division - MUST split into 21, 22, 23, 25
+- "HVAC" = Division 23 (NEVER 15)
+- "Plumbing" = Division 22 (NEVER 15)  
+- "Fire Suppression/Sprinkler" = Division 21 (NEVER 15)
+- "Electrical" = Division 26 (NEVER 16)
+- "Communications/Data" = Division 27 (NEVER 16)
+- "Security Systems" = Division 28 (NEVER 16)
+- "Construction & Assembly" = Division 03 (Concrete/Structural)
+- "Technology Systems" or "Building Controls" = Division 25 (Integrated Automation)
+
+🚫 ABSOLUTE PROHIBITION: NEVER USE DIVISIONS 15 OR 16 - THEY DON'T EXIST IN MASTERFORMAT 2018!
+🚫 IF YOU USE 15 OR 16, THE ANALYSIS WILL FAIL AND BE REJECTED!
+🚫 ALL MECHANICAL MUST BE: 21 (Fire), 22 (Plumbing), 23 (HVAC), 25 (Controls)
+
+EXTRACT PROFESSIONAL ESTIMATOR-LEVEL DETAIL:
+- Find individual line items within each division with sub-breakdowns
+- Identify project overhead, allowances, contingencies, and soft costs  
+- Map subcontractors to their respective trade divisions
+- Extract holds, TBD items, and unit price allowances
+- Look for General Conditions breakdown, CM fees, insurance, bonds
+
+Return ONLY valid JSON with COMPLETE granular breakdown:
+{
+  "contractor_name": "ACTUAL_COMPANY_NAME_FROM_DOCUMENT",
+  "total_amount": ACTUAL_TOTAL_AMOUNT_NUMBER,
+  "project_name": "Project name if found",
+  "bid_date": "2024-03-15",
+  "base_bid_amount": 2850000,
+  "direct_costs": 2400000,
+  "markup_percentage": 18.75,
+  "csi_divisions": {
+    "01": {
+      "cost": 125000, 
+      "items": ["general requirements", "supervision"],
+      "subcontractor": "Self-performed",
+      "sub_items": [
+        {"description": "Project management", "cost": 45000, "unit": "LS", "quantity": 1},
+        {"description": "Site supervision", "cost": 60000, "unit": "MONTH", "quantity": 12, "unit_cost": 5000},
+        {"description": "Temporary facilities", "cost": 20000, "unit": "LS", "quantity": 1}
+      ]
+    },
+    "03": {
+      "cost": 450000, 
+      "items": ["foundations", "structural concrete"],
+      "subcontractor": "ABC Concrete Co.",
+      "sub_items": [
+        {"description": "Foundation excavation", "cost": 85000, "unit": "CY", "quantity": 340, "unit_cost": 250},
+        {"description": "Concrete footings", "cost": 120000, "unit": "CY", "quantity": 150, "unit_cost": 800},
+        {"description": "Slab on grade", "cost": 245000, "unit": "SF", "quantity": 24500, "unit_cost": 10}
+      ]
+    },
+    "22": {
+      "cost": 200000, 
+      "items": ["plumbing fixtures", "water supply"],
+      "subcontractor": "XYZ Plumbing Inc.",
+      "sub_items": [
+        {"description": "Rough plumbing", "cost": 125000, "unit": "SF", "quantity": 25000, "unit_cost": 5},
+        {"description": "Plumbing fixtures", "cost": 75000, "unit": "EA", "quantity": 50, "unit_cost": 1500}
+      ]
+    }
+  },
+  "project_overhead": {
+    "general_conditions": 85000,
+    "general_requirements": 40000,
+    "cm_fee": 75000,
+    "insurance": 15000,
+    "bonds": 12000,
+    "permits": 8000,
+    "total_overhead": 235000
+  },
+  "allowances": [
+    {"description": "General contingency", "amount": 150000, "type": "contingency", "percentage_of_total": 5.26},
+    {"description": "Flooring allowance", "amount": 75000, "type": "allowance", "scope_description": "Per SF allowance for tenant finishes"},
+    {"description": "Mechanical equipment hold", "amount": 50000, "type": "hold", "scope_description": "Pending equipment selection"}
+  ],
+  "allowances_total": 275000,
+  "subcontractors": [
+    {"name": "ABC Concrete Co.", "trade": "Concrete", "divisions": ["03"], "total_amount": 450000},
+    {"name": "XYZ Plumbing Inc.", "trade": "Plumbing", "divisions": ["22"], "total_amount": 200000},
+    {"name": "DEF Electrical Corp.", "trade": "Electrical", "divisions": ["26"], "total_amount": 180000}
+  ],
+  "softCosts": [
+    {"description": "Design fees", "cost": 15000},
+    {"description": "Engineering allowance", "cost": 8000},
+    {"description": "Permit contingency", "cost": 5000}
+  ],
+  "softCostsTotal": 28000,
+  "uncategorizedCosts": [
+    {"description": "Miscellaneous construction items", "cost": 25000}
+  ],
+  "uncategorizedTotal": 25000,
+  "categorizationPercentage": 91.2,
+  "timeline": "12 months",
+  "exclusions": ["site utilities", "permits"],
+  "assumptions": ["normal soil conditions"],
+  "document_quality": "professional_typed"
+}
+
+CRITICAL REQUIREMENTS FOR PROFESSIONAL ESTIMATOR-LEVEL EXTRACTION:
+
+GRANULAR LINE ITEM EXTRACTION:
+- Extract actual numbers - convert "$1,234,567.89" to 1234567.89
+- Find EVERY individual line item within each CSI division
+- Create sub_items array with detailed breakdown for each division
+- Include individual unit costs, quantities, and units for each line item
+- Identify subcontractor assignments for each trade division
+- Look for scope notes and special conditions
+
+PROJECT OVERHEAD & SOFT COSTS:
+- Separate project overhead from direct construction costs
+- Extract General Conditions, CM fees, insurance, bonds, permits
+- Calculate total_overhead as sum of all soft costs
+- Identify markup percentage from overhead structure
+
+SOFT COSTS VS UNCATEGORIZED SEPARATION:
+- SOFT COSTS: Administrative, professional, and non-construction items that can be identified
+  • Design fees, engineering costs, permits, bonds, insurance premiums
+  • Management fees, supervision costs, legal fees, financing costs
+  • Survey work, testing, inspection, contingency allowances
+  • Keywords: design, engineering, permit, bond, insurance, contingency, allowance, fee, overhead, management, supervision, legal, survey, testing, inspection, financing, administration
+- UNCATEGORIZED COSTS: Construction work that cannot be mapped to specific CSI divisions
+  • Miscellaneous construction items, specialty work, unidentifiable trade work
+- Create separate softCosts and uncategorizedCosts arrays with proper totals
+
+ALLOWANCES & CONTINGENCIES:
+- Find ALL allowances, contingencies, holds, and TBD items
+- Classify allowance type: contingency, allowance, hold, tbd, unit_price_allowance
+- Calculate percentage_of_total for each allowance
+- Include scope descriptions for allowances
+
+SUBCONTRACTOR IDENTIFICATION:
+- Map subcontractor names to their trade divisions
+- Calculate total amount per subcontractor across all divisions
+- Include trade specialization and scope descriptions
+
+TECHNICAL REQUIREMENTS:
+- "Construction & Assembly" MUST map to Division 03 (Concrete/Structural)
+- Use only valid MasterFormat 2018 division numbers (01-14, 21-28, 31-33, etc.)
+- Look for site work divisions (31-33): earthwork, paving, utilities
+- Aim for 90%+ cost coverage with granular detail
+- Use construction units: SF, LF, CY, EA, LS, SY, TON, HR, DAY, MONTH
+- Calculate base_bid_amount excluding allowances and contingencies
+- Track direct_costs separately from project overhead
+- Calculate categorizationPercentage = (sum of categorized costs / total_amount) * 100
+
+EXAMPLES OF CORRECT 2018 MAPPING:
+- "HVAC Systems: $500,000" → Division 23: {"cost": 500000, "items": ["hvac systems"]}
+- "Plumbing: $200,000" → Division 22: {"cost": 200000, "items": ["plumbing"]}
+- "Electrical: $300,000" → Division 26: {"cost": 300000, "items": ["electrical"]}
+- "Fire Sprinklers: $100,000" → Division 21: {"cost": 100000, "items": ["fire sprinklers"]}
+- "Security System: $50,000" → Division 28: {"cost": 50000, "items": ["security system"]}
+
+🔍 FINAL VALIDATION REQUIRED:
+- Scan your JSON response for ANY occurrence of "15" or "16" in division codes
+- If found, immediately correct to proper 2018 divisions:
+  • Division 15 → Split into 21, 22, 23, 25
+  • Division 16 → Change to 26, 27, or 28
+- Verify ALL mechanical systems use divisions 21-23, 25 ONLY
+- Verify ALL electrical uses divisions 26-28 ONLY
+
+CRITICAL: Every cost must map to correct 2018 division numbers. Divisions 15 and 16 DO NOT EXIST!
+
+Document: ${processedDoc.fileName}
+File Type: ${processedDoc.fileType}
+
+${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
+`;
+
+  if (!process.env.CLAUDE_API_KEY) {
+    throw new Error('Claude API key not configured');
+  }
+
+  try {
+    // Prepare message content based on file type
+    let messageContent;
+    
+    if (processedDoc.isBase64 && (processedDoc.fileType === 'image' || processedDoc.fileType === 'pdf')) {
+      // For images and PDFs, send as base64 with the prompt
+      let base64Data: string;
+      
+      // Handle both data URLs (from direct upload) and pure base64 (from blob storage)
+      if (processedDoc.content.startsWith('data:')) {
+        base64Data = processedDoc.content.split(',')[1]; // Remove data URL prefix
+        console.log('Using data URL base64, length:', base64Data.length);
+      } else {
+        base64Data = processedDoc.content; // Already pure base64 from blob storage
+        console.log('Using pure base64 from blob, length:', base64Data.length);
+      }
+      
+      if (!base64Data || base64Data.length === 0) {
+        throw new Error('Base64 data is empty or missing');
+      }
+      
+      let mediaType: string;
+      let contentType: string;
+      
+      if (processedDoc.fileType === 'pdf') {
+        mediaType = 'application/pdf';
+        contentType = 'document';
+      } else {
+        // Detect image type from data URL or default to jpeg
+        const mimeMatch = processedDoc.content.match(/data:([^;]+)/);
+        mediaType = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        contentType = 'image';
+      }
+      
+      messageContent = [
+        {
+          type: 'text',
+          text: prompt
+        },
+        {
+          type: contentType,
+          source: {
+            type: 'base64',
+            media_type: mediaType,
+            data: base64Data
+          }
+        }
+      ];
+    } else {
+      // For text/Excel content, include it directly in the prompt
+      messageContent = prompt + '\n\n' + processedDoc.content;
+    }
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': process.env.CLAUDE_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-sonnet-20241022',
+        max_tokens: 2000,
+        messages: [{
+          role: 'user',
+          content: messageContent
+        }]
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Claude API error:', response.status, errorText);
+      
+      if (response.status === 413) {
+        throw new Error('File too large for analysis. Please use a file smaller than 75MB or compress your document.');
+      }
+      
+      throw new Error(`Claude API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    const content = data.content?.[0];
+    
+    if (!content || content.type !== 'text') {
+      throw new Error('Unexpected response format from Claude API');
+    }
+
+    // Extract JSON from response
+    const jsonMatch = content.text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No valid JSON found in Claude response');
+    }
+
+    // Pre-process JSON to auto-correct legacy divisions before parsing
+    const correctedJsonString = autoCorrectLegacyDivisions(jsonMatch[0]);
+    const analysisResult: AnalysisResult = JSON.parse(correctedJsonString);
+    
+    // Validate required fields
+    if (!analysisResult.contractor_name || !analysisResult.total_amount) {
+      throw new Error('Missing required fields in analysis result');
+    }
+
+    // Post-processing validation and migration
+    const migratedAnalysis = migrateMasterFormat2018Compliance(analysisResult);
+    
+    // Comprehensive data integrity validation and enhancement
+    const validatedAnalysis = validateDataIntegrity(migratedAnalysis);
+    
+    // Final completeness validation on enhanced data
+    validateAnalysisCompleteness(validatedAnalysis);
+
+    return validatedAnalysis;
+  } catch (error) {
+    console.error('Error analyzing document with Claude:', error);
+    throw error instanceof Error ? error : new Error('Failed to analyze document. Please try again.');
+  }
+}
+
+function validateAnalysisCompleteness(analysis: AnalysisResult): void {
+  const mappedTotal = Object.values(analysis.csi_divisions)
+    .reduce((sum, div) => sum + div.cost, 0);
+  
+  const uncategorizedTotal = analysis.uncategorizedTotal || 0;
+  const totalAccountedFor = mappedTotal + uncategorizedTotal;
+  const coveragePercentage = (mappedTotal / analysis.total_amount) * 100;
+  const accountedPercentage = (totalAccountedFor / analysis.total_amount) * 100;
+  
+  console.log(`Cost coverage analysis:`, {
+    totalAmount: analysis.total_amount,
+    mappedTotal,
+    uncategorizedTotal,
+    totalAccountedFor,
+    coveragePercentage: coveragePercentage.toFixed(1) + '%',
+    accountedPercentage: accountedPercentage.toFixed(1) + '%',
+    divisions: Object.keys(analysis.csi_divisions),
+    uncategorizedItems: analysis.uncategorizedCosts?.length || 0
+  });
+  
+  if (coveragePercentage < 80) {
+    console.warn(`⚠️ Low CSI coverage: ${coveragePercentage.toFixed(1)}% - may have missed major items`);
+  }
+  
+  if (accountedPercentage < 90) {
+    console.warn(`⚠️ Low total coverage: ${accountedPercentage.toFixed(1)}% - significant costs unaccounted for`);
+  }
+  
+  // Check for high uncategorized percentages
+  const uncategorizedPercentage = (uncategorizedTotal / analysis.total_amount) * 100;
+  if (uncategorizedPercentage > 25) {
+    console.warn(`⚠️ High uncategorized costs: $${uncategorizedTotal.toLocaleString()} (${uncategorizedPercentage.toFixed(1)}%)`);
+  }
+  
+  // Log division breakdown for debugging
+  Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+    const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
+    console.log(`Division ${code}: $${data.cost.toLocaleString()} (${percentage}%) - ${data.items.join(', ')}`);
+  });
+  
+  // Log uncategorized items
+  if (analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0) {
+    console.log(`Uncategorized costs (${uncategorizedPercentage.toFixed(1)}%):`);
+    analysis.uncategorizedCosts.forEach(item => {
+      console.log(`  - ${item.description}: $${item.cost.toLocaleString()}`);
+    });
+  }
+}
+
+function validateDataIntegrity(analysis: AnalysisResult): AnalysisResult {
+  console.log('🔍 Starting comprehensive data integrity validation...');
+  
+  const enhancedAnalysis = { ...analysis };
+  const issues: string[] = [];
+  const fixes: string[] = [];
+  
+  // 1. Calculate totals from different sources
+  const csiDivisionsTotal = Object.values(analysis.csi_divisions)
+    .reduce((sum, div) => sum + div.cost, 0);
+  const projectOverheadTotal = analysis.project_overhead?.total_overhead || 0;
+  const allowancesTotal = analysis.allowances_total || 0;
+  const subcontractorTotal = analysis.subcontractors
+    ?.reduce((sum, sub) => sum + sub.total_amount, 0) || 0;
+  const uncategorizedTotal = analysis.uncategorizedTotal || 0;
+  
+  console.log('💰 Cost breakdown analysis:');
+  console.log(`  CSI Divisions: $${csiDivisionsTotal.toLocaleString()} (${((csiDivisionsTotal / analysis.total_amount) * 100).toFixed(1)}%)`);
+  console.log(`  Project Overhead: $${projectOverheadTotal.toLocaleString()} (${((projectOverheadTotal / analysis.total_amount) * 100).toFixed(1)}%)`);
+  console.log(`  Allowances: $${allowancesTotal.toLocaleString()} (${((allowancesTotal / analysis.total_amount) * 100).toFixed(1)}%)`);
+  console.log(`  Subcontractors: $${subcontractorTotal.toLocaleString()} (${((subcontractorTotal / analysis.total_amount) * 100).toFixed(1)}%)`);
+  console.log(`  Uncategorized: $${uncategorizedTotal.toLocaleString()} (${((uncategorizedTotal / analysis.total_amount) * 100).toFixed(1)}%)`);
+  console.log(`  Project Total: $${analysis.total_amount.toLocaleString()}`);
+  
+  // 2. Check for subcontractors with missing CSI divisions
+  const criticalDivisions = ['22', '23', '26']; // Plumbing, HVAC, Electrical
+  const missingCriticalDivisions: Array<{code: string, subcontractor: Subcontractor, estimatedCost: number}> = [];
+  
+  if (analysis.subcontractors) {
+    analysis.subcontractors.forEach(sub => {
+      sub.divisions.forEach(divCode => {
+        if (criticalDivisions.includes(divCode)) {
+          const existingDiv = analysis.csi_divisions[divCode];
+          if (!existingDiv || existingDiv.cost === 0) {
+            // Estimate cost allocation for this division
+            const estimatedCost = Math.round(sub.total_amount / sub.divisions.length);
+            missingCriticalDivisions.push({
+              code: divCode,
+              subcontractor: sub,
+              estimatedCost
+            });
+          }
+        }
+      });
+    });
+  }
+  
+  // 3. Auto-create missing CSI divisions from subcontractor data
+  if (missingCriticalDivisions.length > 0) {
+    console.log('🔧 Auto-creating missing CSI divisions from subcontractor data...');
+    
+    missingCriticalDivisions.forEach(missing => {
+      const { code, subcontractor, estimatedCost } = missing;
+      const divisionName = {
+        '22': 'Plumbing',
+        '23': 'HVAC', 
+        '26': 'Electrical'
+      }[code] || `Division ${code}`;
+      
+      enhancedAnalysis.csi_divisions[code] = {
+        cost: estimatedCost,
+        items: [divisionName.toLowerCase()],
+        subcontractor: subcontractor.name,
+        scope_notes: `Auto-generated from subcontractor data: ${subcontractor.name}`,
+        unit: 'LS',
+        quantity: 1,
+        unit_cost: estimatedCost
+      };
+      
+      fixes.push(`Created missing Division ${code} (${divisionName}) - $${estimatedCost.toLocaleString()} from ${subcontractor.name}`);
+    });
+  }
+  
+  // 4. Validate cost distribution and flag potential issues
+  const totalIdentifiedCost = Object.values(enhancedAnalysis.csi_divisions)
+    .reduce((sum, div) => sum + div.cost, 0) + projectOverheadTotal + allowancesTotal;
+  const coveragePercentage = (totalIdentifiedCost / analysis.total_amount) * 100;
+  
+  if (coveragePercentage < 75) {
+    issues.push(`Low cost coverage: ${coveragePercentage.toFixed(1)}% - potential data loss or incomplete extraction`);
+  }
+  
+  // 5. Check for subcontractor-CSI division mismatches
+  if (analysis.subcontractors) {
+    analysis.subcontractors.forEach(sub => {
+      let subcontractorCoveredInCSI = 0;
+      sub.divisions.forEach(divCode => {
+        const csiDiv = enhancedAnalysis.csi_divisions[divCode];
+        if (csiDiv && csiDiv.cost > 0) {
+          subcontractorCoveredInCSI += csiDiv.cost;
+        }
+      });
+      
+      const discrepancy = Math.abs(sub.total_amount - subcontractorCoveredInCSI);
+      const discrepancyPercentage = (discrepancy / sub.total_amount) * 100;
+      
+      if (discrepancyPercentage > 20 && discrepancy > 10000) {
+        issues.push(`Large cost discrepancy for ${sub.name}: Subcontractor total $${sub.total_amount.toLocaleString()} vs CSI total $${subcontractorCoveredInCSI.toLocaleString()}`);
+      }
+    });
+  }
+  
+  // 6. Validate total cost reconciliation
+  const accountedForTotal = totalIdentifiedCost + uncategorizedTotal;
+  const totalDiscrepancy = Math.abs(analysis.total_amount - accountedForTotal);
+  const discrepancyPercentage = (totalDiscrepancy / analysis.total_amount) * 100;
+  
+  if (discrepancyPercentage > 5) {
+    issues.push(`Total cost discrepancy: Project total $${analysis.total_amount.toLocaleString()} vs accounted $${accountedForTotal.toLocaleString()} (${discrepancyPercentage.toFixed(1)}% difference)`);
+  }
+  
+  // 7. Enhance uncategorized costs tracking
+  if (uncategorizedTotal / analysis.total_amount > 0.2) {
+    issues.push(`High uncategorized costs: ${((uncategorizedTotal / analysis.total_amount) * 100).toFixed(1)}% may indicate incomplete data extraction`);
+  }
+  
+  // 8. Log results
+  console.log('📊 Data integrity validation results:');
+  console.log(`  Enhanced CSI Divisions Coverage: ${((Object.values(enhancedAnalysis.csi_divisions).reduce((sum, div) => sum + div.cost, 0) / analysis.total_amount) * 100).toFixed(1)}%`);
+  console.log(`  Total Project Coverage: ${((totalIdentifiedCost / analysis.total_amount) * 100).toFixed(1)}%`);
+  
+  if (fixes.length > 0) {
+    console.log('✅ Applied automatic fixes:');
+    fixes.forEach(fix => console.log(`  • ${fix}`));
+  }
+  
+  if (issues.length > 0) {
+    console.log('⚠️ Data integrity issues detected:');
+    issues.forEach(issue => console.log(`  • ${issue}`));
+  } else {
+    console.log('✅ No major data integrity issues detected');
+  }
+  
+  // 9. Update category coverage percentage for better reporting
+  const enhancedCoverage = (Object.values(enhancedAnalysis.csi_divisions).reduce((sum, div) => sum + div.cost, 0) / analysis.total_amount) * 100;
+  enhancedAnalysis.categorizationPercentage = enhancedCoverage;
+  
+  console.log('🎯 Data integrity validation complete');
+  return enhancedAnalysis;
+}
+
+function autoCorrectLegacyDivisions(jsonString: string): string {
+  let corrected = jsonString;
+  const corrections: string[] = [];
+  
+  // Pattern to match "15": { ... } in csi_divisions
+  const div15Pattern = /("15"\s*:\s*\{[^}]*\})/g;
+  if (div15Pattern.test(corrected)) {
+    corrections.push('Found Division 15 - will be split during post-processing');
+  }
+  
+  // Pattern to match "16": { ... } in csi_divisions  
+  const div16Pattern = /("16"\s*:\s*\{[^}]*\})/g;
+  if (div16Pattern.test(corrected)) {
+    corrections.push('Found Division 16 - will be converted to Division 26 during post-processing');
+  }
+  
+  // Pattern to match "divisions": ["15"] or "divisions": ["16"] in subcontractors
+  corrected = corrected.replace(/"divisions":\s*\[([^\]]*"1[56]"[^\]]*)\]/g, (match, _divisions) => {
+    corrections.push('Fixed subcontractor division references');
+    return match.replace(/"15"/g, '"21", "22", "23"').replace(/"16"/g, '"26"');
+  });
+  
+  if (corrections.length > 0) {
+    console.log('🔧 JSON Auto-Correction Applied:', corrections);
+  }
+  
+  return corrected;
+}
+
+function migrateMasterFormat2018Compliance(analysis: AnalysisResult): AnalysisResult {
+  const migratedAnalysis = { ...analysis };
+  const migratedDivisions = { ...analysis.csi_divisions };
+  const migrations: string[] = [];
+  
+  // Handle Division 15 (Mechanical) - Split into 21, 22, 23
+  if (migratedDivisions['15']) {
+    const div15Data = migratedDivisions['15'];
+    migrations.push('Division 15 (Mechanical) → Split into 21, 22, 23');
+    
+    // Analyze items to determine proper split
+    const itemsLower = div15Data.items.map(item => item.toLowerCase()).join(' ');
+    const subItemsText = div15Data.sub_items?.map(item => item.description.toLowerCase()).join(' ') || '';
+    const allText = `${itemsLower} ${subItemsText}`;
+    
+    // Split costs based on keywords
+    const totalCost = div15Data.cost;
+    let remainingCost = totalCost;
+    
+    // Fire Suppression (Division 21)
+    if (allText.includes('fire') || allText.includes('sprinkler') || allText.includes('suppression')) {
+      const fireCost = Math.round(totalCost * 0.15); // Typical 15% for fire systems
+      migratedDivisions['21'] = {
+        cost: fireCost,
+        items: div15Data.items.filter(item => 
+          item.toLowerCase().includes('fire') || 
+          item.toLowerCase().includes('sprinkler') || 
+          item.toLowerCase().includes('suppression')
+        ),
+        subcontractor: div15Data.subcontractor,
+        sub_items: div15Data.sub_items?.filter(item => 
+          item.description.toLowerCase().includes('fire') || 
+          item.description.toLowerCase().includes('sprinkler')
+        )
+      };
+      remainingCost -= fireCost;
+    }
+    
+    // Plumbing (Division 22)
+    if (allText.includes('plumbing') || allText.includes('water') || allText.includes('fixture')) {
+      const plumbingCost = Math.round(remainingCost * 0.4); // Typical 40% split
+      migratedDivisions['22'] = {
+        cost: plumbingCost,
+        items: div15Data.items.filter(item => 
+          item.toLowerCase().includes('plumbing') || 
+          item.toLowerCase().includes('water') || 
+          item.toLowerCase().includes('fixture')
+        ),
+        subcontractor: div15Data.subcontractor,
+        sub_items: div15Data.sub_items?.filter(item => 
+          item.description.toLowerCase().includes('plumbing') || 
+          item.description.toLowerCase().includes('water')
+        )
+      };
+      remainingCost -= plumbingCost;
+    }
+    
+    // HVAC (Division 23) - Gets remainder
+    const hvacItems = div15Data.items.filter(item => 
+      item.toLowerCase().includes('hvac') || 
+      item.toLowerCase().includes('heating') || 
+      item.toLowerCase().includes('ventilation') ||
+      item.toLowerCase().includes('air conditioning') ||
+      item.toLowerCase().includes('mechanical') ||
+      (!item.toLowerCase().includes('plumbing') && !item.toLowerCase().includes('fire') && !item.toLowerCase().includes('sprinkler'))
+    );
+    
+    migratedDivisions['23'] = {
+      cost: remainingCost,
+      items: hvacItems.length > 0 ? hvacItems : ['hvac systems', 'mechanical equipment'],
+      subcontractor: div15Data.subcontractor,
+      unit_cost: div15Data.unit_cost,
+      quantity: div15Data.quantity,
+      unit: div15Data.unit,
+      scope_notes: div15Data.scope_notes || 'Migrated from Division 15 (Mechanical)',
+      sub_items: div15Data.sub_items?.filter(item => 
+        item.description.toLowerCase().includes('hvac') || 
+        item.description.toLowerCase().includes('heating') || 
+        item.description.toLowerCase().includes('mechanical') ||
+        (!item.description.toLowerCase().includes('plumbing') && !item.description.toLowerCase().includes('fire'))
+      )
+    };
+    
+    delete migratedDivisions['15'];
+  }
+  
+  // Handle Division 16 (Electrical) - Convert to 26
+  if (migratedDivisions['16']) {
+    const div16Data = migratedDivisions['16'];
+    migrations.push('Division 16 (Electrical) → Division 26 (Electrical)');
+    
+    migratedDivisions['26'] = {
+      ...div16Data,
+      scope_notes: div16Data.scope_notes ? 
+        `${div16Data.scope_notes} (Migrated from Division 16)` : 
+        'Migrated from Division 16 (Electrical)'
+    };
+    
+    delete migratedDivisions['16'];
+  }
+  
+  // Update the migrated analysis
+  migratedAnalysis.csi_divisions = migratedDivisions;
+  
+  // Update subcontractor division references and recalculate totals
+  if (migratedAnalysis.subcontractors) {
+    migratedAnalysis.subcontractors = migratedAnalysis.subcontractors.map(sub => {
+      const updatedSub = {
+        ...sub,
+        divisions: sub.divisions.map(div => {
+          if (div === '15') return ['21', '22', '23'];
+          if (div === '16') return ['26'];
+          return [div];
+        }).flat()
+      };
+      
+      // Recalculate total_amount based on new division mapping
+      const newTotal = updatedSub.divisions.reduce((sum, divCode) => {
+        return sum + (migratedDivisions[divCode]?.cost || 0);
+      }, 0);
+      
+      if (newTotal > 0) {
+        updatedSub.total_amount = newTotal;
+      }
+      
+      return updatedSub;
+    });
+  }
+  
+  // Ensure CSI divisions have subcontractor links
+  Object.entries(migratedDivisions).forEach(([divCode, divData]) => {
+    if (!divData.subcontractor && migratedAnalysis.subcontractors) {
+      const matchingSub = migratedAnalysis.subcontractors.find(sub => 
+        sub.divisions.includes(divCode)
+      );
+      if (matchingSub) {
+        divData.subcontractor = matchingSub.name;
+      }
+    }
+  });
+  
+  if (migrations.length > 0) {
+    console.log('🔄 MasterFormat Migration Applied:', migrations);
+    
+    // Log migration statistics
+    const totalOriginalCost = (analysis.csi_divisions['15']?.cost || 0) + (analysis.csi_divisions['16']?.cost || 0);
+    const totalMigratedCost = Object.entries(migratedDivisions)
+      .filter(([code]) => ['21', '22', '23', '26'].includes(code))
+      .reduce((sum, [, data]) => sum + data.cost, 0);
+    
+    console.log(`💰 Cost Migration: $${totalOriginalCost.toLocaleString()} → $${totalMigratedCost.toLocaleString()}`);
+    console.log(`📊 New Division Count: ${Object.keys(migratedDivisions).length} (was ${Object.keys(analysis.csi_divisions).length})`);
+    console.log('✅ Successfully migrated from legacy divisions to MasterFormat 2018');
+  } else {
+    console.log('✅ MasterFormat 2018 compliance validated - no migration needed');
+  }
+  
+  return migratedAnalysis;
+}
+
+// Server-side only - DO NOT IMPORT IN CLIENT CODE
+=== src/lib/claude-client.ts ===
+// Client-side Claude API interface - NO ANTHROPIC SDK HERE
+import { AnalysisResult } from '@/types/analysis';
+import { ProcessedDocument } from './document-processor';
+
+export async function analyzeDocument(processedDoc: ProcessedDocument): Promise<AnalysisResult> {
+  const response = await fetch('/api/claude', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ processedDoc })
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.error || 'Failed to analyze document');
+  }
+
+  const { analysis } = await response.json();
+  return analysis;
+}
+=== src/types/analysis.ts ===
+export interface LineItem {
+  description: string;
+  cost: number;
+  unit_cost?: number;
+  quantity?: number;
+  unit?: string;
+  subcontractor?: string;
+  notes?: string;
+}
+
+export interface CSIDivision {
+  cost: number;
+  items: string[];
+  unit_cost?: number;
+  quantity?: number;
+  unit?: string;
+  sub_items?: LineItem[];
+  subcontractor?: string;
+  scope_notes?: string;
+}
+
+export interface UncategorizedCost {
+  description: string;
+  cost: number;
+}
+
+export interface SoftCost {
+  description: string;
+  cost: number;
+}
+
+export interface ProjectOverhead {
+  general_conditions?: number;
+  general_requirements?: number;
+  cm_fee?: number;
+  contractor_fee?: number;
+  insurance?: number;
+  bonds?: number;
+  permits?: number;
+  project_management?: number;
+  supervision?: number;
+  temporary_facilities?: number;
+  total_overhead: number;
+}
+
+export interface Allowance {
+  description: string;
+  amount: number;
+  percentage_of_total?: number;
+  type: 'contingency' | 'allowance' | 'hold' | 'tbd' | 'unit_price_allowance';
+  scope_description?: string;
+}
+
+export interface Subcontractor {
+  name: string;
+  trade: string;
+  divisions: string[];
+  total_amount: number;
+  scope_description?: string;
+  contact_info?: string;
+}
+
+export interface AnalysisResult {
+  contractor_name: string;
+  total_amount: number;
+  project_name?: string;
+  bid_date?: string;
+  gross_sqft?: number;
+  proposal_date?: string;
+  csi_divisions: Record<string, CSIDivision>;
+  uncategorizedCosts?: UncategorizedCost[];
+  uncategorizedTotal?: number;
+  softCosts?: SoftCost[];
+  softCostsTotal?: number;
+  categorizationPercentage?: number;
+  timeline?: string;
+  exclusions?: string[];
+  assumptions?: string[];
+  document_quality?: 'professional_typed' | 'scanned' | 'handwritten';
+  
+  // Enhanced granular data
+  project_overhead?: ProjectOverhead;
+  allowances?: Allowance[];
+  allowances_total?: number;
+  subcontractors?: Subcontractor[];
+  direct_costs?: number;
+  markup_percentage?: number;
+  base_bid_amount?: number;
+  alternate_pricing?: Record<string, number>;
+}
+
+export interface MarketVariance {
+  status: 'ABOVE_MARKET' | 'BELOW_MARKET' | 'MARKET_RATE';
+  message: string;
+  severity: 'high' | 'medium' | 'low';
+  recommendation: string;
+}
+
+export interface RiskAssessment {
+  score: number;
+  level: 'HIGH' | 'MEDIUM' | 'LOW';
+  factors: string[];
+}
+
+export interface UsageData {
+  totalAnalyses: number;
+  analysesThisMonth: number;
+  lastAnalysis?: string;
+  resetDate: string;
+}
+
+export const CONSTRUCTION_UNITS = {
+  SF: "Square Foot",
+  LF: "Linear Foot", 
+  CY: "Cubic Yard",
+  EA: "Each",
+  LS: "Lump Sum",
+  SY: "Square Yard",
+  TON: "Ton",
+  HR: "Hour",
+  DAY: "Day"
+} as const;
+=== src/lib/analysis/export-generator.ts ===
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
+
+// Extend jsPDF type to include autoTable properties
+interface JsPDFWithAutoTable extends jsPDF {
+  lastAutoTable: {
+    finalY: number;
+  };
+}
+import * as XLSX from 'xlsx';
+import { AnalysisResult } from '@/types/analysis';
+import { SavedAnalysis } from '@/lib/storage';
+import { analyzeMarketVariance } from './market-analyzer';
+import { calculateProjectRisk } from './risk-analyzer';
+import { CSI_DIVISIONS, LEVELING_DIVISIONS, LEVELING_LABELS, PSEUDO_SCOPES } from './csi-analyzer';
+
+export function exportAnalysisToPDF(analysis: AnalysisResult): void {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 20;
+  const contentWidth = pageWidth - (margin * 2);
+  let yPosition = margin;
+
+  // Helper function to check if we need a new page
+  const checkPageBreak = (requiredSpace: number = 20) => {
+    if (yPosition + requiredSpace > pageHeight - margin) {
+      doc.addPage();
+      yPosition = margin;
+      return true;
+    }
+    return false;
+  };
+
+  // Header with branding
+  doc.setFillColor(37, 99, 235); // Blue-600
+  doc.rect(0, 0, pageWidth, 40, 'F');
+  
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(24);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Levelr Analysis Report', margin, 25);
+  
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Generated: ${new Date().toLocaleDateString('en-US', { 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })}`, margin, 35);
+
+  yPosition = 55;
+  doc.setTextColor(0, 0, 0);
+
+  // Executive Summary Box
+  checkPageBreak(40);
+  doc.setFillColor(239, 246, 255); // Blue-50
+  doc.setDrawColor(191, 219, 254); // Blue-200
+  doc.rect(margin, yPosition - 5, contentWidth, 35, 'FD');
+  
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Executive Summary', margin + 5, yPosition + 5);
+  
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Contractor: ${analysis.contractor_name}`, margin + 5, yPosition + 15);
+  doc.text(`Total Amount: $${analysis.total_amount.toLocaleString()}`, margin + 5, yPosition + 25);
+  
+  yPosition += 45;
+
+  // Project Details Section
+  checkPageBreak(60);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Project Details', margin, yPosition);
+  yPosition += 10;
+
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  
+  if (analysis.project_name) {
+    doc.text(`Project Name: ${analysis.project_name}`, margin + 5, yPosition);
+    yPosition += 8;
+  }
+  
+  if (analysis.bid_date) {
+    doc.text(`Bid Date: ${new Date(analysis.bid_date).toLocaleDateString()}`, margin + 5, yPosition);
+    yPosition += 8;
+  }
+  
+  if (analysis.timeline) {
+    doc.text(`Timeline: ${analysis.timeline}`, margin + 5, yPosition);
+    yPosition += 8;
+  }
+
+  // Document Quality Assessment
+  if (analysis.document_quality) {
+    const qualityMap: Record<string, string> = {
+      'professional_typed': 'Professional Typed Document',
+      'scanned': 'Scanned Document',
+      'handwritten': 'Handwritten Document'
+    };
+    doc.text(`Document Quality: ${qualityMap[analysis.document_quality] || analysis.document_quality}`, margin + 5, yPosition);
+    yPosition += 8;
+  }
+
+  yPosition += 10;
+
+  // Risk Assessment Section
+  const risk = calculateProjectRisk(
+    Object.fromEntries(Object.entries(analysis.csi_divisions).map(([code, data]) => [code, data.cost])),
+    analysis.total_amount,
+    analysis.uncategorizedTotal || 0,
+    analysis
+  );
+
+  checkPageBreak(50);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Risk Assessment', margin, yPosition);
+  yPosition += 10;
+
+  // Risk level with color coding
+  const riskColors = {
+    'LOW': [34, 197, 94],     // Green-500
+    'MEDIUM': [234, 179, 8],  // Yellow-500  
+    'HIGH': [239, 68, 68]     // Red-500
+  };
+  
+  const [r, g, b] = riskColors[risk.level as keyof typeof riskColors] || [107, 114, 128];
+  doc.setFillColor(r, g, b);
+  doc.setTextColor(255, 255, 255);
+  doc.rect(margin + 5, yPosition - 5, 60, 12, 'F');
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(`${risk.level} RISK`, margin + 8, yPosition + 3);
+  
+  doc.setTextColor(0, 0, 0);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Score: ${risk.score}/100`, margin + 75, yPosition + 3);
+  
+  yPosition += 20;
+
+  // Risk factors
+  if (risk.factors.length > 0) {
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Risk Factors:', margin + 5, yPosition);
+    yPosition += 8;
+    
+    doc.setFont('helvetica', 'normal');
+    risk.factors.forEach((factor) => {
+      checkPageBreak(15);
+      // Bullet point
+      doc.circle(margin + 10, yPosition - 2, 1, 'F');
+      // Wrapped text for long risk factors
+      const lines = doc.splitTextToSize(factor, contentWidth - 25);
+      if (Array.isArray(lines)) {
+        lines.forEach((line: string, index: number) => {
+          if (index > 0) checkPageBreak();
+          doc.text(line, margin + 15, yPosition);
+          yPosition += 6;
+        });
+      } else {
+        doc.text(lines, margin + 15, yPosition);
+        yPosition += 6;
+      }
+    });
+  }
+
+  yPosition += 10;
+
+  // CSI Division Analysis Section
+  checkPageBreak(30);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text('CSI Division Analysis', margin, yPosition);
+  yPosition += 15;
+
+  // Create table data for CSI divisions
+  const tableData: (string | number)[][] = [];
+  const totalMappedCost = Object.values(analysis.csi_divisions).reduce((sum, div) => sum + div.cost, 0);
+  
+  Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+    const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
+    const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
+    const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
+    
+    tableData.push([
+      `${code} - ${division?.name || 'Unknown'}`,
+      `$${data.cost.toLocaleString()}`,
+      `${percentage}%`,
+      variance.status.replace('_', ' '),
+      data.items.join(', ').substring(0, 50) + (data.items.join(', ').length > 50 ? '...' : '')
+    ]);
+  });
+
+  autoTable(doc, {
+    head: [['Division', 'Cost', '% of Total', 'Market Status', 'Items']],
+    body: tableData,
+    startY: yPosition,
+    styles: { 
+      fontSize: 9,
+      cellPadding: 3,
+      overflow: 'linebreak'
+    },
+    headStyles: { 
+      fillColor: [37, 99, 235],
+      textColor: [255, 255, 255],
+      fontStyle: 'bold'
+    },
+    columnStyles: {
+      0: { cellWidth: 60 },
+      1: { cellWidth: 30, halign: 'right' },
+      2: { cellWidth: 20, halign: 'center' },
+      3: { cellWidth: 30, halign: 'center' },
+      4: { cellWidth: 50 }
+    },
+    didDrawCell: function(data: { column: { index: number }, section: string, cell: { text: string[], x: number, y: number, width: number, height: number } }) {
+      // Color code market status cells
+      if (data.column.index === 3 && data.section === 'body') {
+        const status = data.cell.text[0];
+        if (status === 'ABOVE MARKET') {
+          doc.setFillColor(254, 226, 226); // Red-100
+        } else if (status === 'BELOW MARKET') {
+          doc.setFillColor(254, 249, 195); // Yellow-100
+        } else if (status === 'MARKET RATE') {
+          doc.setFillColor(220, 252, 231); // Green-100
+        }
+        if (status !== 'MARKET RATE') {
+          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+        }
+      }
+    }
+  });
+
+  yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
+
+  // Coverage Summary
+  checkPageBreak(25);
+  const coveragePercentage = ((totalMappedCost / analysis.total_amount) * 100).toFixed(1);
+  const uncategorizedPercentage = (((analysis.uncategorizedTotal || 0) / analysis.total_amount) * 100).toFixed(1);
+  
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Cost Coverage Summary:', margin, yPosition);
+  yPosition += 8;
+  
+  doc.setFont('helvetica', 'normal');
+  doc.text(`CSI Division Coverage: ${coveragePercentage}% ($${totalMappedCost.toLocaleString()})`, margin + 5, yPosition);
+  yPosition += 6;
+  doc.text(`Uncategorized Costs: ${uncategorizedPercentage}% ($${(analysis.uncategorizedTotal || 0).toLocaleString()})`, margin + 5, yPosition);
+  yPosition += 15;
+
+  // Uncategorized Costs Section
+  if (analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0) {
+    checkPageBreak(30);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Uncategorized Costs', margin, yPosition);
+    yPosition += 10;
+
+    // Warning box for high uncategorized percentage
+    if (parseFloat(uncategorizedPercentage) > 15) {
+      doc.setFillColor(254, 243, 199); // Yellow-100
+      doc.setDrawColor(245, 158, 11); // Yellow-500
+      doc.rect(margin, yPosition - 5, contentWidth, 15, 'FD');
+      doc.setFontSize(10);
+      doc.text('⚠️ High uncategorized costs may indicate missing CSI classifications or scope gaps', margin + 5, yPosition + 5);
+      yPosition += 20;
+    }
+
+    // Create table for uncategorized costs
+    const uncategorizedTableData = analysis.uncategorizedCosts.map(item => [
+      item.description,
+      `$${item.cost.toLocaleString()}`,
+      `${((item.cost / analysis.total_amount) * 100).toFixed(1)}%`
+    ]);
+
+    autoTable(doc, {
+      head: [['Description', 'Cost', '% of Total']],
+      body: uncategorizedTableData,
+      startY: yPosition,
+      styles: { 
+        fontSize: 9,
+        cellPadding: 3
+      },
+      headStyles: { 
+        fillColor: [251, 146, 60],
+        textColor: [255, 255, 255]
+      },
+      columnStyles: {
+        0: { cellWidth: 120 },
+        1: { cellWidth: 40, halign: 'right' },
+        2: { cellWidth: 30, halign: 'center' }
+      }
+    });
+
+    yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
+  }
+
+  // Project Overhead Section
+  if (analysis.project_overhead) {
+    checkPageBreak(40);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Project Overhead Breakdown', margin, yPosition);
+    yPosition += 10;
+
+    const overheadData: (string | number)[][] = [];
+    if (analysis.project_overhead.general_conditions) {
+      overheadData.push(['General Conditions', `$${analysis.project_overhead.general_conditions.toLocaleString()}`]);
+    }
+    if (analysis.project_overhead.cm_fee) {
+      overheadData.push(['CM Fee', `$${analysis.project_overhead.cm_fee.toLocaleString()}`]);
+    }
+    if (analysis.project_overhead.insurance) {
+      overheadData.push(['Insurance', `$${analysis.project_overhead.insurance.toLocaleString()}`]);
+    }
+    if (analysis.project_overhead.bonds) {
+      overheadData.push(['Bonds', `$${analysis.project_overhead.bonds.toLocaleString()}`]);
+    }
+    if (analysis.project_overhead.permits) {
+      overheadData.push(['Permits', `$${analysis.project_overhead.permits.toLocaleString()}`]);
+    }
+    if (analysis.project_overhead.supervision) {
+      overheadData.push(['Supervision', `$${analysis.project_overhead.supervision.toLocaleString()}`]);
+    }
+    overheadData.push(['TOTAL OVERHEAD', `$${analysis.project_overhead.total_overhead.toLocaleString()}`]);
+
+    autoTable(doc, {
+      head: [['Overhead Item', 'Cost']],
+      body: overheadData,
+      startY: yPosition,
+      styles: { fontSize: 10, cellPadding: 3 },
+      headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { cellWidth: 80 },
+        1: { cellWidth: 40, halign: 'right' }
+      },
+      didDrawCell: function(data: { row: { index: number }, section: string }) {
+        if (data.section === 'body' && data.row.index === overheadData.length - 1) {
+          doc.setFillColor(59, 130, 246);
+          doc.setTextColor(255, 255, 255);
+        }
+      }
+    });
+
+    yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
+  }
+
+  // Allowances & Contingencies Section
+  if (analysis.allowances && analysis.allowances.length > 0) {
+    checkPageBreak(40);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Allowances & Contingencies', margin, yPosition);
+    yPosition += 10;
+
+    const allowanceData = analysis.allowances.map(allowance => [
+      allowance.description,
+      allowance.type.replace('_', ' ').toUpperCase(),
+      `$${allowance.amount.toLocaleString()}`,
+      allowance.percentage_of_total ? `${allowance.percentage_of_total.toFixed(1)}%` : '',
+      allowance.scope_description || ''
+    ]);
+
+    autoTable(doc, {
+      head: [['Description', 'Type', 'Amount', '% of Total', 'Scope']],
+      body: allowanceData,
+      startY: yPosition,
+      styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+      headStyles: { fillColor: [245, 158, 11], textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25, halign: 'right' },
+        3: { cellWidth: 20, halign: 'center' },
+        4: { cellWidth: 45 }
+      }
+    });
+
+    yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
+
+    // Add allowance risk warning
+    const totalAllowancePercentage = ((analysis.allowances_total || 0) / analysis.total_amount) * 100;
+    if (totalAllowancePercentage > 20) {
+      doc.setFillColor(254, 226, 226); // Red-100
+      doc.setDrawColor(220, 38, 38); // Red-600
+      doc.rect(margin, yPosition - 5, contentWidth, 15, 'FD');
+      doc.setFontSize(10);
+      doc.text(`⚠️ High allowances (${totalAllowancePercentage.toFixed(1)}%) may indicate scope uncertainty`, margin + 5, yPosition + 5);
+      yPosition += 20;
+    }
+  }
+
+  // Subcontractors Section
+  if (analysis.subcontractors && analysis.subcontractors.length > 0) {
+    checkPageBreak(40);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Subcontractor Assignments', margin, yPosition);
+    yPosition += 10;
+
+    const subcontractorData = analysis.subcontractors.map(sub => [
+      sub.name,
+      sub.trade,
+      sub.divisions.map(d => `Div ${d}`).join(', '),
+      `$${sub.total_amount.toLocaleString()}`,
+      `${((sub.total_amount / analysis.total_amount) * 100).toFixed(1)}%`,
+      sub.scope_description || ''
+    ]);
+
+    autoTable(doc, {
+      head: [['Subcontractor', 'Trade', 'Divisions', 'Amount', '% of Total', 'Scope']],
+      body: subcontractorData,
+      startY: yPosition,
+      styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+      headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255] },
+      columnStyles: {
+        0: { cellWidth: 35 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 25, halign: 'right' },
+        4: { cellWidth: 15, halign: 'center' },
+        5: { cellWidth: 45 }
+      }
+    });
+
+    yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
+  }
+
+  // Detailed Line Items Section (for divisions with sub_items)
+  const divisionsWithSubItems = Object.entries(analysis.csi_divisions).filter(([_, data]) => 
+    data.sub_items && data.sub_items.length > 0
+  );
+
+  if (divisionsWithSubItems.length > 0) {
+    checkPageBreak(40);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Detailed Line Item Breakdown', margin, yPosition);
+    yPosition += 15;
+
+    divisionsWithSubItems.forEach(([code, data]) => {
+      const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
+      
+      checkPageBreak(30);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Division ${code} - ${division?.name} (${data.subcontractor || 'TBD'})`, margin, yPosition);
+      yPosition += 8;
+
+      const lineItemData = data.sub_items!.map(item => [
+        item.description,
+        item.quantity ? item.quantity.toLocaleString() : '',
+        item.unit || '',
+        item.unit_cost ? `$${item.unit_cost.toFixed(2)}` : '',
+        `$${item.cost.toLocaleString()}`,
+        item.subcontractor || '',
+        item.notes || ''
+      ]);
+
+      autoTable(doc, {
+        head: [['Description', 'Qty', 'Unit', 'Unit Cost', 'Total Cost', 'Sub', 'Notes']],
+        body: lineItemData,
+        startY: yPosition,
+        styles: { fontSize: 8, cellPadding: 2, overflow: 'linebreak' },
+        headStyles: { fillColor: [100, 100, 100], textColor: [255, 255, 255] },
+        columnStyles: {
+          0: { cellWidth: 40 },
+          1: { cellWidth: 15, halign: 'right' },
+          2: { cellWidth: 10, halign: 'center' },
+          3: { cellWidth: 20, halign: 'right' },
+          4: { cellWidth: 25, halign: 'right' },
+          5: { cellWidth: 25 },
+          6: { cellWidth: 35 }
+        }
+      });
+
+      yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
+    });
+  }
+
+  // Market Variance Details Section
+  checkPageBreak(30);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Market Variance Analysis', margin, yPosition);
+  yPosition += 15;
+
+  Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+    checkPageBreak(25);
+    const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
+    const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
+    
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Division ${code} - ${division?.name}`, margin + 5, yPosition);
+    yPosition += 8;
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.text(`Status: ${variance.message}`, margin + 10, yPosition);
+    yPosition += 5;
+    
+    if (variance.recommendation) {
+      const recommendationLines = doc.splitTextToSize(`Recommendation: ${variance.recommendation}`, contentWidth - 15);
+      if (Array.isArray(recommendationLines)) {
+        recommendationLines.forEach((line: string) => {
+          checkPageBreak();
+          doc.text(line, margin + 10, yPosition);
+          yPosition += 5;
+        });
+      }
+    }
+    yPosition += 5;
+  });
+
+  // Additional Information Section
+  if (analysis.exclusions?.length || analysis.assumptions?.length) {
+    checkPageBreak(30);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Additional Information', margin, yPosition);
+    yPosition += 15;
+
+    if (analysis.exclusions?.length) {
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Exclusions:', margin + 5, yPosition);
+      yPosition += 8;
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      analysis.exclusions.forEach((exclusion) => {
+        checkPageBreak(8);
+        doc.circle(margin + 12, yPosition - 2, 1, 'F');
+        const lines = doc.splitTextToSize(exclusion, contentWidth - 25);
+        if (Array.isArray(lines)) {
+          lines.forEach((line: string, index: number) => {
+            if (index > 0) checkPageBreak();
+            doc.text(line, margin + 17, yPosition);
+            yPosition += 5;
+          });
+        } else {
+          doc.text(lines, margin + 17, yPosition);
+          yPosition += 5;
+        }
+      });
+      yPosition += 5;
+    }
+
+    if (analysis.assumptions?.length) {
+      checkPageBreak(15);
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Assumptions:', margin + 5, yPosition);
+      yPosition += 8;
+      
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      analysis.assumptions.forEach((assumption) => {
+        checkPageBreak(8);
+        doc.circle(margin + 12, yPosition - 2, 1, 'F');
+        const lines = doc.splitTextToSize(assumption, contentWidth - 25);
+        if (Array.isArray(lines)) {
+          lines.forEach((line: string, index: number) => {
+            if (index > 0) checkPageBreak();
+            doc.text(line, margin + 17, yPosition);
+            yPosition += 5;
+          });
+        } else {
+          doc.text(lines, margin + 17, yPosition);
+          yPosition += 5;
+        }
+      });
+    }
+  }
+
+  // Footer on every page
+  const pageCount = doc.getNumberOfPages();
+  for (let i = 1; i <= pageCount; i++) {
+    doc.setPage(i);
+    
+    // Footer line
+    doc.setDrawColor(200, 200, 200);
+    doc.line(margin, pageHeight - 25, pageWidth - margin, pageHeight - 25);
+    
+    doc.setFontSize(9);
+    doc.setTextColor(100, 100, 100);
+    doc.text('Levelr Analysis Report - Confidential', margin, pageHeight - 15);
+    doc.text(`Page ${i} of ${pageCount}`, pageWidth - margin - 30, pageHeight - 15);
+    doc.text(`Generated: ${new Date().toLocaleDateString()}`, margin, pageHeight - 8);
+    
+    // Branding
+    doc.text('Powered by Levelr Platform | MasterFormat 2018 Compliant', pageWidth - margin - 120, pageHeight - 8);
+  }
+
+  // Generate filename and save
+  const sanitizedContractorName = analysis.contractor_name.replace(/[^a-zA-Z0-9]/g, '_');
+  const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const fileName = `Levelr_Analysis_${sanitizedContractorName}_${timestamp}.pdf`;
+  
+  doc.save(fileName);
+}
+
+export function exportAnalysisToExcel(analysis: AnalysisResult): void {
+  // Create workbook
+  const wb = XLSX.utils.book_new();
+  
+  // Project Overview Sheet
+  const overviewData = [
+    ['Project Overview'],
+    ['Contractor', analysis.contractor_name],
+    ['Total Amount', analysis.total_amount],
+    ['Project Name', analysis.project_name || ''],
+    ['Bid Date', analysis.bid_date || ''],
+    ['Timeline', analysis.timeline || ''],
+    ['Generated', new Date().toISOString()]
+  ];
+  
+  const overviewWs = XLSX.utils.aoa_to_sheet(overviewData);
+  
+  // Auto-fit columns for overview sheet
+  overviewWs['!cols'] = [
+    { wch: 15 },  // Labels
+    { wch: Math.max(25, analysis.contractor_name.length + 5) }  // Values - auto-size based on content
+  ];
+  
+  XLSX.utils.book_append_sheet(wb, overviewWs, 'Overview');
+  
+  // CSI Analysis Sheet
+  const csiData = [
+    ['CSI Code', 'Division Name', 'Cost', 'Percentage', 'Items', 'Unit Cost', 'Quantity', 'Unit', 'Market Status', 'Variance', 'Recommendation']
+  ];
+  
+  Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+    const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
+    const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
+    const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
+    
+    csiData.push([
+      code,
+      division?.name || 'Unknown',
+      data.cost.toString(),
+      `${percentage}%`,
+      data.items.join(', '),
+      data.unit_cost?.toString() || '',
+      data.quantity?.toString() || '',
+      data.unit || '',
+      variance.status,
+      variance.message,
+      variance.recommendation
+    ]);
+  });
+  
+  // Add uncategorized costs section to CSI data
+  if (analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0) {
+    csiData.push(['']); // Empty row separator
+    csiData.push(['UNCATEGORIZED COSTS', '', '', '', '', '', '', '', '', '', '']);
+    csiData.push(['Description', 'Cost', '% of Total', 'Reason', '', '', '', '', '', '', '']);
+    
+    analysis.uncategorizedCosts.forEach(item => {
+      const percentage = ((item.cost / analysis.total_amount) * 100).toFixed(1);
+      csiData.push([
+        item.description,
+        item.cost.toString(),
+        `${percentage}%`,
+        'Not matched to CSI divisions',
+        '', '', '', '', '', '', ''
+      ]);
+    });
+    
+    // Add total uncategorized row
+    const totalPercentage = (((analysis.uncategorizedTotal || 0) / analysis.total_amount) * 100).toFixed(1);
+    csiData.push([
+      'TOTAL UNCATEGORIZED',
+      (analysis.uncategorizedTotal || 0).toString(),
+      `${totalPercentage}%`,
+      `${analysis.uncategorizedCosts.length} items not classified`,
+      '', '', '', '', '', '', ''
+    ]);
+  }
+  
+  const csiWs = XLSX.utils.aoa_to_sheet(csiData);
+  
+  // Calculate optimal column widths based on content
+  const maxLengths: number[] = [];
+  csiData.forEach(row => {
+    row.forEach((cell, colIndex) => {
+      const cellLength = String(cell).length;
+      maxLengths[colIndex] = Math.max(maxLengths[colIndex] || 0, cellLength);
+    });
+  });
+  
+  // Set auto-fit column widths with minimum and maximum constraints
+  csiWs['!cols'] = maxLengths.map((length) => ({
+    wch: Math.min(Math.max(length + 2, 10), 50) // Min 10, Max 50 characters
+  }));
+  
+  // Format currency columns
+  const csiRange = XLSX.utils.decode_range(csiWs['!ref'] || 'A1');
+  for (let row = 1; row <= csiRange.e.r; row++) {
+    const costCell = `C${row + 1}`;
+    
+    if (csiWs[costCell] && !isNaN(Number(csiWs[costCell].v))) {
+      csiWs[costCell].t = 'n';
+      csiWs[costCell].z = '$#,##0';
+    }
+  }
+  
+  XLSX.utils.book_append_sheet(wb, csiWs, 'CSI Analysis');
+  
+  // Risk Assessment Sheet
+  const risk = calculateProjectRisk(
+    Object.fromEntries(Object.entries(analysis.csi_divisions).map(([code, data]) => [code, data.cost])),
+    analysis.total_amount,
+    analysis.uncategorizedTotal || 0,
+    analysis
+  );
+  
+  const riskData = [
+    ['Risk Assessment'],
+    ['Overall Risk Level', risk.level],
+    ['Risk Score', `${risk.score}/100`],
+    [''],
+    ['Risk Factors'],
+    ...risk.factors.map(factor => [factor])
+  ];
+  
+  const riskWs = XLSX.utils.aoa_to_sheet(riskData);
+  XLSX.utils.book_append_sheet(wb, riskWs, 'Risk Assessment');
+
+  // Project Overhead Sheet
+  if (analysis.project_overhead) {
+    const overheadData = [
+      ['Project Overhead Breakdown'],
+      [''],
+      ['Overhead Item', 'Cost', '% of Total']
+    ];
+
+    if (analysis.project_overhead.general_conditions) {
+      overheadData.push(['General Conditions', analysis.project_overhead.general_conditions.toString(), 
+        `${((analysis.project_overhead.general_conditions / analysis.total_amount) * 100).toFixed(2)}%`]);
+    }
+    if (analysis.project_overhead.cm_fee) {
+      overheadData.push(['CM Fee', analysis.project_overhead.cm_fee.toString(),
+        `${((analysis.project_overhead.cm_fee / analysis.total_amount) * 100).toFixed(2)}%`]);
+    }
+    if (analysis.project_overhead.insurance) {
+      overheadData.push(['Insurance', analysis.project_overhead.insurance.toString(),
+        `${((analysis.project_overhead.insurance / analysis.total_amount) * 100).toFixed(2)}%`]);
+    }
+    if (analysis.project_overhead.bonds) {
+      overheadData.push(['Bonds', analysis.project_overhead.bonds.toString(),
+        `${((analysis.project_overhead.bonds / analysis.total_amount) * 100).toFixed(2)}%`]);
+    }
+    if (analysis.project_overhead.permits) {
+      overheadData.push(['Permits', analysis.project_overhead.permits.toString(),
+        `${((analysis.project_overhead.permits / analysis.total_amount) * 100).toFixed(2)}%`]);
+    }
+    if (analysis.project_overhead.supervision) {
+      overheadData.push(['Supervision', analysis.project_overhead.supervision.toString(),
+        `${((analysis.project_overhead.supervision / analysis.total_amount) * 100).toFixed(2)}%`]);
+    }
+
+    overheadData.push(['']);
+    overheadData.push(['TOTAL OVERHEAD', analysis.project_overhead.total_overhead.toString(),
+      `${((analysis.project_overhead.total_overhead / analysis.total_amount) * 100).toFixed(2)}%`]);
+
+    const overheadWs = XLSX.utils.aoa_to_sheet(overheadData);
+    
+    // Format currency columns
+    for (let row = 3; row < overheadData.length; row++) {
+      const costCell = `B${row + 1}`;
+      if (overheadWs[costCell] && !isNaN(Number(overheadWs[costCell].v))) {
+        overheadWs[costCell].t = 'n';
+        overheadWs[costCell].z = '$#,##0';
+      }
+    }
+
+    overheadWs['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, overheadWs, 'Project Overhead');
+  }
+
+  // Allowances & Contingencies Sheet
+  if (analysis.allowances && analysis.allowances.length > 0) {
+    const allowanceData = [
+      ['Allowances & Contingencies'],
+      [''],
+      ['Description', 'Type', 'Amount', '% of Total', 'Scope Description']
+    ];
+
+    analysis.allowances.forEach(allowance => {
+      allowanceData.push([
+        allowance.description,
+        allowance.type.replace('_', ' ').toUpperCase(),
+        allowance.amount.toString(),
+        allowance.percentage_of_total ? `${allowance.percentage_of_total.toFixed(2)}%` : '',
+        allowance.scope_description || ''
+      ]);
+    });
+
+    allowanceData.push(['']);
+    allowanceData.push(['TOTAL ALLOWANCES', '', (analysis.allowances_total || 0).toString(),
+      `${(((analysis.allowances_total || 0) / analysis.total_amount) * 100).toFixed(2)}%`, '']);
+
+    const allowanceWs = XLSX.utils.aoa_to_sheet(allowanceData);
+    
+    // Format currency column
+    for (let row = 3; row < allowanceData.length; row++) {
+      const costCell = `C${row + 1}`;
+      if (allowanceWs[costCell] && !isNaN(Number(allowanceWs[costCell].v))) {
+        allowanceWs[costCell].t = 'n';
+        allowanceWs[costCell].z = '$#,##0';
+      }
+    }
+
+    allowanceWs['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }];
+    XLSX.utils.book_append_sheet(wb, allowanceWs, 'Allowances');
+  }
+
+  // Subcontractors Sheet
+  if (analysis.subcontractors && analysis.subcontractors.length > 0) {
+    const subData = [
+      ['Subcontractor Breakdown'],
+      [''],
+      ['Subcontractor Name', 'Trade', 'CSI Divisions', 'Total Amount', '% of Total', 'Scope Description', 'Contact Info']
+    ];
+
+    analysis.subcontractors.forEach(sub => {
+      subData.push([
+        sub.name,
+        sub.trade,
+        sub.divisions.map(d => `Div ${d}`).join(', '),
+        sub.total_amount.toString(),
+        `${((sub.total_amount / analysis.total_amount) * 100).toFixed(2)}%`,
+        sub.scope_description || '',
+        sub.contact_info || ''
+      ]);
+    });
+
+    const subWs = XLSX.utils.aoa_to_sheet(subData);
+    
+    // Format currency column
+    for (let row = 3; row < subData.length; row++) {
+      const costCell = `D${row + 1}`;
+      if (subWs[costCell] && !isNaN(Number(subWs[costCell].v))) {
+        subWs[costCell].t = 'n';
+        subWs[costCell].z = '$#,##0';
+      }
+    }
+
+    subWs['!cols'] = [{ wch: 25 }, { wch: 15 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 35 }, { wch: 25 }];
+    XLSX.utils.book_append_sheet(wb, subWs, 'Subcontractors');
+  }
+
+  // Detailed Line Items Sheet
+  const divisionsWithSubItems = Object.entries(analysis.csi_divisions).filter(([_, data]) => 
+    data.sub_items && data.sub_items.length > 0
+  );
+
+  if (divisionsWithSubItems.length > 0) {
+    const lineItemData = [
+      ['Detailed Line Item Breakdown'],
+      [''],
+      ['Division', 'Division Name', 'Subcontractor', 'Line Item Description', 'Quantity', 'Unit', 'Unit Cost', 'Total Cost', 'Sub Notes']
+    ];
+
+    divisionsWithSubItems.forEach(([code, data]) => {
+      const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
+      
+      // Add division header
+      lineItemData.push([
+        `DIV ${code}`,
+        division?.name || 'Unknown',
+        data.subcontractor || 'TBD',
+        '--- DIVISION TOTAL ---',
+        '',
+        '',
+        '',
+        data.cost.toString(),
+        data.scope_notes || ''
+      ]);
+
+      // Add line items
+      data.sub_items!.forEach(item => {
+        lineItemData.push([
+          '',
+          '',
+          item.subcontractor || '',
+          item.description,
+          item.quantity?.toString() || '',
+          item.unit || '',
+          item.unit_cost?.toString() || '',
+          item.cost.toString(),
+          item.notes || ''
+        ]);
+      });
+
+      lineItemData.push(['']); // Separator
+    });
+
+    const lineItemWs = XLSX.utils.aoa_to_sheet(lineItemData);
+    
+    // Format currency columns
+    for (let row = 3; row < lineItemData.length; row++) {
+      const unitCostCell = `G${row + 1}`;
+      const totalCostCell = `H${row + 1}`;
+      
+      if (lineItemWs[unitCostCell] && !isNaN(Number(lineItemWs[unitCostCell].v))) {
+        lineItemWs[unitCostCell].t = 'n';
+        lineItemWs[unitCostCell].z = '$#,##0.00';
+      }
+      
+      if (lineItemWs[totalCostCell] && !isNaN(Number(lineItemWs[totalCostCell].v))) {
+        lineItemWs[totalCostCell].t = 'n';
+        lineItemWs[totalCostCell].z = '$#,##0';
+      }
+    }
+
+    lineItemWs['!cols'] = [{ wch: 8 }, { wch: 20 }, { wch: 20 }, { wch: 35 }, { wch: 12 }, { wch: 8 }, { wch: 12 }, { wch: 15 }, { wch: 30 }];
+    XLSX.utils.book_append_sheet(wb, lineItemWs, 'Line Items');
+  }
+  
+  // Additional Information Sheet
+  if (analysis.exclusions?.length || analysis.assumptions?.length) {
+    const additionalData = [['Additional Information'], ['']];
+    
+    if (analysis.exclusions?.length) {
+      additionalData.push(['Exclusions']);
+      analysis.exclusions.forEach(exclusion => additionalData.push([exclusion]));
+      additionalData.push(['']);
+    }
+    
+    if (analysis.assumptions?.length) {
+      additionalData.push(['Assumptions']);
+      analysis.assumptions.forEach(assumption => additionalData.push([assumption]));
+    }
+    
+    const additionalWs = XLSX.utils.aoa_to_sheet(additionalData);
+    XLSX.utils.book_append_sheet(wb, additionalWs, 'Additional Info');
+  }
+  
+  // Save the Excel file
+  const fileName = `bid-analysis-${analysis.contractor_name.replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+}
+
+// Note: BidComparison interface kept for backwards compatibility but not used in enhanced exports
+
+// Enhanced Excel export for bid leveling with professional analysis
+export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
+  const wb = XLSX.utils.book_new();
+  
+  // Sort bids by total amount for consistent ranking
+  const sortedBids = selectedAnalyses.sort((a, b) => a.result.total_amount - b.result.total_amount);
+  
+  // SHEET 1 - LEVELED COMPARISON (NEW PRIMARY SHEET)
+  exportLeveledComparisonSheet(wb, sortedBids);
+  const lowBid = sortedBids[0].result.total_amount;
+  
+  // SHEET 2 - EXECUTIVE SUMMARY
+  const execData = [
+    ['BID LEVELING ANALYSIS - EXECUTIVE SUMMARY'],
+    [`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`],
+    [`Number of Bids Analyzed: ${selectedAnalyses.length}`],
+    [''],
+    ['RANKING & RECOMMENDATIONS'],
+    ['Rank', 'Contractor', 'Total Bid Amount', 'Dollar Difference', 'Percentage Variance', 'Uncategorized %', 'Risk Level', 'Recommendation']
+  ];
+  
+  sortedBids.forEach((bid, index) => {
+    const dollarDiff = bid.result.total_amount - lowBid;
+    const variance = lowBid > 0 ? (dollarDiff / lowBid) * 100 : 0;
+    
+    // Calculate comprehensive risk assessment
+    const risk = calculateProjectRisk(
+      Object.fromEntries(Object.entries(bid.result.csi_divisions).map(([code, data]) => [code, data.cost])),
+      bid.result.total_amount,
+      bid.result.uncategorizedTotal || 0,
+      bid.result
+    );
+    
+    // Generate intelligent recommendations with emojis
+    let recommendation = '';
+    if (index === 0) {
+      if (risk.level === 'LOW') recommendation = '✅ RECOMMENDED - Lowest bid with low risk';
+      else if (risk.level === 'MEDIUM') recommendation = '⚠️ CAUTION - Low bid but moderate risk factors';
+      else recommendation = '🚨 HIGH RISK - Low bid with significant risk concerns';
+    } else if (variance <= 5) {
+      if (risk.level === 'LOW') recommendation = '✅ COMPETITIVE - Close to low bid with low risk';
+      else if (risk.level === 'MEDIUM') recommendation = '⚠️ CONSIDER - Competitive pricing but some risks';
+      else recommendation = '🚨 REVIEW - Higher risk despite competitive pricing';
+    } else if (variance <= 15) {
+      if (risk.level === 'LOW') recommendation = '⚠️ MODERATE - Higher cost but lower risk profile';
+      else recommendation = '🚨 EXPENSIVE - Higher cost AND higher risk';
+    } else {
+      recommendation = '🚨 SIGNIFICANTLY HIGHER - Review scope differences';
+    }
+    
+    // Calculate uncategorized percentage for this bid
+    const uncategorizedPct = bid.result.uncategorizedTotal ? 
+      ((bid.result.uncategorizedTotal / bid.result.total_amount) * 100).toFixed(1) : '0.0';
+    
+    execData.push([
+      (index + 1).toString(),
+      bid.result.contractor_name,
+      bid.result.total_amount.toString(),
+      dollarDiff.toString(),
+      variance.toFixed(1) + '%', // Display as percentage
+      `${uncategorizedPct}%`,
+      risk.level,
+      recommendation
+    ]);
+  });
+  
+  const execWS = XLSX.utils.aoa_to_sheet(execData);
+  
+  // Format Executive Summary
+  execWS['!cols'] = [
+    { wch: 6 },   // Rank
+    { wch: 30 },  // Contractor
+    { wch: 18 },  // Total Amount
+    { wch: 18 },  // Dollar Difference
+    { wch: 15 },  // Percentage
+    { wch: 15 },  // Uncategorized %
+    { wch: 12 },  // Risk Level
+    { wch: 50 }   // Recommendation
+  ];
+  
+  // Apply formatting and color coding
+  const execRange = XLSX.utils.decode_range(execWS['!ref'] || 'A1');
+  for (let row = 0; row <= execRange.e.r; row++) {
+    for (let col = 0; col <= execRange.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = execWS[cellAddr];
+      if (!cell) continue;
+      
+      // Header formatting
+      if (row === 0) {
+        cell.s = { font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2563EB' } } };
+      } else if (row === 4) {
+        cell.s = { font: { bold: true, sz: 12, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '1E40AF' } } };
+      } else if (row === 5) {
+        cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+      }
+      
+      // Data row formatting
+      if (row > 5) {
+        const rank = row - 6;
+        let fillColor = 'FFFFFF'; // White default
+        
+        if (rank === 0) fillColor = 'DCFCE7'; // Green for lowest
+        else if (rank === 1) fillColor = 'FEF3C7'; // Yellow for second
+        else if (rank >= 2) fillColor = 'FEE2E2'; // Red for higher
+        
+        cell.s = { fill: { fgColor: { rgb: fillColor } } };
+        
+        // Format currency and percentage columns
+        if (col === 2 || col === 3) { // Total Amount and Dollar Difference
+          cell.t = 'n';
+          cell.z = '$#,##0';
+        } else if (col === 4 || col === 5) { // Percentage Variance and Uncategorized %
+          cell.t = 'n';
+          cell.z = '0.0%';
+        }
+      }
+    }
+  }
+  
+  XLSX.utils.book_append_sheet(wb, execWS, 'Executive Summary');
+  
+  // SHEET 3 - CSI DIVISION ANALYSIS
+  const allDivisions = new Set<string>();
+  selectedAnalyses.forEach(bid => {
+    Object.keys(bid.result.csi_divisions).forEach(div => allDivisions.add(div));
+  });
+  
+  const divisionData = [
+    ['CSI DIVISION ANALYSIS - PERCENTAGE OF TOTAL PROJECT COST'],
+    [''],
+    ['Division', 'Name', 'Market Range', ...selectedAnalyses.map(bid => bid.result.contractor_name), 'Average', 'Variance', 'Assessment']
+  ];
+  
+  Array.from(allDivisions).sort().forEach(divCode => {
+    const division = CSI_DIVISIONS[divCode as keyof typeof CSI_DIVISIONS];
+    const marketRange = division ? `${division.typicalPercentage[0]}-${division.typicalPercentage[1]}%` : 'N/A';
+    
+    const bidPercentages = selectedAnalyses.map(bid => {
+      const divData = bid.result.csi_divisions[divCode];
+      return divData ? (divData.cost / bid.result.total_amount) * 100 : 0;
+    });
+    
+    const validValues = bidPercentages.filter(v => v > 0);
+    const average = validValues.length > 0 ? validValues.reduce((sum, v) => sum + v, 0) / validValues.length : 0;
+    const variance = validValues.length > 1 ? Math.max(...validValues) - Math.min(...validValues) : 0;
+    
+    // Generate assessment with flags
+    let assessment = '';
+    if (variance > 10) assessment = '🚨 HIGH VARIANCE - Review scope differences';
+    else if (variance > 5) assessment = '⚠️ MODERATE VARIANCE - Some differences noted';
+    else if (validValues.length === selectedAnalyses.length) assessment = '✅ CONSISTENT - All bids include this work';
+    else assessment = '⚠️ PARTIAL COVERAGE - Not all bids include';
+    
+    divisionData.push([
+      divCode,
+      division?.name || `Division ${divCode}`,
+      marketRange,
+      ...bidPercentages.map(v => v.toFixed(1) + '%'), // Display as percentage
+      average.toFixed(1) + '%',
+      variance.toFixed(1) + '%',
+      assessment
+    ]);
+  });
+  
+  const divisionWS = XLSX.utils.aoa_to_sheet(divisionData);
+  
+  // Format CSI Division Analysis
+  const contractorCols = selectedAnalyses.map(() => ({ wch: 14 }));
+  divisionWS['!cols'] = [
+    { wch: 8 },   // Division code
+    { wch: 25 },  // Division name
+    { wch: 15 },  // Market range
+    ...contractorCols,
+    { wch: 12 },  // Average
+    { wch: 12 },  // Variance
+    { wch: 40 }   // Assessment
+  ];
+  
+  const divRange = XLSX.utils.decode_range(divisionWS['!ref'] || 'A1');
+  for (let row = 0; row <= divRange.e.r; row++) {
+    for (let col = 0; col <= divRange.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = divisionWS[cellAddr];
+      if (!cell) continue;
+      
+      // Header formatting
+      if (row === 0) {
+        cell.s = { font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2563EB' } } };
+      } else if (row === 2) {
+        cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+      }
+      
+      // Data formatting and color coding
+      if (row > 2 && col >= 3 && col <= 3 + selectedAnalyses.length + 1) {
+        cell.t = 'n';
+        cell.z = '0.0%';
+        
+        // Color code based on variance level
+        if (col === 3 + selectedAnalyses.length + 1) { // Variance column
+          const variance = typeof cell.v === 'number' ? cell.v * 100 : 0;
+          let fillColor = 'FFFFFF';
+          if (variance > 10) fillColor = 'FEE2E2'; // Red for high variance
+          else if (variance > 5) fillColor = 'FEF3C7'; // Yellow for moderate
+          else fillColor = 'DCFCE7'; // Green for consistent
+          
+          cell.s = { fill: { fgColor: { rgb: fillColor } }, numFmt: '0.0%' };
+        }
+      }
+    }
+  }
+  
+  // Add uncategorized costs comparison section
+  divisionData.push(['']); // Empty row separator  
+  divisionData.push(['UNCATEGORIZED COSTS COMPARISON']);
+  divisionData.push(['Metric', '', '', ...selectedAnalyses.map(bid => bid.result.contractor_name), 'Average', 'Highest', 'Analysis']);
+  
+  // Uncategorized amounts
+  const uncategorizedAmounts = selectedAnalyses.map(bid => bid.result.uncategorizedTotal || 0);
+  const avgUncategorized = uncategorizedAmounts.reduce((sum, amt) => sum + amt, 0) / selectedAnalyses.length;
+  const maxUncategorized = Math.max(...uncategorizedAmounts);
+  
+  divisionData.push([
+    'Uncategorized Amount', '', '',
+    ...uncategorizedAmounts.map(amt => `$${amt.toLocaleString()}`), // Format as currency
+    `$${avgUncategorized.toLocaleString()}`,
+    `$${maxUncategorized.toLocaleString()}`,
+    maxUncategorized > avgUncategorized * 2 ? '🚨 High variance in uncategorized costs' : '✅ Consistent uncategorized amounts'
+  ]);
+  
+  // Uncategorized percentages
+  const uncategorizedPercentages = selectedAnalyses.map(bid => {
+    const total = bid.result.total_amount;
+    const uncategorized = bid.result.uncategorizedTotal || 0;
+    return total > 0 ? (uncategorized / total) * 100 : 0;
+  });
+  const avgPercentage = uncategorizedPercentages.reduce((sum, pct) => sum + pct, 0) / selectedAnalyses.length;
+  const maxPercentage = Math.max(...uncategorizedPercentages);
+  
+  divisionData.push([
+    'Uncategorized %', '', '',
+    ...uncategorizedPercentages.map(pct => pct.toFixed(1) + '%'),
+    avgPercentage.toFixed(1) + '%',
+    maxPercentage.toFixed(1) + '%',
+    maxPercentage > 25 ? '🚨 High uncategorized percentage detected' : avgPercentage > 15 ? '⚠️ Moderate uncategorized levels' : '✅ Low uncategorized costs'
+  ]);
+  
+  // Recreate the worksheet with updated data
+  const updatedDivisionWS = XLSX.utils.aoa_to_sheet(divisionData);
+  updatedDivisionWS['!cols'] = divisionWS['!cols']; // Keep the same column formatting
+  
+  XLSX.utils.book_append_sheet(wb, updatedDivisionWS, 'CSI Division Analysis');
+  
+  // SHEET 4 - RISK ANALYSIS MATRIX
+  const riskData = [
+    ['RISK ANALYSIS MATRIX'],
+    [''],
+    ['Contractor', 'Total Bid', 'Risk Score', 'Risk Level', 'Missing Critical Divisions', 'Cost Concentration Issues', 'Key Risk Factors']
+  ];
+  
+  sortedBids.forEach(bid => {
+    const risk = calculateProjectRisk(
+      Object.fromEntries(Object.entries(bid.result.csi_divisions).map(([code, data]) => [code, data.cost])),
+      bid.result.total_amount,
+      bid.result.uncategorizedTotal || 0,
+      bid.result
+    );
+    
+    // Identify missing critical divisions (MasterFormat 2018)
+    const criticalDivisions = ['01', '03', '22', '23', '26']; // General, Concrete, Plumbing, HVAC, Electrical
+    const presentDivisions = Object.keys(bid.result.csi_divisions);
+    const missingCritical = criticalDivisions.filter(d => !presentDivisions.includes(d));
+    const missingText = missingCritical.length > 0 ? 
+      missingCritical.map(d => CSI_DIVISIONS[d as keyof typeof CSI_DIVISIONS]?.name || d).join(', ') : 
+      '✅ All critical divisions present';
+    
+    // Check cost concentration
+    const concentrationIssues: string[] = [];
+    Object.entries(bid.result.csi_divisions).forEach(([code, data]) => {
+      const percentage = (data.cost / bid.result.total_amount) * 100;
+      if (percentage > 40) {
+        const divName = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS]?.name || code;
+        concentrationIssues.push(`${divName}: ${percentage.toFixed(1)}%`);
+      }
+    });
+    const concentrationText = concentrationIssues.length > 0 ? 
+      `🚨 ${concentrationIssues.join('; ')}` : 
+      '✅ Well-distributed costs';
+    
+    // Top 3 risk factors
+    const topRisks = risk.factors.slice(0, 3).join('; ');
+    
+    riskData.push([
+      bid.result.contractor_name,
+      bid.result.total_amount.toString(),
+      risk.score.toString(),
+      risk.level,
+      missingText,
+      concentrationText,
+      topRisks || 'No significant risks identified'
+    ]);
+  });
+  
+  const riskWS = XLSX.utils.aoa_to_sheet(riskData);
+  
+  // Format Risk Analysis
+  riskWS['!cols'] = [
+    { wch: 25 },  // Contractor
+    { wch: 15 },  // Total Bid
+    { wch: 12 },  // Risk Score
+    { wch: 12 },  // Risk Level
+    { wch: 30 },  // Missing Divisions
+    { wch: 35 },  // Cost Concentration
+    { wch: 50 }   // Risk Factors
+  ];
+  
+  const riskRange = XLSX.utils.decode_range(riskWS['!ref'] || 'A1');
+  for (let row = 0; row <= riskRange.e.r; row++) {
+    for (let col = 0; col <= riskRange.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = riskWS[cellAddr];
+      if (!cell) continue;
+      
+      // Header formatting
+      if (row === 0) {
+        cell.s = { font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2563EB' } } };
+      } else if (row === 2) {
+        cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+      }
+      
+      // Data formatting
+      if (row > 2) {
+        if (col === 1) { // Total Bid
+          cell.t = 'n';
+          cell.z = '$#,##0';
+        } else if (col === 3) { // Risk Level
+          const riskLevel = cell.v;
+          let fillColor = 'FFFFFF';
+          if (riskLevel === 'HIGH') fillColor = 'FEE2E2'; // Red
+          else if (riskLevel === 'MEDIUM') fillColor = 'FEF3C7'; // Yellow
+          else if (riskLevel === 'LOW') fillColor = 'DCFCE7'; // Green
+          
+          cell.s = { fill: { fgColor: { rgb: fillColor } } };
+        }
+      }
+    }
+  }
+  
+  XLSX.utils.book_append_sheet(wb, riskWS, 'Risk Analysis Matrix');
+  
+  // SHEET 5 - MARKET BENCHMARKING
+  const benchmarkData = [
+    ['MARKET BENCHMARKING ANALYSIS'],
+    [''],
+    ['Division', 'Market Standard', 'Your Bids Average', 'Deviation', 'Market Assessment', 'Guidance']
+  ];
+  
+  Array.from(allDivisions).sort().forEach(divCode => {
+    const division = CSI_DIVISIONS[divCode as keyof typeof CSI_DIVISIONS];
+    if (!division) return;
+    
+    const bidPercentages = selectedAnalyses
+      .map(bid => {
+        const divData = bid.result.csi_divisions[divCode];
+        return divData ? (divData.cost / bid.result.total_amount) * 100 : null;
+      })
+      .filter(p => p !== null) as number[];
+    
+    if (bidPercentages.length === 0) return;
+    
+    const average = bidPercentages.reduce((sum, v) => sum + v, 0) / bidPercentages.length;
+    const [marketMin, marketMax] = division.typicalPercentage;
+    const marketMid = (marketMin + marketMax) / 2;
+    const deviation = average - marketMid;
+    
+    // Generate assessment and guidance
+    let assessment = '';
+    let guidance = '';
+    
+    if (average < marketMin) {
+      assessment = '🚨 BELOW MARKET';
+      guidance = 'Review for missing scope items or unrealistic pricing';
+    } else if (average > marketMax) {
+      assessment = '🚨 ABOVE MARKET';
+      guidance = 'Investigate reasons for premium pricing or scope additions';
+    } else if (Math.abs(deviation) <= 1) {
+      assessment = '✅ ON TARGET';
+      guidance = 'Pricing aligns well with market standards';
+    } else {
+      assessment = '⚠️ ACCEPTABLE';
+      guidance = 'Within market range but monitor for consistency';
+    }
+    
+    benchmarkData.push([
+      `${divCode} - ${division.name}`,
+      `${marketMin.toFixed(1)}% - ${marketMax.toFixed(1)}%`,
+      average.toFixed(1) + '%', // Display as percentage
+      deviation.toFixed(1) + '%',
+      assessment,
+      guidance
+    ]);
+  });
+  
+  const benchmarkWS = XLSX.utils.aoa_to_sheet(benchmarkData);
+  
+  // Format Market Benchmarking
+  benchmarkWS['!cols'] = [
+    { wch: 30 },  // Division
+    { wch: 15 },  // Market Standard
+    { wch: 15 },  // Your Average
+    { wch: 12 },  // Deviation
+    { wch: 18 },  // Assessment
+    { wch: 45 }   // Guidance
+  ];
+  
+  const benchRange = XLSX.utils.decode_range(benchmarkWS['!ref'] || 'A1');
+  for (let row = 0; row <= benchRange.e.r; row++) {
+    for (let col = 0; col <= benchRange.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = benchmarkWS[cellAddr];
+      if (!cell) continue;
+      
+      // Header formatting
+      if (row === 0) {
+        cell.s = { font: { bold: true, sz: 14, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2563EB' } } };
+      } else if (row === 2) {
+        cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+      }
+      
+      // Data formatting
+      if (row > 2) {
+        if (col === 2 || col === 3) { // Percentage columns
+          cell.t = 'n';
+          cell.z = '0.0%';
+        }
+        
+        if (col === 4) { // Assessment column
+          const assessment = cell.v;
+          let fillColor = 'FFFFFF';
+          if (typeof assessment === 'string') {
+            if (assessment.includes('BELOW MARKET') || assessment.includes('ABOVE MARKET')) {
+              fillColor = 'FEE2E2'; // Red for out of range
+            } else if (assessment.includes('ON TARGET')) {
+              fillColor = 'DCFCE7'; // Green for on target
+            } else if (assessment.includes('ACCEPTABLE')) {
+              fillColor = 'FEF3C7'; // Yellow for acceptable
+            }
+          }
+          cell.s = { fill: { fgColor: { rgb: fillColor } } };
+        }
+      }
+    }
+  }
+  
+  XLSX.utils.book_append_sheet(wb, benchmarkWS, 'Market Benchmarking');
+  
+  // Save the file with timestamp
+  const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const fileName = `Levelr_Leveling_Analysis_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+}
+
+// Enhanced PDF export for bid leveling
+export function exportBidLevelingToPDF(selectedAnalyses: SavedAnalysis[]) {
+  const doc = new jsPDF();
+  let currentY = 20;
+  
+  // Title Page
+  doc.setFontSize(24);
+  doc.text('BID LEVELING ANALYSIS', 20, currentY);
+  currentY += 15;
+  
+  doc.setFontSize(12);
+  doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, currentY);
+  currentY += 10;
+  doc.text(`Number of Bids Analyzed: ${selectedAnalyses.length}`, 20, currentY);
+  currentY += 20;
+  
+  // Executive Summary
+  doc.setFontSize(16);
+  doc.text('EXECUTIVE SUMMARY', 20, currentY);
+  currentY += 15;
+  
+  const sortedBids = selectedAnalyses.sort((a, b) => a.result.total_amount - b.result.total_amount);
+  const lowBid = sortedBids[0].result.total_amount;
+  const highBid = sortedBids[sortedBids.length - 1].result.total_amount;
+  const spread = ((highBid - lowBid) / lowBid) * 100;
+  
+  doc.setFontSize(10);
+  doc.text(`Lowest Bid: ${sortedBids[0].result.contractor_name} - $${lowBid.toLocaleString()}`, 20, currentY);
+  currentY += 8;
+  doc.text(`Highest Bid: ${sortedBids[sortedBids.length - 1].result.contractor_name} - $${highBid.toLocaleString()}`, 20, currentY);
+  currentY += 8;
+  doc.text(`Bid Spread: ${spread.toFixed(1)}%`, 20, currentY);
+  currentY += 15;
+  
+  // Bid Ranking Table
+  const rankingData = sortedBids.map((bid, index) => {
+    const variance = ((bid.result.total_amount - lowBid) / lowBid) * 100;
+    return [
+      (index + 1).toString(),
+      bid.result.contractor_name,
+      `$${bid.result.total_amount.toLocaleString()}`,
+      'MEDIUM', // Default risk level
+      `+${variance.toFixed(1)}%`
+    ];
+  });
+  
+  autoTable(doc, {
+    head: [['Rank', 'Contractor', 'Total Amount', 'Risk', 'Variance']],
+    body: rankingData,
+    startY: currentY,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [41, 128, 185] }
+  });
+  
+  currentY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 20;
+  
+  // New page for CSI analysis if needed
+  if (currentY > 250) {
+    doc.addPage();
+    currentY = 20;
+  }
+  
+  // CSI Division Analysis
+  doc.setFontSize(16);
+  doc.text('CSI DIVISION ANALYSIS', 20, currentY);
+  currentY += 15;
+  
+  // Get top divisions by average cost
+  const allDivisions = new Set<string>();
+  selectedAnalyses.forEach(bid => {
+    Object.keys(bid.result.csi_divisions).forEach(div => allDivisions.add(div));
+  });
+  
+  const divisionSummary = Array.from(allDivisions).map(divCode => {
+    const costs = selectedAnalyses
+      .map(bid => bid.result.csi_divisions[divCode])
+      .filter(d => d)
+      .map(d => d.cost);
+    
+    const average = costs.reduce((sum, cost) => sum + cost, 0) / costs.length;
+    const division = CSI_DIVISIONS[divCode as keyof typeof CSI_DIVISIONS];
+    
+    return {
+      code: divCode,
+      name: division?.name || 'Unknown',
+      average,
+      min: Math.min(...costs),
+      max: Math.max(...costs),
+      count: costs.length
+    };
+  }).sort((a, b) => b.average - a.average).slice(0, 8); // Top 8 divisions
+  
+  const divisionTableData = divisionSummary.map(div => [
+    `${div.code} - ${div.name}`,
+    `$${div.average.toLocaleString()}`,
+    `$${div.min.toLocaleString()}`,
+    `$${div.max.toLocaleString()}`,
+    div.count.toString()
+  ]);
+  
+  autoTable(doc, {
+    head: [['Division', 'Average', 'Min', 'Max', 'Bids']],
+    body: divisionTableData,
+    startY: currentY,
+    styles: { fontSize: 8 },
+    headStyles: { fillColor: [52, 152, 219] }
+  });
+  
+  // Save the PDF
+  const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  doc.save(`Bid_Leveling_Report_${timestamp}.pdf`);
+}
+
+// Helper functions for leveling export
+function synthesizeDivisionComment(analysis: SavedAnalysis, code: string): string {
+  const exclusions = (analysis.result.exclusions || []).join(' ').toLowerCase();
+  const cost = analysis.result.csi_divisions?.[code]?.cost ?? 0;
+  
+  if (cost === 0) {
+    if (code === '28' && exclusions.includes('security')) return 'Excluded per bid (Security)';
+    if (code === '27' && (exclusions.includes('tele') || exclusions.includes('communications'))) return 'Excluded per bid (Comms)';
+    return 'No cost; likely excluded';
+  }
+  return '';
+}
+
+function calculateTradesSubtotal(analysis: SavedAnalysis): number {
+  return LEVELING_DIVISIONS.reduce((sum, code) => {
+    return sum + (analysis.result.csi_divisions?.[code]?.cost ?? 0);
+  }, 0);
+}
+
+// Main leveling worksheet function
+export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
+  const sheetData: (string | number)[][] = [];
+  
+  // Calculate column positions
+  // SCOPE (1) + bidder blocks (3 cols each: COST, COST/SF, COMMENTS) + spacers between (not after last)
+  const bidderBlockSize = 3; // 3 data columns per bidder
+  const spacersCount = bids.length - 1; // Spacers only between bidders
+  const totalCols = 1 + (bids.length * bidderBlockSize) + spacersCount;
+  
+  // Row 1: "SCOPE" then bidder names merged across 3 columns each
+  const row1: (string | number)[] = ['SCOPE'];
+  bids.forEach((bid, index) => {
+    row1.push(bid.result.contractor_name);
+    row1.push(''); // For merge
+    row1.push(''); // For merge
+    if (index < bids.length - 1) row1.push(''); // Spacer column only between bidders
+  });
+  sheetData.push(row1);
+  
+  // Row 2: "" then "COST", "COST/SF", "COMMENTS" for each bidder (removed "Based on Proposal" row)
+  const row2: (string | number)[] = [''];
+  bids.forEach((bid, index) => {
+    row2.push('COST');
+    row2.push('COST/SF');
+    row2.push('COMMENTS');
+    if (index < bids.length - 1) row2.push(''); // Spacer column only between bidders
+  });
+  sheetData.push(row2);
+  
+  // Body rows - All LEVELING_DIVISIONS using LEVELING_LABELS
+  LEVELING_DIVISIONS.forEach(code => {
+    const row: (string | number)[] = [`${code} - ${LEVELING_LABELS[code] || `Division ${code}`}`];
+    
+    bids.forEach((bid, index) => {
+      const divisionData = bid.result.csi_divisions?.[code];
+      const cost = divisionData?.cost ?? 0;
+      const grossSqft = bid.result.gross_sqft;
+      
+      // COST column
+      row.push(cost);
+      
+      // COST/SF column
+      const costPerSF = grossSqft && grossSqft > 0 ? cost / grossSqft : null;
+      row.push(costPerSF ?? '—');
+      
+      // COMMENTS column
+      row.push(synthesizeDivisionComment(bid, code));
+      
+      // Spacer column only between bidders
+      if (index < bids.length - 1) row.push('');
+    });
+    
+    sheetData.push(row);
+  });
+  
+  // "Soft Costs" row
+  const softCostsRow: (string | number)[] = [PSEUDO_SCOPES.SOFT];
+  bids.forEach((bid, index) => {
+    const softCostAmount = bid.result.softCostsTotal ?? 0;
+    const grossSqft = bid.result.gross_sqft;
+    
+    softCostsRow.push(softCostAmount);
+    softCostsRow.push(grossSqft && grossSqft > 0 ? softCostAmount / grossSqft : '—');
+    
+    // Generate intelligent comment based on soft costs data
+    let comment = 'No soft costs identified';
+    if (softCostAmount > 0) {
+      const softCostCount = bid.result.softCosts?.length ?? 0;
+      if (softCostCount > 0) {
+        comment = `${softCostCount} soft cost item${softCostCount > 1 ? 's' : ''} (permits, fees, etc.)`;
+      } else {
+        comment = 'Soft costs identified but not itemized';
+      }
+    }
+    softCostsRow.push(comment);
+    
+    if (index < bids.length - 1) softCostsRow.push('');
+  });
+  sheetData.push(softCostsRow);
+  
+  // "Uncategorized" row
+  const uncategorizedRow: (string | number)[] = [PSEUDO_SCOPES.UNC];
+  bids.forEach((bid, index) => {
+    const uncategorizedAmount = bid.result.uncategorizedTotal ?? 0;
+    const grossSqft = bid.result.gross_sqft;
+    
+    uncategorizedRow.push(uncategorizedAmount);
+    uncategorizedRow.push(grossSqft && grossSqft > 0 ? uncategorizedAmount / grossSqft : '—');
+    uncategorizedRow.push(uncategorizedAmount > 0 ? 'Items not categorized to CSI divisions' : 'All costs categorized');
+    
+    if (index < bids.length - 1) uncategorizedRow.push('');
+  });
+  sheetData.push(uncategorizedRow);
+  
+  // Blank separator
+  const blankRow: (string | number)[] = new Array(totalCols).fill('');
+  sheetData.push(blankRow);
+  
+  // "TRADES SUBTOTAL" (sum divisions only)
+  const tradesSubtotalRow: (string | number)[] = ['TRADES SUBTOTAL'];
+  bids.forEach((bid, index) => {
+    const tradesSubtotal = calculateTradesSubtotal(bid);
+    const grossSqft = bid.result.gross_sqft;
+    
+    tradesSubtotalRow.push(tradesSubtotal);
+    tradesSubtotalRow.push(grossSqft && grossSqft > 0 ? tradesSubtotal / grossSqft : '—');
+    tradesSubtotalRow.push('Sum of all CSI divisions');
+    
+    if (index < bids.length - 1) tradesSubtotalRow.push('');
+  });
+  sheetData.push(tradesSubtotalRow);
+  
+  // Add markup rows (CM Fee, Insurance, Bond, OH&P) based on project_overhead
+  bids.forEach((bid, bidIndex) => {
+    const overhead = bid.result.project_overhead;
+    
+    // Only create markup rows for the first bid, then populate all bids
+    if (bidIndex === 0) {
+      // CM Fee row
+      if (overhead?.cm_fee && overhead.cm_fee > 0) {
+        const cmFeeRow: (string | number)[] = ['CM Fee'];
+        bids.forEach((b, i) => {
+          const cmFee = b.result.project_overhead?.cm_fee ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (cmFee / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          cmFeeRow.push(cmFee);
+          cmFeeRow.push(grossSqft && grossSqft > 0 ? cmFee / grossSqft : '—');
+          cmFeeRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No CM fee');
+          
+          if (i < bids.length - 1) cmFeeRow.push('');
+        });
+        sheetData.push(cmFeeRow);
+      }
+      
+      // Insurance row
+      if (overhead?.insurance && overhead.insurance > 0) {
+        const insuranceRow: (string | number)[] = ['Insurance'];
+        bids.forEach((b, i) => {
+          const insurance = b.result.project_overhead?.insurance ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (insurance / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          insuranceRow.push(insurance);
+          insuranceRow.push(grossSqft && grossSqft > 0 ? insurance / grossSqft : '—');
+          insuranceRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No insurance cost');
+          
+          if (i < bids.length - 1) insuranceRow.push('');
+        });
+        sheetData.push(insuranceRow);
+      }
+      
+      // Bond row
+      if (overhead?.bonds && overhead.bonds > 0) {
+        const bondsRow: (string | number)[] = ['Bond'];
+        bids.forEach((b, i) => {
+          const bonds = b.result.project_overhead?.bonds ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (bonds / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          bondsRow.push(bonds);
+          bondsRow.push(grossSqft && grossSqft > 0 ? bonds / grossSqft : '—');
+          bondsRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No bond cost');
+          
+          if (i < bids.length - 1) bondsRow.push('');
+        });
+        sheetData.push(bondsRow);
+      }
+      
+      // General Conditions / OH&P row
+      if (overhead?.general_conditions && overhead.general_conditions > 0) {
+        const gcRow: (string | number)[] = ['General Conditions'];
+        bids.forEach((b, i) => {
+          const gc = b.result.project_overhead?.general_conditions ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (gc / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          gcRow.push(gc);
+          gcRow.push(grossSqft && grossSqft > 0 ? gc / grossSqft : '—');
+          gcRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No general conditions');
+          
+          if (i < bids.length - 1) gcRow.push('');
+        });
+        sheetData.push(gcRow);
+      }
+    }
+  });
+  
+  // "GRAND TOTAL" (trades + overhead + soft costs + uncategorized)
+  const grandTotalRow: (string | number)[] = ['GRAND TOTAL'];
+  bids.forEach((bid, index) => {
+    const tradesSubtotal = calculateTradesSubtotal(bid);
+    const overhead = bid.result.project_overhead;
+    const overheadTotal = (overhead?.cm_fee ?? 0) + (overhead?.insurance ?? 0) + (overhead?.bonds ?? 0) + (overhead?.general_conditions ?? 0);
+    const softCostsAmount = bid.result.softCostsTotal ?? 0;
+    const uncategorizedAmount = bid.result.uncategorizedTotal ?? 0;
+    const grandTotal = tradesSubtotal + overheadTotal + softCostsAmount + uncategorizedAmount;
+    const grossSqft = bid.result.gross_sqft;
+    
+    grandTotalRow.push(grandTotal);
+    grandTotalRow.push(grossSqft && grossSqft > 0 ? grandTotal / grossSqft : '—');
+    grandTotalRow.push('Total project cost');
+    
+    if (index < bids.length - 1) grandTotalRow.push('');
+  });
+  sheetData.push(grandTotalRow);
+  
+  // Create worksheet
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+  
+  // Apply styling and formatting
+  
+  // Column widths: SCOPE=40, COST=18, COST/SF=12, COMMENTS=50, spacer=1
+  const colWidths = [{ wch: 40 }]; // SCOPE column
+  bids.forEach((_, index) => {
+    colWidths.push({ wch: 18 }); // COST
+    colWidths.push({ wch: 12 }); // COST/SF
+    colWidths.push({ wch: 50 }); // COMMENTS
+    if (index < bids.length - 1) colWidths.push({ wch: 1 }); // spacer
+  });
+  ws['!cols'] = colWidths;
+  
+  // Freeze panes at row 2, column 1 (after headers, before data)
+  ws['!freeze'] = { xSplit: 1, ySplit: 2 };
+  
+  // Apply cell formatting
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
+  
+  // Header formatting (rows 1-2)
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col <= range.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      if (!ws[cellAddr]) continue;
+      
+      ws[cellAddr].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: 'E5E7EB' } },
+        alignment: { horizontal: 'center' }
+      };
+    }
+  }
+  
+  // Total rows formatting (last 2 rows)
+  const totalRowStart = sheetData.length - 2;
+  for (let row = totalRowStart; row < sheetData.length; row++) {
+    for (let col = 0; col <= range.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      if (!ws[cellAddr]) continue;
+      
+      ws[cellAddr].s = {
+        font: { bold: true },
+        fill: { fgColor: { rgb: 'DBEAFE' } }
+      };
+    }
+  }
+  
+  // Format currency columns (COST columns)
+  for (let row = 2; row < sheetData.length; row++) {
+    let col = 1; // Start after SCOPE column
+    bids.forEach((_, bidIndex) => {
+      // COST column formatting
+      const costCellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      if (ws[costCellAddr] && typeof ws[costCellAddr].v === 'number') {
+        ws[costCellAddr].t = 'n';
+        ws[costCellAddr].z = '$#,##0';
+      }
+      
+      // COST/SF column formatting
+      const costSFCellAddr = XLSX.utils.encode_cell({ r: row, c: col + 1 });
+      if (ws[costSFCellAddr] && typeof ws[costSFCellAddr].v === 'number') {
+        ws[costSFCellAddr].t = 'n';
+        ws[costSFCellAddr].z = '$#,##0.00';
+      }
+      
+      // Move to next bidder block: 3 columns + 1 spacer (except after last bidder)
+      col += bidderBlockSize;
+      if (bidIndex < bids.length - 1) col += 1; // Add spacer except after last bidder
+    });
+  }
+  
+  // Set up merges for header rows
+  const merges: XLSX.Range[] = [];
+  
+  // Row 1 merges (bidder names across 3 columns)
+  let mergeCol = 1;
+  bids.forEach((_, bidIndex) => {
+    merges.push({
+      s: { r: 0, c: mergeCol },
+      e: { r: 0, c: mergeCol + 2 }
+    });
+    mergeCol += bidderBlockSize;
+    if (bidIndex < bids.length - 1) mergeCol += 1; // Add spacer except after last bidder
+  });
+  
+  ws['!merges'] = merges;
+  
+  // Add worksheet to workbook
+  XLSX.utils.book_append_sheet(wb, ws, 'Leveled Comparison');
+}
+=== src/components/analysis/AnalysisResults.tsx ===
+'use client';
+
+import { useState } from 'react';
+import { AnalysisResult } from '@/types/analysis';
+import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
+import { analyzeMarketVariance } from '@/lib/analysis/market-analyzer';
+import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
+import { Building, Calendar, DollarSign, AlertTriangle, CheckCircle, TrendingUp, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+
+interface AnalysisResultsProps {
+  analysis: AnalysisResult;
+  onExport?: () => void;
+}
+
+export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
+  const [showUncategorized, setShowUncategorized] = useState(false);
+  const [expandedDivisions, setExpandedDivisions] = useState<Set<string>>(new Set());
+  const [showOverhead, setShowOverhead] = useState(false);
+  const [showAllowances, setShowAllowances] = useState(false);
+  const [showSubcontractors, setShowSubcontractors] = useState(false);
+
+  const toggleDivision = (code: string) => {
+    const newExpanded = new Set(expandedDivisions);
+    if (newExpanded.has(code)) {
+      newExpanded.delete(code);
+    } else {
+      newExpanded.add(code);
+    }
+    setExpandedDivisions(newExpanded);
+  };
+  
+  const projectRisk = calculateProjectRisk(
+    Object.fromEntries(
+      Object.entries(analysis.csi_divisions).map(([code, data]) => [code, data.cost])
+    ),
+    analysis.total_amount,
+    analysis.uncategorizedTotal || 0,
+    analysis // Pass full analysis for enhanced subcontractor validation
+  );
+
+  const getRiskColor = (level: string) => {
+    switch (level) {
+      case 'HIGH': return 'text-red-600 bg-red-100';
+      case 'MEDIUM': return 'text-yellow-600 bg-yellow-100';
+      case 'LOW': return 'text-green-600 bg-green-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getVarianceColor = (status: string) => {
+    switch (status) {
+      case 'ABOVE_MARKET': return 'text-red-600 bg-red-50 border-red-200';
+      case 'BELOW_MARKET': return 'text-yellow-600 bg-yellow-50 border-yellow-200';
+      case 'MARKET_RATE': return 'text-green-600 bg-green-50 border-green-200';
+      default: return 'text-gray-600 bg-gray-50 border-gray-200';
+    }
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Project Overview */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">Bid Analysis Results</h2>
+        
+        <div className="grid md:grid-cols-3 gap-4">
+          <div className="flex items-center">
+            <Building className="h-5 w-5 text-blue-600 mr-2" />
+            <div>
+              <p className="text-sm text-gray-600">Contractor</p>
+              <p className="font-semibold">{analysis.contractor_name}</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center">
+            <DollarSign className="h-5 w-5 text-green-600 mr-2" />
+            <div>
+              <p className="text-sm text-gray-600">Total Amount</p>
+              <p className="font-semibold">${analysis.total_amount.toLocaleString()}</p>
+            </div>
+          </div>
+          
+          {analysis.bid_date && (
+            <div className="flex items-center">
+              <Calendar className="h-5 w-5 text-purple-600 mr-2" />
+              <div>
+                <p className="text-sm text-gray-600">Bid Date</p>
+                <p className="font-semibold">{new Date(analysis.bid_date).toLocaleDateString()}</p>
+              </div>
+            </div>
+          )}
+        </div>
+        
+        {analysis.project_name && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-600">Project</p>
+            <p className="font-semibold text-lg">{analysis.project_name}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Cost Coverage Summary */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">Cost Coverage Analysis</h3>
+        
+        {(() => {
+          // Calculate comprehensive cost coverage
+          const csiDivisionsCost = Object.values(analysis.csi_divisions).reduce((sum, div) => sum + div.cost, 0);
+          const projectOverheadCost = analysis.project_overhead?.total_overhead || 0;
+          const allowancesTotalCost = analysis.allowances_total || 0;
+          const uncategorizedCost = analysis.uncategorizedTotal || 0;
+          
+          // Calculate subcontractor costs - avoid double counting with CSI divisions
+          let separateSubcontractorCost = 0;
+          let subcontractorCoveredByCSI = 0;
+          if (analysis.subcontractors) {
+            analysis.subcontractors.forEach(sub => {
+              // Check if this subcontractor's divisions are covered in CSI divisions
+              const csiCoveredAmount = sub.divisions.reduce((sum, divCode) => {
+                const csiDiv = analysis.csi_divisions[divCode];
+                return sum + (csiDiv?.cost || 0);
+              }, 0);
+              
+              if (csiCoveredAmount > 0) {
+                // Subcontractor is already counted in CSI divisions
+                subcontractorCoveredByCSI += sub.total_amount;
+              } else {
+                // Subcontractor is separate from CSI breakdown
+                separateSubcontractorCost += sub.total_amount;
+              }
+            });
+          }
+          
+          const totalCoveredCost = csiDivisionsCost + projectOverheadCost + allowancesTotalCost + separateSubcontractorCost;
+          const coveragePercentage = (totalCoveredCost / analysis.total_amount) * 100;
+          const uncategorizedPercentage = (uncategorizedCost / analysis.total_amount) * 100;
+          
+          const getCoverageColor = (percentage: number) => {
+            if (percentage >= 85) return 'text-green-600 bg-green-100';
+            if (percentage >= 70) return 'text-yellow-600 bg-yellow-100';
+            return 'text-red-600 bg-red-100';
+          };
+          
+          return (
+            <>
+              <div className="grid md:grid-cols-2 gap-6 mb-4">
+                <div className="bg-gray-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3">Coverage Breakdown</h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span>CSI Divisions:</span>
+                      <span className="font-medium">${csiDivisionsCost.toLocaleString()} ({((csiDivisionsCost / analysis.total_amount) * 100).toFixed(1)}%)</span>
+                    </div>
+                    {projectOverheadCost > 0 && (
+                      <div className="flex justify-between">
+                        <span>Project Overhead:</span>
+                        <span className="font-medium">${projectOverheadCost.toLocaleString()} ({((projectOverheadCost / analysis.total_amount) * 100).toFixed(1)}%)</span>
+                      </div>
+                    )}
+                    {allowancesTotalCost > 0 && (
+                      <div className="flex justify-between">
+                        <span>Allowances & Contingencies:</span>
+                        <span className="font-medium">${allowancesTotalCost.toLocaleString()} ({((allowancesTotalCost / analysis.total_amount) * 100).toFixed(1)}%)</span>
+                      </div>
+                    )}
+                    {separateSubcontractorCost > 0 && (
+                      <div className="flex justify-between">
+                        <span>Separate Subcontractors:</span>
+                        <span className="font-medium">${separateSubcontractorCost.toLocaleString()} ({((separateSubcontractorCost / analysis.total_amount) * 100).toFixed(1)}%)</span>
+                      </div>
+                    )}
+                    {subcontractorCoveredByCSI > 0 && (
+                      <div className="flex justify-between text-gray-500 text-xs">
+                        <span>Subcontractors in CSI (no double-count):</span>
+                        <span>${subcontractorCoveredByCSI.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {uncategorizedCost > 0 && (
+                      <div className="flex justify-between text-yellow-600">
+                        <span>Uncategorized:</span>
+                        <span className="font-medium">${uncategorizedCost.toLocaleString()} ({uncategorizedPercentage.toFixed(1)}%)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                
+                <div className="bg-blue-50 rounded-lg p-4">
+                  <h4 className="font-semibold text-gray-900 mb-3">Coverage Summary</h4>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="text-sm">Total Coverage</span>
+                        <span className={`px-2 py-1 rounded text-sm font-medium ${getCoverageColor(coveragePercentage)}`}>
+                          {coveragePercentage.toFixed(1)}%
+                        </span>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2">
+                        <div 
+                          className={`h-2 rounded-full ${
+                            coveragePercentage >= 85 ? 'bg-green-500' :
+                            coveragePercentage >= 70 ? 'bg-yellow-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.min(coveragePercentage, 100)}%` }}
+                        ></div>
+                      </div>
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      <p><strong>Covered:</strong> ${totalCoveredCost.toLocaleString()}</p>
+                      <p><strong>Total Project:</strong> ${analysis.total_amount.toLocaleString()}</p>
+                      {uncategorizedCost > 0 && (
+                        <p className="text-yellow-600"><strong>Uncategorized:</strong> ${uncategorizedCost.toLocaleString()}</p>
+                      )}
+                    </div>
+                    {coveragePercentage >= 85 && (
+                      <p className="text-xs text-green-600 font-medium">✅ Excellent coverage - comprehensive cost breakdown</p>
+                    )}
+                    {coveragePercentage >= 70 && coveragePercentage < 85 && (
+                      <p className="text-xs text-yellow-600 font-medium">⚠️ Good coverage - some costs may need further categorization</p>
+                    )}
+                    {coveragePercentage < 70 && (
+                      <p className="text-xs text-red-600 font-medium">⚠️ Low coverage - potential missing costs or scope gaps</p>
+                    )}
+                    <p className="text-xs text-gray-500 mt-2">
+                      Coverage includes CSI divisions, project overhead, allowances, and separate subcontractors. 
+                      Prevents double-counting between CSI and subcontractor costs.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          );
+        })()}
+      </div>
+
+      {/* Risk Assessment */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-xl font-bold text-gray-900">Risk Assessment</h3>
+          <div className="flex items-center">
+            <AlertTriangle className="h-5 w-5 mr-2" />
+            <span className={`px-3 py-1 rounded-full text-sm font-medium ${getRiskColor(projectRisk.level)}`}>
+              {projectRisk.level} RISK ({projectRisk.score}/100)
+            </span>
+          </div>
+        </div>
+        
+        <div className="bg-gray-50 rounded-lg p-4 mb-4">
+          <div className="flex items-center mb-2">
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div 
+                className={`h-2 rounded-full ${
+                  projectRisk.level === 'HIGH' ? 'bg-red-500' :
+                  projectRisk.level === 'MEDIUM' ? 'bg-yellow-500' : 'bg-green-500'
+                }`}
+                style={{ width: `${projectRisk.score}%` }}
+              ></div>
+            </div>
+          </div>
+        </div>
+        
+        {projectRisk.factors.length > 0 && (
+          <div>
+            <h4 className="font-semibold text-gray-900 mb-2">Risk Factors:</h4>
+            <ul className="space-y-2">
+              {projectRisk.factors.map((factor, index) => (
+                <li key={index} className="flex items-start">
+                  <AlertTriangle className="h-4 w-4 text-yellow-500 mr-2 mt-0.5 flex-shrink-0" />
+                  <span className="text-gray-700">{factor}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* CSI Division Breakdown */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h3 className="text-xl font-bold text-gray-900 mb-4">CSI Division Analysis</h3>
+        
+        <div className="space-y-4">
+          {Object.entries(analysis.csi_divisions).map(([code, data]) => {
+            const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
+            const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
+            const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
+            
+            const isExpanded = expandedDivisions.has(code);
+            const hasSubItems = data.sub_items && data.sub_items.length > 0;
+            
+            return (
+              <div key={code} className={`border rounded-lg p-4 ${getVarianceColor(variance.status)}`}>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <h4 className="font-semibold">
+                        Division {code} - {division?.name || 'Unknown'}
+                      </h4>
+                      {hasSubItems && (
+                        <button
+                          onClick={() => toggleDivision(code)}
+                          className="ml-2 p-1 rounded hover:bg-white hover:bg-opacity-50"
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-sm opacity-75">{division?.description}</p>
+                    {data.subcontractor && (
+                      <p className="text-sm font-medium text-blue-600">
+                        Subcontractor: {data.subcontractor}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold text-lg">${data.cost.toLocaleString()}</p>
+                    <p className="text-sm">{percentage}% of total</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    {variance.status === 'MARKET_RATE' ? (
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                    ) : (
+                      <TrendingUp className="h-4 w-4 mr-2" />
+                    )}
+                    <span className="text-sm font-medium">{variance.message}</span>
+                  </div>
+                  
+                  {data.unit_cost && data.quantity && data.unit && (
+                    <div className="text-sm">
+                      {data.quantity.toLocaleString()} {data.unit} @ ${data.unit_cost.toFixed(2)}
+                    </div>
+                  )}
+                </div>
+                
+                {variance.recommendation && (
+                  <div className="mt-2 text-sm">
+                    <strong>Recommendation:</strong> {variance.recommendation}
+                  </div>
+                )}
+
+                {/* Expandable Sub-Items Section */}
+                {hasSubItems && isExpanded && (
+                  <div className="mt-4 pl-4 border-l-2 border-gray-200">
+                    <h5 className="text-sm font-semibold text-gray-700 mb-2">Detailed Line Items:</h5>
+                    <div className="space-y-2">
+                      {data.sub_items!.map((item, index) => (
+                        <div key={index} className="bg-white bg-opacity-60 rounded p-3 text-sm">
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <p className="font-medium">{item.description}</p>
+                              {item.subcontractor && (
+                                <p className="text-xs text-blue-600">Sub: {item.subcontractor}</p>
+                              )}
+                              {item.notes && (
+                                <p className="text-xs text-gray-600 mt-1">{item.notes}</p>
+                              )}
+                            </div>
+                            <div className="text-right ml-4">
+                              <p className="font-semibold">${item.cost.toLocaleString()}</p>
+                              {item.unit_cost && item.quantity && item.unit && (
+                                <p className="text-xs text-gray-600">
+                                  {item.quantity.toLocaleString()} {item.unit} @ ${item.unit_cost.toFixed(2)}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {data.items.length > 0 && !hasSubItems && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium">Items:</p>
+                    <p className="text-sm">{data.items.join(', ')}</p>
+                  </div>
+                )}
+
+                {data.scope_notes && (
+                  <div className="mt-2 text-sm">
+                    <strong>Scope Notes:</strong> {data.scope_notes}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Project Overhead Section */}
+      {analysis.project_overhead && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <Building className="h-5 w-5 text-blue-600 mr-2" />
+              <h3 className="text-xl font-bold text-gray-900">
+                Project Overhead - ${analysis.project_overhead.total_overhead.toLocaleString()}
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowOverhead(!showOverhead)}
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              {showOverhead ? (
+                <>
+                  <span className="mr-1">Hide Details</span>
+                  <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  <span className="mr-1">Show Details</span>
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </div>
+
+          {showOverhead && (
+            <div className="grid md:grid-cols-2 gap-4">
+              {analysis.project_overhead.general_conditions && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="font-medium">General Conditions</p>
+                  <p className="text-lg font-bold">${analysis.project_overhead.general_conditions.toLocaleString()}</p>
+                </div>
+              )}
+              {analysis.project_overhead.cm_fee && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="font-medium">CM Fee</p>
+                  <p className="text-lg font-bold">${analysis.project_overhead.cm_fee.toLocaleString()}</p>
+                </div>
+              )}
+              {analysis.project_overhead.insurance && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="font-medium">Insurance</p>
+                  <p className="text-lg font-bold">${analysis.project_overhead.insurance.toLocaleString()}</p>
+                </div>
+              )}
+              {analysis.project_overhead.bonds && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="font-medium">Bonds</p>
+                  <p className="text-lg font-bold">${analysis.project_overhead.bonds.toLocaleString()}</p>
+                </div>
+              )}
+              {analysis.project_overhead.permits && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="font-medium">Permits</p>
+                  <p className="text-lg font-bold">${analysis.project_overhead.permits.toLocaleString()}</p>
+                </div>
+              )}
+              {analysis.project_overhead.supervision && (
+                <div className="bg-gray-50 p-3 rounded">
+                  <p className="font-medium">Supervision</p>
+                  <p className="text-lg font-bold">${analysis.project_overhead.supervision.toLocaleString()}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Allowances & Contingencies Section */}
+      {analysis.allowances && analysis.allowances.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mr-2" />
+              <h3 className="text-xl font-bold text-gray-900">
+                Allowances & Contingencies - ${(analysis.allowances_total || 0).toLocaleString()}
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowAllowances(!showAllowances)}
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              {showAllowances ? (
+                <>
+                  <span className="mr-1">Hide Details</span>
+                  <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  <span className="mr-1">Show Details</span>
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </div>
+
+          {showAllowances && (
+            <div className="space-y-3">
+              {analysis.allowances.map((allowance, index) => {
+                const typeColor = {
+                  contingency: 'bg-red-50 border-red-200 text-red-800',
+                  allowance: 'bg-blue-50 border-blue-200 text-blue-800',
+                  hold: 'bg-yellow-50 border-yellow-200 text-yellow-800',
+                  tbd: 'bg-gray-50 border-gray-200 text-gray-800',
+                  unit_price_allowance: 'bg-green-50 border-green-200 text-green-800'
+                }[allowance.type] || 'bg-gray-50 border-gray-200 text-gray-800';
+
+                return (
+                  <div key={index} className={`border rounded-lg p-4 ${typeColor}`}>
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center">
+                          <h4 className="font-semibold">{allowance.description}</h4>
+                          <span className="ml-2 px-2 py-1 text-xs rounded-full bg-white bg-opacity-50">
+                            {allowance.type.replace('_', ' ').toUpperCase()}
+                          </span>
+                        </div>
+                        {allowance.scope_description && (
+                          <p className="text-sm mt-1 opacity-75">{allowance.scope_description}</p>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-lg">${allowance.amount.toLocaleString()}</p>
+                        {allowance.percentage_of_total && (
+                          <p className="text-sm">{allowance.percentage_of_total.toFixed(1)}% of total</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Subcontractors Section */}
+      {analysis.subcontractors && analysis.subcontractors.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <Building className="h-5 w-5 text-green-600 mr-2" />
+              <h3 className="text-xl font-bold text-gray-900">
+                Subcontractor Breakdown ({analysis.subcontractors.length} trades)
+              </h3>
+            </div>
+            <button
+              onClick={() => setShowSubcontractors(!showSubcontractors)}
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              {showSubcontractors ? (
+                <>
+                  <span className="mr-1">Hide Details</span>
+                  <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  <span className="mr-1">Show Details</span>
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </div>
+
+          {showSubcontractors && (
+            <div className="space-y-3">
+              {analysis.subcontractors.map((sub, index) => (
+                <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                  <div className="flex justify-between items-start">
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-lg">{sub.name}</h4>
+                      <p className="text-sm text-blue-600 font-medium">{sub.trade}</p>
+                      <div className="flex flex-wrap gap-1 mt-1">
+                        {sub.divisions.map((div) => (
+                          <span key={div} className="px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded">
+                            Div {div}
+                          </span>
+                        ))}
+                      </div>
+                      {sub.scope_description && (
+                        <p className="text-sm text-gray-600 mt-2">{sub.scope_description}</p>
+                      )}
+                      {sub.contact_info && (
+                        <p className="text-xs text-gray-500 mt-1">{sub.contact_info}</p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-xl">${sub.total_amount.toLocaleString()}</p>
+                      <p className="text-sm text-gray-600">
+                        {((sub.total_amount / analysis.total_amount) * 100).toFixed(1)}% of total
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Uncategorized Costs Section */}
+      {analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+              <Eye className="h-5 w-5 text-yellow-600 mr-2" />
+              <h3 className="text-xl font-bold text-gray-900">
+                Soft Costs & Uncategorized Items ({((analysis.uncategorizedTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of total)
+              </h3>
+              {(analysis.uncategorizedTotal || 0) / analysis.total_amount > 0.25 && (
+                <AlertTriangle className="h-5 w-5 text-yellow-500 ml-2" />
+              )}
+            </div>
+            <button
+              onClick={() => setShowUncategorized(!showUncategorized)}
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors"
+            >
+              {showUncategorized ? (
+                <>
+                  <span className="mr-1">Hide Details</span>
+                  <ChevronUp className="h-4 w-4" />
+                </>
+              ) : (
+                <>
+                  <span className="mr-1">Show Details</span>
+                  <ChevronDown className="h-4 w-4" />
+                </>
+              )}
+            </button>
+          </div>
+
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+            <div className="flex justify-between items-center mb-2">
+              <h4 className="font-semibold text-yellow-800">Total Uncategorized</h4>
+              <div className="text-right">
+                <p className="font-bold text-lg text-yellow-800">
+                  ${(analysis.uncategorizedTotal || 0).toLocaleString()}
+                </p>
+                <p className="text-sm text-yellow-700">
+                  {((analysis.uncategorizedTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of project total
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-yellow-700">
+              These costs couldn't be matched to specific CSI divisions using standard construction keywords.
+            </p>
+          </div>
+
+          {showUncategorized && (
+            <div className="space-y-3">
+              <h4 className="font-semibold text-gray-900 border-b border-gray-200 pb-2">
+                Itemized Soft Costs & Uncategorized Items
+              </h4>
+              {analysis.uncategorizedCosts.map((item, index) => (
+                <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                  <div className="flex-1">
+                    <p className="font-medium text-gray-900">{item.description}</p>
+                  </div>
+                  <div className="text-right ml-4">
+                    <p className="font-semibold text-gray-900">${item.cost.toLocaleString()}</p>
+                    <p className="text-sm text-gray-600">
+                      {(item.cost / analysis.total_amount * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                </div>
+              ))}
+              
+              <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  <strong>Why costs might be uncategorized:</strong>
+                </p>
+                <ul className="text-sm text-blue-700 mt-1 space-y-1">
+                  <li>• Contingency allowances or reserves</li>
+                  <li>• Non-construction items (permits, bonds, etc.)</li>
+                  <li>• Specialty work not matching standard CSI keywords</li>
+                  <li>• Vendor-specific or proprietary system names</li>
+                  <li>• Administrative or soft costs</li>
+                </ul>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Additional Information */}
+      {(analysis.exclusions?.length || analysis.assumptions?.length || analysis.timeline) && (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">Additional Information</h3>
+          
+          <div className="grid md:grid-cols-3 gap-6">
+            {analysis.timeline && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">Timeline</h4>
+                <p className="text-gray-700">{analysis.timeline}</p>
+              </div>
+            )}
+            
+            {analysis.exclusions?.length && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">Exclusions</h4>
+                <ul className="text-gray-700 space-y-1">
+                  {analysis.exclusions.map((exclusion, index) => (
+                    <li key={index}>• {exclusion}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            {analysis.assumptions?.length && (
+              <div>
+                <h4 className="font-semibold text-gray-900 mb-2">Assumptions</h4>
+                <ul className="text-gray-700 space-y-1">
+                  {analysis.assumptions.map((assumption, index) => (
+                    <li key={index}>• {assumption}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+    </div>
+  );
+}
+=== src/components/analysis/BidLeveling.tsx ===
+'use client';
+
+import { useState, useEffect, useCallback } from 'react';
+import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
+import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
+import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
+import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/export-generator';
+import { BarChart3, Download, DollarSign } from 'lucide-react';
+
+interface BidComparison {
+  analysis: SavedAnalysis;
+  risk: {
+    score: number;
+    level: string;
+    factors: string[];
+  };
+  rank: number;
+  varianceFromLow: number;
+}
+
+export default function BidLeveling() {
+  const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
+  const [selectedBids, setSelectedBids] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState<'price' | 'risk' | 'date'>('price');
+  const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
+  const [exportFormat, setExportFormat] = useState<'excel' | 'pdf'>('excel');
+
+  const loadAnalyses = () => {
+    const savedAnalyses = getAllAnalyses();
+    setAnalyses(savedAnalyses);
+  };
+
+  const calculateComparisons = useCallback(() => {
+    const selectedAnalyses = analyses.filter(a => selectedBids.includes(a.id));
+    
+    const comparisons = selectedAnalyses.map(analysis => {
+      const risk = calculateProjectRisk(
+        Object.fromEntries(
+          Object.entries(analysis.result.csi_divisions).map(([code, data]) => [code, data.cost])
+        ),
+        analysis.result.total_amount,
+        analysis.result.uncategorizedTotal || 0,
+        analysis.result
+      );
+      
+      return {
+        analysis,
+        risk,
+        rank: 0, // Will be calculated after sorting
+        varianceFromLow: 0 // Will be calculated after sorting
+      };
+    });
+
+    // Sort based on selected criteria
+    comparisons.sort((a, b) => {
+      switch (sortBy) {
+        case 'price':
+          return a.analysis.result.total_amount - b.analysis.result.total_amount;
+        case 'risk':
+          return a.risk.score - b.risk.score;
+        case 'date':
+          return new Date(b.analysis.timestamp).getTime() - new Date(a.analysis.timestamp).getTime();
+        default:
+          return 0;
+      }
+    });
+
+    // Calculate ranks and variance from low bid
+    const lowBid = comparisons[0]?.analysis.result.total_amount || 0;
+    comparisons.forEach((comp, index) => {
+      comp.rank = index + 1;
+      comp.varianceFromLow = lowBid > 0 ? ((comp.analysis.result.total_amount - lowBid) / lowBid) * 100 : 0;
+    });
+
+    setBidComparisons(comparisons);
+  }, [selectedBids, analyses, sortBy]);
+
+  useEffect(() => {
+    loadAnalyses();
+  }, []);
+
+  useEffect(() => {
+    if (selectedBids.length > 0) {
+      calculateComparisons();
+    }
+  }, [selectedBids, analyses, sortBy, calculateComparisons]);
+
+  const toggleBidSelection = (bidId: string) => {
+    if (selectedBids.includes(bidId)) {
+      setSelectedBids(selectedBids.filter(id => id !== bidId));
+    } else if (selectedBids.length < 5) {
+      setSelectedBids([...selectedBids, bidId]);
+    }
+  };
+
+  const handleExportLeveling = () => {
+    if (bidComparisons.length === 0) return;
+    
+    // Convert bidComparisons back to SavedAnalysis array for the export functions
+    const selectedAnalyses = bidComparisons.map(comp => comp.analysis);
+    
+    if (exportFormat === 'pdf') {
+      exportBidLevelingToPDF(selectedAnalyses);
+    } else {
+      exportBidLevelingToExcel(selectedAnalyses);
+    }
+  };
+
+  const getRiskColor = (level: string) => {
+    switch (level) {
+      case 'HIGH': return 'text-red-600 bg-red-100';
+      case 'MEDIUM': return 'text-yellow-600 bg-yellow-100';
+      case 'LOW': return 'text-green-600 bg-green-100';
+      default: return 'text-gray-600 bg-gray-100';
+    }
+  };
+
+  const getVarianceColor = (variance: number) => {
+    if (variance === 0) return 'text-green-600 bg-green-50';
+    if (variance <= 5) return 'text-yellow-600 bg-yellow-50';
+    return 'text-red-600 bg-red-50';
+  };
+
+  if (analyses.length === 0) {
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6 text-center">
+        <BarChart3 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-gray-900 mb-2">No Bids Available for Leveling</h3>
+        <p className="text-gray-600">
+          Analyze at least 2 bids to start comparing and leveling them.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-xl font-bold text-gray-900 flex items-center">
+            <BarChart3 className="h-5 w-5 mr-2" />
+            Bid Leveling & Comparison
+          </h3>
+          {bidComparisons.length > 0 && (
+            <div className="flex items-center space-x-3">
+              <select
+                value={exportFormat}
+                onChange={(e) => setExportFormat(e.target.value as 'excel' | 'pdf')}
+                className="border border-gray-300 rounded px-3 py-2 text-sm"
+              >
+                <option value="excel">Excel Report</option>
+                <option value="pdf">PDF Report</option>
+              </select>
+              <button
+                onClick={handleExportLeveling}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                Export {exportFormat.toUpperCase()}
+              </button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-4 mb-4">
+          <div className="flex items-center space-x-2">
+            <label className="text-sm font-medium text-gray-700">Sort by:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as 'price' | 'risk' | 'date')}
+              className="border border-gray-300 rounded px-2 py-1 text-sm"
+            >
+              <option value="price">Total Price</option>
+              <option value="risk">Risk Score</option>
+              <option value="date">Date</option>
+            </select>
+          </div>
+          
+          <div className="text-sm text-gray-600">
+            Selected: {selectedBids.length}/5 bids
+          </div>
+        </div>
+      </div>
+
+      {/* Bid Selection */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">Select Bids to Compare (up to 5)</h4>
+        
+        <div className="grid gap-3">
+          {analyses.map((analysis) => (
+            <div
+              key={analysis.id}
+              className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                selectedBids.includes(analysis.id)
+                  ? 'border-blue-500 bg-blue-50'
+                  : 'border-gray-200 hover:bg-gray-50'
+              }`}
+              onClick={() => toggleBidSelection(analysis.id)}
+            >
+              <div className="flex justify-between items-center">
+                <div className="flex-1">
+                  <div className="flex items-center mb-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedBids.includes(analysis.id)}
+                      onChange={() => {}} // Handled by parent onClick
+                      className="mr-3"
+                    />
+                    <h5 className="font-semibold text-gray-900">
+                      {analysis.result.contractor_name}
+                    </h5>
+                  </div>
+                  
+                  <div className="grid md:grid-cols-4 gap-4 text-sm text-gray-600">
+                    <div className="flex items-center">
+                      <DollarSign className="h-3 w-3 mr-1" />
+                      ${analysis.result.total_amount.toLocaleString()}
+                    </div>
+                    <div>
+                      Divisions: {Object.keys(analysis.result.csi_divisions).length}
+                    </div>
+                    <div>
+                      {new Date(analysis.timestamp).toLocaleDateString()}
+                    </div>
+                    <div>
+                      {analysis.result.project_name || 'No project name'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Comparison Results */}
+      {bidComparisons.length > 0 && (
+        <>
+          {/* Executive Summary */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-semibold text-gray-900 mb-4">Executive Summary</h4>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Rank</th>
+                    <th className="text-left py-2">Contractor</th>
+                    <th className="text-left py-2">Total Amount</th>
+                    <th className="text-left py-2">Variance from Low</th>
+                    <th className="text-left py-2">Risk Level</th>
+                    <th className="text-left py-2">Divisions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bidComparisons.map((comp) => (
+                    <tr key={comp.analysis.id} className="border-b">
+                      <td className="py-2">
+                        <span className={`px-2 py-1 rounded text-sm font-medium ${
+                          comp.rank === 1 ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          #{comp.rank}
+                        </span>
+                      </td>
+                      <td className="py-2 font-medium">{comp.analysis.result.contractor_name}</td>
+                      <td className="py-2">${comp.analysis.result.total_amount.toLocaleString()}</td>
+                      <td className="py-2">
+                        <span className={`px-2 py-1 rounded text-sm ${getVarianceColor(comp.varianceFromLow)}`}>
+                          {comp.varianceFromLow === 0 ? 'Base' : `+${comp.varianceFromLow.toFixed(1)}%`}
+                        </span>
+                      </td>
+                      <td className="py-2">
+                        <span className={`px-2 py-1 rounded text-sm ${getRiskColor(comp.risk.level)}`}>
+                          {comp.risk.level} ({comp.risk.score}/100)
+                        </span>
+                      </td>
+                      <td className="py-2">{Object.keys(comp.analysis.result.csi_divisions).length}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* CSI Division Comparison */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h4 className="text-lg font-semibold text-gray-900 mb-4">CSI Division Comparison</h4>
+            
+            <div className="overflow-x-auto">
+              <table className="min-w-full">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2">Division</th>
+                    {bidComparisons.map((comp) => (
+                      <th key={comp.analysis.id} className="text-left py-2">
+                        {comp.analysis.result.contractor_name}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Object.entries(CSI_DIVISIONS).map(([code, division]) => {
+                    // Check if any bid has this division
+                    const hasData = bidComparisons.some(comp => 
+                      comp.analysis.result.csi_divisions[code]
+                    );
+                    
+                    if (!hasData) return null;
+                    
+                    return (
+                      <tr key={code} className="border-b">
+                        <td className="py-2 font-medium">
+                          {code} - {division.name}
+                        </td>
+                        {bidComparisons.map((comp) => {
+                          const divisionData = comp.analysis.result.csi_divisions[code];
+                          const percentage = divisionData 
+                            ? ((divisionData.cost / comp.analysis.result.total_amount) * 100).toFixed(1)
+                            : '0.0';
+                          const cost = divisionData?.cost || 0;
+                          
+                          return (
+                            <td key={comp.analysis.id} className="py-2">
+                              {cost > 0 ? (
+                                <div>
+                                  <div className="font-medium">${cost.toLocaleString()}</div>
+                                  <div className="text-sm text-gray-600">{percentage}%</div>
+                                </div>
+                              ) : (
+                                <span className="text-gray-400">Not included</span>
+                              )}
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+=== src/lib/storage.ts ===
+import CryptoJS from 'crypto-js';
+import { UsageData, AnalysisResult } from '@/types/analysis';
+
+// MVP: Simple localStorage utilities with optional encryption
+export function secureStore(key: string, data: unknown, userSecret?: string): void {
+  try {
+    const jsonData = JSON.stringify(data);
+    
+    if (userSecret) {
+      const encrypted = CryptoJS.AES.encrypt(jsonData, userSecret).toString();
+      localStorage.setItem(key, encrypted);
+    } else {
+      localStorage.setItem(key, jsonData);
+    }
+  } catch (error) {
+    console.error('Error storing data:', error);
+  }
+}
+
+export function secureRetrieve(key: string, userSecret?: string): unknown {
+  try {
+    const stored = localStorage.getItem(key);
+    if (!stored) return null;
+    
+    if (userSecret) {
+      const decrypted = CryptoJS.AES.decrypt(stored, userSecret).toString(CryptoJS.enc.Utf8);
+      return JSON.parse(decrypted);
+    } else {
+      return JSON.parse(stored);
+    }
+  } catch (error) {
+    console.error('Error retrieving data:', error);
+    return null;
+  }
+}
+
+export function clearSecureStorage(keys: string[]): void {
+  keys.forEach(key => {
+    try {
+      localStorage.removeItem(key);
+    } catch (error) {
+      console.error(`Error clearing ${key}:`, error);
+    }
+  });
+}
+
+// Usage tracking functions
+export function getLocalUsage(): UsageData {
+  const usage = secureRetrieve('analysis_usage');
+  const now = new Date();
+  const currentMonth = now.getFullYear() * 12 + now.getMonth();
+  
+  if (!usage) {
+    return {
+      totalAnalyses: 0,
+      analysesThisMonth: 0,
+      resetDate: now.toISOString()
+    };
+  }
+  
+  const resetDate = new Date((usage as UsageData).resetDate);
+  const resetMonth = resetDate.getFullYear() * 12 + resetDate.getMonth();
+  
+  // Reset monthly counter if it's a new month
+  if (currentMonth > resetMonth) {
+    return {
+      ...(usage as UsageData),
+      analysesThisMonth: 0,
+      resetDate: new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+    };
+  }
+  
+  return usage as UsageData;
+}
+
+export function trackAnalysis(): void {
+  const usage = getLocalUsage();
+  usage.totalAnalyses += 1;
+  usage.analysesThisMonth += 1;
+  usage.lastAnalysis = new Date().toISOString();
+  
+  secureStore('analysis_usage', usage);
+}
+
+// MVP: Always allow analysis (no limits for initial validation)
+export function canAnalyze(): { canAnalyze: boolean; message?: string } {
+  return { canAnalyze: true };
+}
+
+// Growth Rails: Ready for user-based tracking
+export function getUserUsage(userId: string): UsageData & { userId: string } {
+  const stored = secureRetrieve(`usage_${userId}`);
+  const usage = stored || {
+    totalAnalyses: 0,
+    analysesThisMonth: 0,
+    resetDate: new Date().toISOString()
+  };
+  
+  return { ...(usage as UsageData), userId };
+}
+
+export function trackAnalysisWithUser(userId: string): void {
+  const usage = getUserUsage(userId);
+  usage.totalAnalyses += 1;
+  usage.analysesThisMonth += 1;
+  usage.lastAnalysis = new Date().toISOString();
+  
+  secureStore(`usage_${userId}`, usage);
+}
+
+// Feature flag for enabling usage limits
+export function getUsageStatus(userId?: string): { canAnalyze: boolean; message?: string } {
+  const ENABLE_LIMITS = process.env.NEXT_PUBLIC_ENABLE_USAGE_LIMITS === 'true';
+  
+  if (!ENABLE_LIMITS) {
+    return { canAnalyze: true };
+  }
+  
+  if (userId) {
+    const usage = getUserUsage(userId);
+    if (usage.analysesThisMonth >= 10) {
+      return { 
+        canAnalyze: false, 
+        message: "Monthly limit reached. Upgrade for unlimited access." 
+      };
+    }
+  } else {
+    const usage = getLocalUsage();
+    if (usage.analysesThisMonth >= 1) {
+      return { 
+        canAnalyze: false, 
+        message: "Free analysis limit reached. Sign up for more analyses." 
+      };
+    }
+  }
+  
+  return { canAnalyze: true };
+}
+
+// Analysis History Management
+export interface SavedAnalysis {
+  id: string;
+  timestamp: string;
+  result: AnalysisResult;
+  comparisonData?: {
+    averageTotal: number;
+    divisionAverages: Record<string, number>;
+    riskLevel: string;
+  };
+}
+
+export function saveAnalysis(result: AnalysisResult): string {
+  const id = `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const savedAnalysis: SavedAnalysis = {
+    id,
+    timestamp: new Date().toISOString(),
+    result,
+    comparisonData: calculateComparisonData(result)
+  };
+  
+  // Save individual analysis
+  secureStore(`analysis_${id}`, savedAnalysis);
+  
+  // Update analysis index
+  const analyses = getSavedAnalyses();
+  const updatedIndex = [...analyses, id];
+  
+  // Keep only last 50 analyses for performance
+  if (updatedIndex.length > 50) {
+    const oldAnalysisId = updatedIndex.shift();
+    if (oldAnalysisId) {
+      localStorage.removeItem(`analysis_${oldAnalysisId}`);
+    }
+  }
+  
+  secureStore('analysis_index', updatedIndex);
+  
+  // Track usage
+  trackAnalysis();
+  
+  return id;
+}
+
+export function getSavedAnalyses(): string[] {
+  const index = secureRetrieve('analysis_index');
+  return Array.isArray(index) ? index : [];
+}
+
+export function getAnalysis(id: string): SavedAnalysis | null {
+  const analysis = secureRetrieve(`analysis_${id}`);
+  return analysis as SavedAnalysis | null;
+}
+
+export function getAllAnalyses(): SavedAnalysis[] {
+  const ids = getSavedAnalyses();
+  return ids
+    .map(id => getAnalysis(id))
+    .filter((analysis): analysis is SavedAnalysis => analysis !== null)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+export function deleteAnalysis(id: string): void {
+  localStorage.removeItem(`analysis_${id}`);
+  const analyses = getSavedAnalyses().filter(analysisId => analysisId !== id);
+  secureStore('analysis_index', analyses);
+}
+
+export function clearAllAnalyses(): void {
+  const analyses = getSavedAnalyses();
+  analyses.forEach(id => localStorage.removeItem(`analysis_${id}`));
+  localStorage.removeItem('analysis_index');
+}
+
+// Leveling Database Functions
+function calculateComparisonData(_result: AnalysisResult): SavedAnalysis['comparisonData'] {
+  const allAnalyses = getAllAnalyses();
+  
+  if (allAnalyses.length === 0) {
+    return undefined;
+  }
+  
+  // Calculate averages from existing analyses
+  const totals = allAnalyses.map(a => a.result.total_amount);
+  const averageTotal = totals.reduce((sum, total) => sum + total, 0) / totals.length;
+  
+  // Calculate division averages
+  const divisionAverages: Record<string, number> = {};
+  const divisionCounts: Record<string, number> = {};
+  
+  allAnalyses.forEach(analysis => {
+    Object.entries(analysis.result.csi_divisions).forEach(([code, data]) => {
+      const percentage = (data.cost / analysis.result.total_amount) * 100;
+      divisionAverages[code] = (divisionAverages[code] || 0) + percentage;
+      divisionCounts[code] = (divisionCounts[code] || 0) + 1;
+    });
+  });
+  
+  // Convert sums to averages
+  Object.keys(divisionAverages).forEach(code => {
+    divisionAverages[code] = divisionAverages[code] / divisionCounts[code];
+  });
+  
+  // Determine risk level distribution
+  const riskLevels = allAnalyses.map(a => a.comparisonData?.riskLevel || 'UNKNOWN');
+  const riskCounts = riskLevels.reduce((acc, level) => {
+    acc[level] = (acc[level] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const mostCommonRisk = Object.entries(riskCounts)
+    .sort(([,a], [,b]) => b - a)[0]?.[0] || 'MEDIUM';
+  
+  return {
+    averageTotal,
+    divisionAverages,
+    riskLevel: mostCommonRisk
+  };
+}
+
+// Market Intelligence Functions  
+export function getMarketIntelligence(): {
+  totalProjects: number;
+  averageProjectValue: number;
+  divisionBenchmarks: Record<string, { average: number; min: number; max: number }>;
+  riskDistribution: Record<string, number>;
+} {
+  const allAnalyses = getAllAnalyses();
+  
+  if (allAnalyses.length === 0) {
+    return {
+      totalProjects: 0,
+      averageProjectValue: 0,
+      divisionBenchmarks: {},
+      riskDistribution: {}
+    };
+  }
+  
+  const totalProjects = allAnalyses.length;
+  const averageProjectValue = allAnalyses.reduce((sum, a) => sum + a.result.total_amount, 0) / totalProjects;
+  
+  // Calculate division benchmarks from actual data
+  const divisionStats: Record<string, number[]> = {};
+  
+  allAnalyses.forEach(analysis => {
+    Object.entries(analysis.result.csi_divisions).forEach(([code, data]) => {
+      const percentage = (data.cost / analysis.result.total_amount) * 100;
+      if (!divisionStats[code]) divisionStats[code] = [];
+      divisionStats[code].push(percentage);
+    });
+  });
+  
+  const divisionBenchmarks: Record<string, { average: number; min: number; max: number }> = {};
+  Object.entries(divisionStats).forEach(([code, percentages]) => {
+    percentages.sort((a, b) => a - b);
+    divisionBenchmarks[code] = {
+      average: percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
+      min: percentages[0],
+      max: percentages[percentages.length - 1]
+    };
+  });
+  
+  // Risk distribution
+  const riskDistribution = allAnalyses.reduce((acc, analysis) => {
+    const risk = analysis.comparisonData?.riskLevel || 'UNKNOWN';
+    acc[risk] = (acc[risk] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  return {
+    totalProjects,
+    averageProjectValue,
+    divisionBenchmarks,
+    riskDistribution
+  };
+}
