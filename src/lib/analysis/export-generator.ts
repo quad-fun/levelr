@@ -1009,7 +1009,7 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
       bid.result.contractor_name,
       bid.result.total_amount.toString(),
       dollarDiff.toString(),
-      (variance / 100).toString(), // Convert to decimal for Excel percentage formatting
+      variance.toFixed(1) + '%', // Display as percentage
       `${uncategorizedPct}%`,
       risk.level,
       recommendation
@@ -1108,9 +1108,9 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
       divCode,
       division?.name || `Division ${divCode}`,
       marketRange,
-      ...bidPercentages.map(v => (v / 100).toString()), // Convert to decimal for Excel formatting
-      (average / 100).toString(),
-      (variance / 100).toString(),
+      ...bidPercentages.map(v => v.toFixed(1) + '%'), // Display as percentage
+      average.toFixed(1) + '%',
+      variance.toFixed(1) + '%',
       assessment
     ]);
   });
@@ -1174,9 +1174,9 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   
   divisionData.push([
     'Uncategorized Amount', '', '',
-    ...uncategorizedAmounts.map(amt => (amt / 100).toString()), // Format as currency
-    (avgUncategorized / 100).toString(),
-    (maxUncategorized / 100).toString(),
+    ...uncategorizedAmounts.map(amt => `$${amt.toLocaleString()}`), // Format as currency
+    `$${avgUncategorized.toLocaleString()}`,
+    `$${maxUncategorized.toLocaleString()}`,
     maxUncategorized > avgUncategorized * 2 ? '🚨 High variance in uncategorized costs' : '✅ Consistent uncategorized amounts'
   ]);
   
@@ -1191,9 +1191,9 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   
   divisionData.push([
     'Uncategorized %', '', '',
-    ...uncategorizedPercentages.map(pct => (pct / 100).toString()),
-    (avgPercentage / 100).toString(),
-    (maxPercentage / 100).toString(),
+    ...uncategorizedPercentages.map(pct => pct.toFixed(1) + '%'),
+    avgPercentage.toFixed(1) + '%',
+    maxPercentage.toFixed(1) + '%',
     maxPercentage > 25 ? '🚨 High uncategorized percentage detected' : avgPercentage > 15 ? '⚠️ Moderate uncategorized levels' : '✅ Low uncategorized costs'
   ]);
   
@@ -1346,8 +1346,8 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
     benchmarkData.push([
       `${divCode} - ${division.name}`,
       `${marketMin.toFixed(1)}% - ${marketMax.toFixed(1)}%`,
-      (average / 100).toString(), // Convert to decimal for Excel formatting
-      (deviation / 100).toString(),
+      average.toFixed(1) + '%', // Display as percentage
+      deviation.toFixed(1) + '%',
       assessment,
       guidance
     ]);

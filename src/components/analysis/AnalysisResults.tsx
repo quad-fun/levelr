@@ -9,10 +9,10 @@ import { Building, Calendar, DollarSign, AlertTriangle, CheckCircle, TrendingUp,
 
 interface AnalysisResultsProps {
   analysis: AnalysisResult;
-  onExport: () => void;
+  onExport?: () => void;
 }
 
-export default function AnalysisResults({ analysis, onExport }: AnalysisResultsProps) {
+export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
   const [showUncategorized, setShowUncategorized] = useState(false);
   const [expandedDivisions, setExpandedDivisions] = useState<Set<string>>(new Set());
   const [showOverhead, setShowOverhead] = useState(false);
@@ -717,15 +717,6 @@ export default function AnalysisResults({ analysis, onExport }: AnalysisResultsP
         </div>
       )}
 
-      {/* Export Button */}
-      <div className="flex justify-center">
-        <button
-          onClick={onExport}
-          className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-semibold transition-colors"
-        >
-          Export Analysis Report
-        </button>
-      </div>
     </div>
   );
 }
