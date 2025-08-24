@@ -189,14 +189,14 @@ export function classifyCSIDivision(itemDescription: string): string | null {
 // Leveling export foundation
 export const LEVELING_DIVISIONS = [
   "01","02","03","04","05","06","07","08","09",
-  "10","11","12","13","14","15","16","21","22","23","26","27","28","31","32","33"
+  "10","11","12","13","14","21","22","23","26","27","28","31","32","33"
 ] as const;
 
 export const LEVELING_LABELS: Record<string,string> = {
   "01":"General Requirements","02":"Existing Conditions","03":"Concrete","04":"Masonry",
   "05":"Metals","06":"Wood, Plastics, Composites","07":"Thermal & Moisture Protection",
   "08":"Openings","09":"Finishes","10":"Specialties","11":"Equipment","12":"Furnishings",
-  "13":"Special Construction","14":"Conveying Equipment","15":"Mechanical","16":"Electrical",
+  "13":"Special Construction","14":"Conveying Equipment",
   "21":"Fire Suppression","22":"Plumbing","23":"HVAC","26":"Electrical",
   "27":"Communications","28":"Electronic Safety & Security","31":"Earthwork",
   "32":"Exterior Improvements","33":"Utilities"

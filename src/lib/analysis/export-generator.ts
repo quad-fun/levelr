@@ -1552,9 +1552,10 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   const sheetData: (string | number)[][] = [];
   
   // Calculate column positions
-  // SCOPE (1) + bidder blocks (4 cols each: COST, COST/SF, COMMENTS, spacer)
-  const bidderBlockSize = 4; // 3 data columns + 1 spacer
-  const totalCols = 1 + (bids.length * bidderBlockSize);
+  // SCOPE (1) + bidder blocks (3 cols each: COST, COST/SF, COMMENTS) + spacers between (not after last)
+  const bidderBlockSize = 3; // 3 data columns per bidder
+  const spacersCount = bids.length - 1; // Spacers only between bidders
+  const totalCols = 1 + (bids.length * bidderBlockSize) + spacersCount;
   
   // Row 1: "SCOPE" then bidder names merged across 3 columns each
   const row1: (string | number)[] = ['SCOPE'];
@@ -1562,32 +1563,19 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
     row1.push(bid.result.contractor_name);
     row1.push(''); // For merge
     row1.push(''); // For merge
-    if (index < bids.length - 1) row1.push(''); // Spacer column
+    if (index < bids.length - 1) row1.push(''); // Spacer column only between bidders
   });
   sheetData.push(row1);
   
-  // Row 2: "" then "BASED ON PROPOSAL" + proposal_date merged per bidder
+  // Row 2: "" then "COST", "COST/SF", "COMMENTS" for each bidder (removed "Based on Proposal" row)
   const row2: (string | number)[] = [''];
   bids.forEach((bid, index) => {
-    const proposalText = bid.result.proposal_date 
-      ? `BASED ON PROPOSAL ${bid.result.proposal_date}`
-      : 'BASED ON PROPOSAL';
-    row2.push(proposalText);
-    row2.push(''); // For merge
-    row2.push(''); // For merge
-    if (index < bids.length - 1) row2.push(''); // Spacer column
+    row2.push('COST');
+    row2.push('COST/SF');
+    row2.push('COMMENTS');
+    if (index < bids.length - 1) row2.push(''); // Spacer column only between bidders
   });
   sheetData.push(row2);
-  
-  // Row 3: "" then "COST", "COST/SF", "COMMENTS" for each bidder
-  const row3: (string | number)[] = [''];
-  bids.forEach((bid, index) => {
-    row3.push('COST');
-    row3.push('COST/SF');
-    row3.push('COMMENTS');
-    if (index < bids.length - 1) row3.push(''); // Spacer column
-  });
-  sheetData.push(row3);
   
   // Body rows - All LEVELING_DIVISIONS using LEVELING_LABELS
   LEVELING_DIVISIONS.forEach(code => {
@@ -1608,7 +1596,7 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
       // COMMENTS column
       row.push(synthesizeDivisionComment(bid, code));
       
-      // Spacer column
+      // Spacer column only between bidders
       if (index < bids.length - 1) row.push('');
     });
     
@@ -1662,12 +1650,94 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   });
   sheetData.push(tradesSubtotalRow);
   
-  // "GRAND TOTAL" (trades + uncategorized for now)
+  // Add markup rows (CM Fee, Insurance, Bond, OH&P) based on project_overhead
+  bids.forEach((bid, bidIndex) => {
+    const overhead = bid.result.project_overhead;
+    
+    // Only create markup rows for the first bid, then populate all bids
+    if (bidIndex === 0) {
+      // CM Fee row
+      if (overhead?.cm_fee && overhead.cm_fee > 0) {
+        const cmFeeRow: (string | number)[] = ['CM Fee'];
+        bids.forEach((b, i) => {
+          const cmFee = b.result.project_overhead?.cm_fee ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (cmFee / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          cmFeeRow.push(cmFee);
+          cmFeeRow.push(grossSqft && grossSqft > 0 ? cmFee / grossSqft : '—');
+          cmFeeRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No CM fee');
+          
+          if (i < bids.length - 1) cmFeeRow.push('');
+        });
+        sheetData.push(cmFeeRow);
+      }
+      
+      // Insurance row
+      if (overhead?.insurance && overhead.insurance > 0) {
+        const insuranceRow: (string | number)[] = ['Insurance'];
+        bids.forEach((b, i) => {
+          const insurance = b.result.project_overhead?.insurance ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (insurance / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          insuranceRow.push(insurance);
+          insuranceRow.push(grossSqft && grossSqft > 0 ? insurance / grossSqft : '—');
+          insuranceRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No insurance cost');
+          
+          if (i < bids.length - 1) insuranceRow.push('');
+        });
+        sheetData.push(insuranceRow);
+      }
+      
+      // Bond row
+      if (overhead?.bonds && overhead.bonds > 0) {
+        const bondsRow: (string | number)[] = ['Bond'];
+        bids.forEach((b, i) => {
+          const bonds = b.result.project_overhead?.bonds ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (bonds / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          bondsRow.push(bonds);
+          bondsRow.push(grossSqft && grossSqft > 0 ? bonds / grossSqft : '—');
+          bondsRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No bond cost');
+          
+          if (i < bids.length - 1) bondsRow.push('');
+        });
+        sheetData.push(bondsRow);
+      }
+      
+      // General Conditions / OH&P row
+      if (overhead?.general_conditions && overhead.general_conditions > 0) {
+        const gcRow: (string | number)[] = ['General Conditions'];
+        bids.forEach((b, i) => {
+          const gc = b.result.project_overhead?.general_conditions ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (gc / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+          
+          gcRow.push(gc);
+          gcRow.push(grossSqft && grossSqft > 0 ? gc / grossSqft : '—');
+          gcRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No general conditions');
+          
+          if (i < bids.length - 1) gcRow.push('');
+        });
+        sheetData.push(gcRow);
+      }
+    }
+  });
+  
+  // "GRAND TOTAL" (trades + overhead + uncategorized)
   const grandTotalRow: (string | number)[] = ['GRAND TOTAL'];
   bids.forEach((bid, index) => {
     const tradesSubtotal = calculateTradesSubtotal(bid);
+    const overhead = bid.result.project_overhead;
+    const overheadTotal = (overhead?.cm_fee ?? 0) + (overhead?.insurance ?? 0) + (overhead?.bonds ?? 0) + (overhead?.general_conditions ?? 0);
     const uncategorizedAmount = bid.result.uncategorizedTotal ?? 0;
-    const grandTotal = tradesSubtotal + uncategorizedAmount;
+    const grandTotal = tradesSubtotal + overheadTotal + uncategorizedAmount;
     const grossSqft = bid.result.gross_sqft;
     
     grandTotalRow.push(grandTotal);
@@ -1693,14 +1763,14 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   });
   ws['!cols'] = colWidths;
   
-  // Freeze panes at row 3, column 1 (after headers, before data)
-  ws['!freeze'] = { xSplit: 1, ySplit: 3 };
+  // Freeze panes at row 2, column 1 (after headers, before data)
+  ws['!freeze'] = { xSplit: 1, ySplit: 2 };
   
   // Apply cell formatting
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1:A1');
   
-  // Header formatting (rows 1-3)
-  for (let row = 0; row < 3; row++) {
+  // Header formatting (rows 1-2)
+  for (let row = 0; row < 2; row++) {
     for (let col = 0; col <= range.e.c; col++) {
       const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
       if (!ws[cellAddr]) continue;
@@ -1728,9 +1798,9 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   }
   
   // Format currency columns (COST columns)
-  for (let row = 3; row < sheetData.length; row++) {
+  for (let row = 2; row < sheetData.length; row++) {
     let col = 1; // Start after SCOPE column
-    bids.forEach(() => {
+    bids.forEach((_, bidIndex) => {
       // COST column formatting
       const costCellAddr = XLSX.utils.encode_cell({ r: row, c: col });
       if (ws[costCellAddr] && typeof ws[costCellAddr].v === 'number') {
@@ -1745,7 +1815,9 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
         ws[costSFCellAddr].z = '$#,##0.00';
       }
       
-      col += bidderBlockSize; // Move to next bidder block
+      // Move to next bidder block: 3 columns + 1 spacer (except after last bidder)
+      col += bidderBlockSize;
+      if (bidIndex < bids.length - 1) col += 1; // Add spacer except after last bidder
     });
   }
   
@@ -1754,22 +1826,13 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   
   // Row 1 merges (bidder names across 3 columns)
   let mergeCol = 1;
-  bids.forEach(() => {
+  bids.forEach((_, bidIndex) => {
     merges.push({
       s: { r: 0, c: mergeCol },
       e: { r: 0, c: mergeCol + 2 }
     });
     mergeCol += bidderBlockSize;
-  });
-  
-  // Row 2 merges (proposal dates across 3 columns)
-  mergeCol = 1;
-  bids.forEach(() => {
-    merges.push({
-      s: { r: 1, c: mergeCol },
-      e: { r: 1, c: mergeCol + 2 }
-    });
-    mergeCol += bidderBlockSize;
+    if (bidIndex < bids.length - 1) mergeCol += 1; // Add spacer except after last bidder
   });
   
   ws['!merges'] = merges;
