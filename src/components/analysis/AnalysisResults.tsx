@@ -602,7 +602,7 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
             <div className="flex items-center">
               <Eye className="h-5 w-5 text-yellow-600 mr-2" />
               <h3 className="text-xl font-bold text-gray-900">
-                Uncategorized Costs ({((analysis.uncategorizedTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of total)
+                Soft Costs & Uncategorized Items ({((analysis.uncategorizedTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of total)
               </h3>
               {(analysis.uncategorizedTotal || 0) / analysis.total_amount > 0.25 && (
                 <AlertTriangle className="h-5 w-5 text-yellow-500 ml-2" />
@@ -646,7 +646,7 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
           {showUncategorized && (
             <div className="space-y-3">
               <h4 className="font-semibold text-gray-900 border-b border-gray-200 pb-2">
-                Itemized Uncategorized Costs
+                Itemized Soft Costs & Uncategorized Items
               </h4>
               {analysis.uncategorizedCosts.map((item, index) => (
                 <div key={index} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
