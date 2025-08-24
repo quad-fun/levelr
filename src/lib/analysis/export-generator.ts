@@ -959,9 +959,12 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   
   // Sort bids by total amount for consistent ranking
   const sortedBids = selectedAnalyses.sort((a, b) => a.result.total_amount - b.result.total_amount);
+  
+  // SHEET 1 - LEVELED COMPARISON (NEW PRIMARY SHEET)
+  exportLeveledComparisonSheet(wb, sortedBids);
   const lowBid = sortedBids[0].result.total_amount;
   
-  // SHEET 1 - EXECUTIVE SUMMARY
+  // SHEET 2 - EXECUTIVE SUMMARY
   const execData = [
     ['BID LEVELING ANALYSIS - EXECUTIVE SUMMARY'],
     [`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`],
@@ -1072,7 +1075,7 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   
   XLSX.utils.book_append_sheet(wb, execWS, 'Executive Summary');
   
-  // SHEET 2 - CSI DIVISION ANALYSIS
+  // SHEET 3 - CSI DIVISION ANALYSIS
   const allDivisions = new Set<string>();
   selectedAnalyses.forEach(bid => {
     Object.keys(bid.result.csi_divisions).forEach(div => allDivisions.add(div));
@@ -1203,7 +1206,7 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   
   XLSX.utils.book_append_sheet(wb, updatedDivisionWS, 'CSI Division Analysis');
   
-  // SHEET 3 - RISK ANALYSIS MATRIX
+  // SHEET 4 - RISK ANALYSIS MATRIX
   const riskData = [
     ['RISK ANALYSIS MATRIX'],
     [''],
@@ -1300,7 +1303,7 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   
   XLSX.utils.book_append_sheet(wb, riskWS, 'Risk Analysis Matrix');
   
-  // SHEET 4 - MARKET BENCHMARKING
+  // SHEET 5 - MARKET BENCHMARKING
   const benchmarkData = [
     ['MARKET BENCHMARKING ANALYSIS'],
     [''],
