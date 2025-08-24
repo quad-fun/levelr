@@ -24,6 +24,11 @@ export interface UncategorizedCost {
   cost: number;
 }
 
+export interface SoftCost {
+  description: string;
+  cost: number;
+}
+
 export interface ProjectOverhead {
   general_conditions?: number;
   general_requirements?: number;
@@ -65,6 +70,8 @@ export interface AnalysisResult {
   csi_divisions: Record<string, CSIDivision>;
   uncategorizedCosts?: UncategorizedCost[];
   uncategorizedTotal?: number;
+  softCosts?: SoftCost[];
+  softCostsTotal?: number;
   categorizationPercentage?: number;
   timeline?: string;
   exclusions?: string[];

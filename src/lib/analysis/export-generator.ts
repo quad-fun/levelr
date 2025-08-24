@@ -1606,13 +1606,23 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   // "Soft Costs" row
   const softCostsRow: (string | number)[] = [PSEUDO_SCOPES.SOFT];
   bids.forEach((bid, index) => {
-    // Start with $0 + "No soft costs provided" as requested
-    const softCostAmount = 0; // Will be enhanced in future iterations
+    const softCostAmount = bid.result.softCostsTotal ?? 0;
     const grossSqft = bid.result.gross_sqft;
     
     softCostsRow.push(softCostAmount);
     softCostsRow.push(grossSqft && grossSqft > 0 ? softCostAmount / grossSqft : '—');
-    softCostsRow.push('No soft costs provided');
+    
+    // Generate intelligent comment based on soft costs data
+    let comment = 'No soft costs identified';
+    if (softCostAmount > 0) {
+      const softCostCount = bid.result.softCosts?.length ?? 0;
+      if (softCostCount > 0) {
+        comment = `${softCostCount} soft cost item${softCostCount > 1 ? 's' : ''} (permits, fees, etc.)`;
+      } else {
+        comment = 'Soft costs identified but not itemized';
+      }
+    }
+    softCostsRow.push(comment);
     
     if (index < bids.length - 1) softCostsRow.push('');
   });
@@ -1730,14 +1740,15 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
     }
   });
   
-  // "GRAND TOTAL" (trades + overhead + uncategorized)
+  // "GRAND TOTAL" (trades + overhead + soft costs + uncategorized)
   const grandTotalRow: (string | number)[] = ['GRAND TOTAL'];
   bids.forEach((bid, index) => {
     const tradesSubtotal = calculateTradesSubtotal(bid);
     const overhead = bid.result.project_overhead;
     const overheadTotal = (overhead?.cm_fee ?? 0) + (overhead?.insurance ?? 0) + (overhead?.bonds ?? 0) + (overhead?.general_conditions ?? 0);
+    const softCostsAmount = bid.result.softCostsTotal ?? 0;
     const uncategorizedAmount = bid.result.uncategorizedTotal ?? 0;
-    const grandTotal = tradesSubtotal + overheadTotal + uncategorizedAmount;
+    const grandTotal = tradesSubtotal + overheadTotal + softCostsAmount + uncategorizedAmount;
     const grossSqft = bid.result.gross_sqft;
     
     grandTotalRow.push(grandTotal);

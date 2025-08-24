@@ -119,8 +119,14 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
     {"name": "XYZ Plumbing Inc.", "trade": "Plumbing", "divisions": ["22"], "total_amount": 200000},
     {"name": "DEF Electrical Corp.", "trade": "Electrical", "divisions": ["26"], "total_amount": 180000}
   ],
+  "softCosts": [
+    {"description": "Design fees", "cost": 15000},
+    {"description": "Engineering allowance", "cost": 8000},
+    {"description": "Permit contingency", "cost": 5000}
+  ],
+  "softCostsTotal": 28000,
   "uncategorizedCosts": [
-    {"description": "Miscellaneous items", "cost": 25000}
+    {"description": "Miscellaneous construction items", "cost": 25000}
   ],
   "uncategorizedTotal": 25000,
   "categorizationPercentage": 91.2,
@@ -145,6 +151,16 @@ PROJECT OVERHEAD & SOFT COSTS:
 - Extract General Conditions, CM fees, insurance, bonds, permits
 - Calculate total_overhead as sum of all soft costs
 - Identify markup percentage from overhead structure
+
+SOFT COSTS VS UNCATEGORIZED SEPARATION:
+- SOFT COSTS: Administrative, professional, and non-construction items that can be identified
+  • Design fees, engineering costs, permits, bonds, insurance premiums
+  • Management fees, supervision costs, legal fees, financing costs
+  • Survey work, testing, inspection, contingency allowances
+  • Keywords: design, engineering, permit, bond, insurance, contingency, allowance, fee, overhead, management, supervision, legal, survey, testing, inspection, financing, administration
+- UNCATEGORIZED COSTS: Construction work that cannot be mapped to specific CSI divisions
+  • Miscellaneous construction items, specialty work, unidentifiable trade work
+- Create separate softCosts and uncategorizedCosts arrays with proper totals
 
 ALLOWANCES & CONTINGENCIES:
 - Find ALL allowances, contingencies, holds, and TBD items

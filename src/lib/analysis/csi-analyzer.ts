@@ -203,3 +203,14 @@ export const LEVELING_LABELS: Record<string,string> = {
 };
 
 export const PSEUDO_SCOPES = { SOFT: "Soft Costs", UNC: "Uncategorized" } as const;
+
+export function classifyItemType(description: string): 'csi' | 'soft' | 'uncategorized' {
+  const softKeywords = [
+    'design', 'engineering', 'permit', 'bond', 'insurance', 'contingency', 
+    'allowance', 'fee', 'overhead', 'management', 'supervision', 'legal',
+    'survey', 'testing', 'inspection', 'financing', 'administration'
+  ];
+  
+  const desc = description.toLowerCase();
+  return softKeywords.some(keyword => desc.includes(keyword)) ? 'soft' : 'uncategorized';
+}
