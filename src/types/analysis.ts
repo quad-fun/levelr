@@ -60,6 +60,8 @@ export interface AnalysisResult {
   total_amount: number;
   project_name?: string;
   bid_date?: string;
+  gross_sqft?: number;
+  proposal_date?: string;
   csi_divisions: Record<string, CSIDivision>;
   uncategorizedCosts?: UncategorizedCost[];
   uncategorizedTotal?: number;
