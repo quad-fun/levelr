@@ -1591,7 +1591,7 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   
   // Body rows - All LEVELING_DIVISIONS using LEVELING_LABELS
   LEVELING_DIVISIONS.forEach(code => {
-    const row: (string | number)[] = [LEVELING_LABELS[code] || `Division ${code}`];
+    const row: (string | number)[] = [`${code} - ${LEVELING_LABELS[code] || `Division ${code}`}`];
     
     bids.forEach((bid, index) => {
       const divisionData = bid.result.csi_divisions?.[code];
