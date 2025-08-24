@@ -31,7 +31,7 @@ export function middleware(request: NextRequest) {
   const validPassword = process.env.BASIC_AUTH_PASSWORD || 'demo2024';
 
   // Special Shorewood credentials for backdoor access
-  const isShorewordCredentials = username === 'shorewood' && password === 'shorewood2025';
+  const isShorewordCredentials = username === 'shorewood' && password === 'shorewood';
 
   if ((username !== validUsername || password !== validPassword) && !isShorewordCredentials) {
     return new NextResponse('Invalid credentials', {
