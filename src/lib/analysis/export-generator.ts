@@ -1545,7 +1545,7 @@ function calculateTradesSubtotal(analysis: SavedAnalysis): number {
 }
 
 // Main leveling worksheet function
-function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
+export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
   const sheetData: (string | number)[][] = [];
   
   // Calculate column positions
@@ -1727,7 +1727,7 @@ function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) 
   // Format currency columns (COST columns)
   for (let row = 3; row < sheetData.length; row++) {
     let col = 1; // Start after SCOPE column
-    bids.forEach((_, bidIndex) => {
+    bids.forEach(() => {
       // COST column formatting
       const costCellAddr = XLSX.utils.encode_cell({ r: row, c: col });
       if (ws[costCellAddr] && typeof ws[costCellAddr].v === 'number') {
@@ -1751,7 +1751,7 @@ function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) 
   
   // Row 1 merges (bidder names across 3 columns)
   let mergeCol = 1;
-  bids.forEach((_, index) => {
+  bids.forEach(() => {
     merges.push({
       s: { r: 0, c: mergeCol },
       e: { r: 0, c: mergeCol + 2 }
@@ -1761,7 +1761,7 @@ function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) 
   
   // Row 2 merges (proposal dates across 3 columns)
   mergeCol = 1;
-  bids.forEach((_, index) => {
+  bids.forEach(() => {
     merges.push({
       s: { r: 1, c: mergeCol },
       e: { r: 1, c: mergeCol + 2 }
