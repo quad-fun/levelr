@@ -112,12 +112,33 @@ Browser-only real estate document analysis platform with Claude AI integration f
 - Implemented soft costs separation from uncategorized items
 - Enhanced Claude prompt for three-way cost classification
 
+### 6. Complete Soft Costs Integration (December 2024)
+**Issue**: Soft costs functionality was partially implemented but not consistently applied  
+**Impact**: Claude wasn't extracting soft costs, leveling exports showed "No soft costs identified"  
+**Solution**: Comprehensive soft costs integration
+- **Enhanced Claude Prompts**: Added explicit soft costs identification instructions in both API routes
+- **New UI Components**: Added dedicated Soft Costs section to AnalysisResults.tsx with purple-themed display
+- **Enhanced Risk Analysis**: Updated calculateProjectRisk to validate soft costs percentages (2-20% range)
+- **Complete Integration**: Connected all pieces from Claude extraction to UI display to export functionality
+
+**Key Features Added**:
+- Proper soft costs identification: design fees, permits, bonds, insurance, legal, consulting
+- Clear separation between CSI divisions, soft costs, and uncategorized construction items
+- Itemized soft costs breakdown with individual cost and percentage displays
+- Enhanced validation ensuring softCostsTotal equals sum of softCosts array items
+- Risk assessment flags for unusually high (>20%) or low (<2%) soft costs percentages
+
+**Technical Implementation**:
+- Updated Claude prompts with specific soft costs keywords and validation requirements
+- Added purple-themed UI section showing itemized breakdown of administrative costs
+- Enhanced risk analyzer with comprehensive coverage calculations including soft costs
+- All existing leveling export functionality now populates with actual soft costs data
+
 ### Known Issues
-- **Soft costs data**: New analyses needed to populate itemized soft costs
 - **Subcontractor null values**: Some legacy data may have null total_amount causing toLocaleString() errors
 - **Cost/SF calculations**: Require gross_sqft field to be extracted by Claude
 
 ## Deployment Status
 ✅ Main: https://levelr-quad-funs-projects.vercel.app  
 ✅ GitHub: https://github.com/quad-fun/levelr  
-✅ Enhanced leveling features in development
+✅ Soft costs integration complete and ready for production
