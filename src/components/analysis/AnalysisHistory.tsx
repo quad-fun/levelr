@@ -3,17 +3,19 @@
 import { useState, useEffect } from 'react';
 import { getAllAnalyses, getMarketIntelligence, deleteAnalysis, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
+import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/export-generator';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   Trash2, TrendingUp, BarChart3, Building, Calendar, DollarSign, AlertTriangle, 
-  FileText, Users, Download, Plus, Flag, ChevronDown, 
-  ChevronUp, Target, TrendingDown, Award, Clock
+  FileText, Users, Download, ChevronDown, 
+  ChevronUp, Target, TrendingDown, Award, Clock, Sheet, Flag
 } from 'lucide-react';
 
 export default function AnalysisHistory() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [selectedAnalysis, setSelectedAnalysis] = useState<SavedAnalysis | null>(null);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
+  const [isExporting, setIsExporting] = useState<string | null>(null);
   const [marketIntel, setMarketIntel] = useState(getMarketIntelligence());
 
   useEffect(() => {
@@ -108,6 +110,30 @@ export default function AnalysisHistory() {
       largestSub: subs.length > 0 ? subs.reduce((max, sub) => sub.total_amount > max.total_amount ? sub : max) : null,
       selfPerformedRatio: Math.max(0, selfPerformedRatio)
     };
+  };
+
+  const handleExportPDF = async (analysis: SavedAnalysis) => {
+    setIsExporting(`${analysis.id}-pdf`);
+    try {
+      exportAnalysisToPDF(analysis.result);
+    } catch (error) {
+      console.error('Error exporting PDF:', error);
+      alert('Error exporting PDF. Please try again.');
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
+  const handleExportExcel = async (analysis: SavedAnalysis) => {
+    setIsExporting(`${analysis.id}-excel`);
+    try {
+      exportAnalysisToExcel(analysis.result);
+    } catch (error) {
+      console.error('Error exporting Excel:', error);
+      alert('Error exporting Excel. Please try again.');
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   if (analyses.length === 0) {
@@ -417,6 +443,48 @@ export default function AnalysisHistory() {
                   <div className="p-6 space-y-4">
                     <h5 className="font-bold text-gray-900 mb-4">Project Details & Analysis</h5>
 
+                    {/* CSI Divisions Breakdown */}
+                    {Object.keys(analysis.result.csi_divisions).length > 0 && (
+                      <div className="border rounded-lg">
+                        <button
+                          onClick={() => toggleSection('csiDivisions')}
+                          className="w-full flex justify-between items-center p-4 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="font-medium flex items-center">
+                            <BarChart3 className="h-4 w-4 mr-2" />
+                            CSI Divisions Breakdown ({Object.keys(analysis.result.csi_divisions).length})
+                          </span>
+                          {expandedSection === 'csiDivisions' ? 
+                            <ChevronUp className="h-4 w-4" /> : 
+                            <ChevronDown className="h-4 w-4" />
+                          }
+                        </button>
+                        {expandedSection === 'csiDivisions' && (
+                          <div className="border-t p-4 space-y-2 max-h-64 overflow-y-auto">
+                            {Object.entries(analysis.result.csi_divisions).map(([code, data]) => (
+                              <div key={code} className="flex justify-between items-center py-2 px-3 bg-blue-50 rounded">
+                                <div className="flex-1">
+                                  <span className="text-sm font-medium">Division {code}</span>
+                                  {data.subcontractor && (
+                                    <p className="text-xs text-gray-600">Sub: {data.subcontractor}</p>
+                                  )}
+                                  {data.items && data.items.length > 0 && (
+                                    <p className="text-xs text-gray-500">{data.items.join(', ')}</p>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-medium">${data.cost.toLocaleString()}</span>
+                                  <span className="text-xs text-gray-500 block">
+                                    {((data.cost / analysis.result.total_amount) * 100).toFixed(1)}%
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
                     {/* Subcontractor Details */}
                     {analysis.result.subcontractors && analysis.result.subcontractors.length > 0 && (
                       <div className="border rounded-lg">
@@ -592,19 +660,34 @@ export default function AnalysisHistory() {
                     )}
 
                     {/* Quick Actions */}
-                    <div className="flex flex-wrap gap-3 pt-4 border-t">
-                      <button className="flex items-center px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-sm">
-                        <Download className="h-4 w-4 mr-2" />
-                        Export Analysis
-                      </button>
-                      <button className="flex items-center px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-sm">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add to Leveling
-                      </button>
-                      <button className="flex items-center px-3 py-2 bg-gray-600 text-white rounded hover:bg-gray-700 transition-colors text-sm">
-                        <Flag className="h-4 w-4 mr-2" />
-                        Flag for Review
-                      </button>
+                    <div className="pt-4 border-t">
+                      <div className="flex items-center mb-3">
+                        <Download className="h-4 w-4 text-blue-600 mr-2" />
+                        <h6 className="font-medium text-gray-900">Export Analysis</h6>
+                      </div>
+                      <p className="text-sm text-gray-600 mb-4">
+                        Download your complete analysis report in your preferred format.
+                      </p>
+                      
+                      <div className="grid sm:grid-cols-2 gap-3">
+                        <button
+                          onClick={() => handleExportPDF(analysis)}
+                          disabled={isExporting === `${analysis.id}-pdf`}
+                          className="flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white rounded font-medium transition-colors text-sm"
+                        >
+                          <FileText className="h-4 w-4 mr-2" />
+                          {isExporting === `${analysis.id}-pdf` ? 'Exporting...' : 'Export PDF Report'}
+                        </button>
+                        
+                        <button
+                          onClick={() => handleExportExcel(analysis)}
+                          disabled={isExporting === `${analysis.id}-excel`}
+                          className="flex items-center justify-center px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white rounded font-medium transition-colors text-sm"
+                        >
+                          <Sheet className="h-4 w-4 mr-2" />
+                          {isExporting === `${analysis.id}-excel` ? 'Exporting...' : 'Export Excel Data'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
