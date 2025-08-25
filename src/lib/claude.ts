@@ -162,6 +162,12 @@ SOFT COSTS VS UNCATEGORIZED SEPARATION:
   • Miscellaneous construction items, specialty work, unidentifiable trade work
 - Create separate softCosts and uncategorizedCosts arrays with proper totals
 
+CRITICAL VALIDATION:
+- softCostsTotal MUST equal sum of all softCosts array items
+- uncategorizedCosts should ONLY contain construction work not mappable to CSI
+- All costs must be accounted for: CSI divisions + soft costs + uncategorized = close to total_amount
+- Soft costs are typically 3-15% of total project cost
+
 ALLOWANCES & CONTINGENCIES:
 - Find ALL allowances, contingencies, holds, and TBD items
 - Classify allowance type: contingency, allowance, hold, tbd, unit_price_allowance

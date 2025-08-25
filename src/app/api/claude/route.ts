@@ -269,6 +269,27 @@ SITE DIVISIONS (31-33):
 32 - Exterior Improvements (paving, landscaping, site work)
 33 - Utilities (site utilities, water, sewer, gas lines)
 
+🎯 CRITICAL COST SEPARATION REQUIREMENTS:
+
+**CSI DIVISIONS**: Construction work that maps to specific CSI divisions
+**SOFT COSTS**: Administrative, professional, and non-construction costs
+**UNCATEGORIZED**: Construction work that cannot be mapped to CSI divisions
+
+SOFT COSTS IDENTIFICATION (These should NEVER be in CSI divisions):
+• Design fees, architectural services, engineering costs
+• Permits, bonds, insurance premiums (not construction insurance)
+• Legal fees, financing costs, consultant fees
+• Survey work, testing, inspection services not part of construction
+• Project management fees, owner's representative costs
+• Marketing, advertising, sales expenses
+• Financing costs, loan fees, interest during construction
+• Administrative overhead not related to construction activities
+• Professional services (legal, accounting, real estate)
+
+Keywords for SOFT COSTS: design, engineering, architect, permit, bond, insurance, legal, finance, consultant, survey, test, inspection, management fee, overhead, administration, professional, loan, interest
+
+UNCATEGORIZED COSTS should only be construction work that doesn't fit CSI divisions.
+
 Return ONLY valid JSON with this exact structure:
 {
   "contractor_name": "ACTUAL_COMPANY_NAME_FROM_DOCUMENT",
@@ -293,8 +314,14 @@ Return ONLY valid JSON with this exact structure:
   "subcontractors": [
     {"name": "ABC Concrete Co.", "trade": "Concrete", "divisions": ["03"], "total_amount": 450000}
   ],
+  "softCosts": [
+    {"description": "Design fees", "cost": 15000},
+    {"description": "Engineering services", "cost": 8000},
+    {"description": "Permit fees", "cost": 5000}
+  ],
+  "softCostsTotal": 28000,
   "uncategorizedCosts": [
-    {"description": "Miscellaneous items", "cost": 25000}
+    {"description": "Miscellaneous construction items not mappable to CSI", "cost": 25000}
   ],
   "uncategorizedTotal": 25000,
   "categorizationPercentage": 91.2,
@@ -303,6 +330,12 @@ Return ONLY valid JSON with this exact structure:
   "assumptions": ["normal soil conditions"],
   "document_quality": "professional_typed"
 }
+
+CRITICAL VALIDATION:
+- softCostsTotal MUST equal sum of all softCosts array items
+- uncategorizedCosts should ONLY contain construction work not mappable to CSI
+- All costs must be accounted for: CSI divisions + soft costs + uncategorized = close to total_amount
+- Soft costs are typically 3-15% of total project cost
 
 Document: ${processedDoc.fileName}
 File Type: ${processedDoc.fileType}
