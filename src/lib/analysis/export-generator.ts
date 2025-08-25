@@ -184,7 +184,9 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
   const tableData: (string | number)[][] = [];
   const totalMappedCost = Object.values(analysis.csi_divisions).reduce((sum, div) => sum + div.cost, 0);
   
-  Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+  Object.entries(analysis.csi_divisions)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([code, data]) => {
     const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
     const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
     const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
@@ -434,9 +436,11 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
   }
 
   // Detailed Line Items Section (for divisions with sub_items)
-  const divisionsWithSubItems = Object.entries(analysis.csi_divisions).filter(([_, data]) => 
-    data.sub_items && data.sub_items.length > 0
-  );
+  const divisionsWithSubItems = Object.entries(analysis.csi_divisions)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .filter(([_, data]) => 
+      data.sub_items && data.sub_items.length > 0
+    );
 
   if (divisionsWithSubItems.length > 0) {
     checkPageBreak(40);
@@ -492,7 +496,9 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
   doc.text('Market Variance Analysis', margin, yPosition);
   yPosition += 15;
 
-  Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+  Object.entries(analysis.csi_divisions)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([code, data]) => {
     checkPageBreak(25);
     const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
     const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
@@ -638,7 +644,9 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
     ['CSI Code', 'Division Name', 'Cost', 'Percentage', 'Items', 'Unit Cost', 'Quantity', 'Unit', 'Market Status', 'Variance', 'Recommendation']
   ];
   
-  Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+  Object.entries(analysis.csi_divisions)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .forEach(([code, data]) => {
     const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
     const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
     const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
@@ -860,9 +868,11 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
   }
 
   // Detailed Line Items Sheet
-  const divisionsWithSubItems = Object.entries(analysis.csi_divisions).filter(([_, data]) => 
-    data.sub_items && data.sub_items.length > 0
-  );
+  const divisionsWithSubItems = Object.entries(analysis.csi_divisions)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .filter(([_, data]) => 
+      data.sub_items && data.sub_items.length > 0
+    );
 
   if (divisionsWithSubItems.length > 0) {
     const lineItemData = [
@@ -1231,7 +1241,9 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
     
     // Check cost concentration
     const concentrationIssues: string[] = [];
-    Object.entries(bid.result.csi_divisions).forEach(([code, data]) => {
+    Object.entries(bid.result.csi_divisions)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .forEach(([code, data]) => {
       const percentage = (data.cost / bid.result.total_amount) * 100;
       if (percentage > 40) {
         const divName = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS]?.name || code;

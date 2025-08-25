@@ -277,7 +277,9 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
         <h3 className="text-xl font-bold text-gray-900 mb-4">CSI Division Analysis</h3>
         
         <div className="space-y-4">
-          {Object.entries(analysis.csi_divisions).map(([code, data]) => {
+          {Object.entries(analysis.csi_divisions)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([code, data]) => {
             const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
             const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
             const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);

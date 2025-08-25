@@ -69,7 +69,9 @@ export default function AnalysisHistory() {
   };
 
   const getTop5CostCategories = (analysis: SavedAnalysis) => {
-    const categories = Object.entries(analysis.result.csi_divisions).map(([code, data]) => ({
+    const categories = Object.entries(analysis.result.csi_divisions)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([code, data]) => ({
       code,
       name: `Division ${code}`,
       cost: data.cost,
@@ -461,7 +463,9 @@ export default function AnalysisHistory() {
                         </button>
                         {expandedSection === 'csiDivisions' && (
                           <div className="border-t p-4 space-y-2 max-h-64 overflow-y-auto">
-                            {Object.entries(analysis.result.csi_divisions).map(([code, data]) => (
+                            {Object.entries(analysis.result.csi_divisions)
+                              .sort(([a], [b]) => a.localeCompare(b))
+                              .map(([code, data]) => (
                               <div key={code} className="flex justify-between items-center py-2 px-3 bg-blue-50 rounded">
                                 <div className="flex-1">
                                   <span className="text-sm font-medium">Division {code}</span>

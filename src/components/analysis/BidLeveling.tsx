@@ -300,7 +300,9 @@ export default function BidLeveling() {
                   </tr>
                 </thead>
                 <tbody>
-                  {Object.entries(CSI_DIVISIONS).map(([code, division]) => {
+                  {Object.entries(CSI_DIVISIONS)
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([code, division]) => {
                     // Check if any bid has this division
                     const hasData = bidComparisons.some(comp => 
                       comp.analysis.result.csi_divisions[code]
