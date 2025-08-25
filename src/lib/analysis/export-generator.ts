@@ -226,15 +226,29 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
       if (data.column.index === 3 && data.section === 'body') {
         const status = data.cell.text[0];
         if (status === 'ABOVE MARKET') {
-          doc.setFillColor(254, 226, 226); // Red-100
-        } else if (status === 'BELOW MARKET') {
-          doc.setFillColor(254, 249, 195); // Yellow-100
-        } else if (status === 'MARKET RATE') {
-          doc.setFillColor(220, 252, 231); // Green-100
-        }
-        if (status !== 'MARKET RATE') {
+          doc.setFillColor(254, 226, 226); // Red-100 background
           doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+          doc.setTextColor(153, 27, 27); // Red-800 text for contrast
+        } else if (status === 'BELOW MARKET') {
+          doc.setFillColor(254, 249, 195); // Yellow-100 background
+          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+          doc.setTextColor(146, 64, 14); // Yellow-800 text for contrast
+        } else if (status === 'MARKET RATE') {
+          doc.setFillColor(220, 252, 231); // Green-100 background
+          doc.rect(data.cell.x, data.cell.y, data.cell.width, data.cell.height, 'F');
+          doc.setTextColor(20, 83, 45); // Green-800 text for contrast
         }
+        
+        // Redraw the text with proper color
+        if (status) {
+          doc.setFontSize(9);
+          const textX = data.cell.x + data.cell.width / 2;
+          const textY = data.cell.y + data.cell.height / 2 + 2;
+          doc.text(status, textX, textY, { align: 'center' });
+        }
+        
+        // Reset text color for other cells
+        doc.setTextColor(0, 0, 0);
       }
     }
   });
