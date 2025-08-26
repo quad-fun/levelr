@@ -76,6 +76,11 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
             <div>
               <p className="text-sm text-gray-600">Total Amount</p>
               <p className="font-semibold">${analysis.total_amount.toLocaleString()}</p>
+              {analysis.gross_sqft && (
+                <p className="text-xs text-gray-600">
+                  ${(analysis.total_amount / analysis.gross_sqft).toFixed(0)}/SF ({analysis.gross_sqft.toLocaleString()} SF)
+                </p>
+              )}
             </div>
           </div>
           
