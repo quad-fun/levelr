@@ -190,10 +190,12 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
     const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
     const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
     const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
+    const costPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? `$${(data.cost / analysis.gross_sqft).toFixed(2)}` : '—';
     
     tableData.push([
       `${code} - ${division?.name || 'Unknown'}`,
       `$${data.cost.toLocaleString()}`,
+      costPerSF,
       `${percentage}%`,
       variance.status.replace('_', ' '),
       data.items.join(', ').substring(0, 50) + (data.items.join(', ').length > 50 ? '...' : '')
@@ -201,7 +203,7 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
   });
 
   autoTable(doc, {
-    head: [['Division', 'Cost', '% of Total', 'Market Status', 'Items']],
+    head: [['Division', 'Cost', 'Cost/SF', '% of Total', 'Market Status', 'Items']],
     body: tableData,
     startY: yPosition,
     styles: { 
@@ -215,15 +217,16 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
       fontStyle: 'bold'
     },
     columnStyles: {
-      0: { cellWidth: 60 },
-      1: { cellWidth: 30, halign: 'right' },
-      2: { cellWidth: 20, halign: 'center' },
-      3: { cellWidth: 30, halign: 'center' },
-      4: { cellWidth: 50 }
+      0: { cellWidth: 50 }, // Division
+      1: { cellWidth: 25, halign: 'right' }, // Cost
+      2: { cellWidth: 20, halign: 'right' }, // Cost/SF
+      3: { cellWidth: 15, halign: 'center' }, // % of Total
+      4: { cellWidth: 25, halign: 'center' }, // Market Status
+      5: { cellWidth: 45 } // Items
     },
     didDrawCell: function(data: { column: { index: number }, section: string, cell: { text: string[], x: number, y: number, width: number, height: number } }) {
       // Color code market status cells
-      if (data.column.index === 3 && data.section === 'body') {
+      if (data.column.index === 4 && data.section === 'body') {
         const status = data.cell.text[0];
         if (status === 'ABOVE MARKET') {
           doc.setFillColor(254, 226, 226); // Red-100 background
@@ -698,7 +701,7 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
   
   // CSI Analysis Sheet
   const csiData = [
-    ['CSI Code', 'Division Name', 'Cost', 'Percentage', 'Items', 'Unit Cost', 'Quantity', 'Unit', 'Market Status', 'Variance', 'Recommendation']
+    ['CSI Code', 'Division Name', 'Cost', 'Cost/SF', 'Percentage', 'Items', 'Unit Cost', 'Quantity', 'Unit', 'Market Status', 'Variance', 'Recommendation']
   ];
   
   Object.entries(analysis.csi_divisions)
@@ -707,11 +710,13 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
     const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
     const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
     const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
+    const costPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? (data.cost / analysis.gross_sqft).toFixed(2) : '—';
     
     csiData.push([
       code,
       division?.name || 'Unknown',
       data.cost.toString(),
+      costPerSF,
       `${percentage}%`,
       data.items.join(', '),
       data.unit_cost?.toString() || '',
@@ -726,14 +731,16 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
   // Add uncategorized costs section to CSI data
   if (analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0) {
     csiData.push(['']); // Empty row separator
-    csiData.push(['UNCATEGORIZED COSTS', '', '', '', '', '', '', '', '', '', '']);
-    csiData.push(['Description', 'Cost', '% of Total', 'Reason', '', '', '', '', '', '', '']);
+    csiData.push(['UNCATEGORIZED COSTS', '', '', '', '', '', '', '', '', '', '', '']);
+    csiData.push(['Description', 'Cost', 'Cost/SF', '% of Total', 'Reason', '', '', '', '', '', '', '']);
     
     analysis.uncategorizedCosts.forEach(item => {
       const percentage = ((item.cost / analysis.total_amount) * 100).toFixed(1);
+      const costPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? (item.cost / analysis.gross_sqft).toFixed(2) : '—';
       csiData.push([
         item.description,
         item.cost.toString(),
+        costPerSF,
         `${percentage}%`,
         'Not matched to CSI divisions',
         '', '', '', '', '', '', ''
@@ -742,12 +749,44 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
     
     // Add total uncategorized row
     const totalPercentage = (((analysis.uncategorizedTotal || 0) / analysis.total_amount) * 100).toFixed(1);
+    const totalCostPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? ((analysis.uncategorizedTotal || 0) / analysis.gross_sqft).toFixed(2) : '—';
     csiData.push([
       'TOTAL UNCATEGORIZED',
       (analysis.uncategorizedTotal || 0).toString(),
+      totalCostPerSF,
       `${totalPercentage}%`,
       `${analysis.uncategorizedCosts.length} items not classified`,
       '', '', '', '', '', '', ''
+    ]);
+  }
+  
+  // Add soft costs section to CSI data
+  if (analysis.softCosts && analysis.softCosts.length > 0) {
+    csiData.push(['']); // Empty row separator
+    csiData.push(['SOFT COSTS', '', '', '', '', '', '', '', '', '', '', '']);
+    csiData.push(['Description', 'Cost', 'Cost/SF', '% of Total', '', '', '', '', '', '', '', '']);
+    
+    analysis.softCosts.forEach(cost => {
+      const percentage = ((cost.cost / analysis.total_amount) * 100).toFixed(1);
+      const costPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? (cost.cost / analysis.gross_sqft).toFixed(2) : '—';
+      csiData.push([
+        cost.description,
+        cost.cost.toString(),
+        costPerSF,
+        `${percentage}%`,
+        '', '', '', '', '', '', '', ''
+      ]);
+    });
+    
+    // Add total soft costs row
+    const totalSoftPercentage = (((analysis.softCostsTotal || 0) / analysis.total_amount) * 100).toFixed(1);
+    const totalSoftCostPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? ((analysis.softCostsTotal || 0) / analysis.gross_sqft).toFixed(2) : '—';
+    csiData.push([
+      'TOTAL SOFT COSTS',
+      (analysis.softCostsTotal || 0).toString(),
+      totalSoftCostPerSF,
+      `${totalSoftPercentage}%`,
+      '', '', '', '', '', '', '', ''
     ]);
   }
   
@@ -889,41 +928,6 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
     XLSX.utils.book_append_sheet(wb, allowanceWs, 'Allowances');
   }
 
-  // Soft Costs Sheet
-  if (analysis.softCosts && analysis.softCosts.length > 0) {
-    const softCostData = [
-      ['Soft Costs Breakdown'],
-      [''],
-      ['Description', 'Amount', '% of Total']
-    ];
-
-    analysis.softCosts.forEach(cost => {
-      softCostData.push([
-        cost.description,
-        cost.cost.toString(),
-        `${((cost.cost / analysis.total_amount) * 100).toFixed(2)}%`
-      ]);
-    });
-
-    softCostData.push(['']);
-    softCostData.push(['TOTAL SOFT COSTS', (analysis.softCostsTotal || 0).toString(),
-      `${(((analysis.softCostsTotal || 0) / analysis.total_amount) * 100).toFixed(2)}%`]);
-
-    const softCostWs = XLSX.utils.aoa_to_sheet(softCostData);
-
-    // Format currency columns
-    const range = XLSX.utils.decode_range(softCostWs['!ref']!);
-    for (let row = 3; row <= range.e.r; row++) { // Start from row 3 (after headers)
-      const costCell = XLSX.utils.encode_cell({ r: row, c: 1 }); // Column B (Amount)
-      if (softCostWs[costCell] && !isNaN(Number(softCostWs[costCell].v))) {
-        softCostWs[costCell].t = 'n';
-        softCostWs[costCell].z = '$#,##0';
-      }
-    }
-
-    softCostWs['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 12 }];
-    XLSX.utils.book_append_sheet(wb, softCostWs, 'Soft Costs');
-  }
 
   // Subcontractors Sheet
   if (analysis.subcontractors && analysis.subcontractors.length > 0) {
