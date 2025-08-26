@@ -413,6 +413,49 @@ export function exportAnalysisToPDF(analysis: AnalysisResult): void {
     }
   }
 
+  // Soft Costs Section
+  if (analysis.softCosts && analysis.softCosts.length > 0) {
+    checkPageBreak(40);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Soft Costs Breakdown', margin, yPosition);
+    yPosition += 10;
+
+    const softCostData = analysis.softCosts.map(cost => [
+      cost.description,
+      `$${cost.cost.toLocaleString()}`,
+      `${((cost.cost / analysis.total_amount) * 100).toFixed(1)}%`
+    ]);
+
+    // Add total row
+    softCostData.push([
+      'TOTAL SOFT COSTS',
+      `$${(analysis.softCostsTotal || 0).toLocaleString()}`,
+      `${(((analysis.softCostsTotal || 0) / analysis.total_amount) * 100).toFixed(1)}%`
+    ]);
+
+    autoTable(doc, {
+      head: [['Description', 'Amount', '% of Total']],
+      body: softCostData,
+      startY: yPosition,
+      styles: { fontSize: 9, cellPadding: 3, overflow: 'linebreak' },
+      headStyles: { fillColor: [147, 51, 234], textColor: [255, 255, 255] }, // Purple
+      columnStyles: {
+        0: { cellWidth: 85 },
+        1: { cellWidth: 35, halign: 'right' },
+        2: { cellWidth: 25, halign: 'center' }
+      },
+      didDrawCell: function(data: { row: { index: number }, section: string }) {
+        // Highlight total row
+        if (data.section === 'body' && data.row.index === softCostData.length - 1) {
+          doc.setFillColor(243, 244, 246); // Gray-100
+        }
+      }
+    });
+
+    yPosition = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 15;
+  }
+
   // Subcontractors Section
   if (analysis.subcontractors && analysis.subcontractors.length > 0) {
     checkPageBreak(40);
@@ -844,6 +887,42 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
 
     allowanceWs['!cols'] = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 12 }, { wch: 40 }];
     XLSX.utils.book_append_sheet(wb, allowanceWs, 'Allowances');
+  }
+
+  // Soft Costs Sheet
+  if (analysis.softCosts && analysis.softCosts.length > 0) {
+    const softCostData = [
+      ['Soft Costs Breakdown'],
+      [''],
+      ['Description', 'Amount', '% of Total']
+    ];
+
+    analysis.softCosts.forEach(cost => {
+      softCostData.push([
+        cost.description,
+        cost.cost.toString(),
+        `${((cost.cost / analysis.total_amount) * 100).toFixed(2)}%`
+      ]);
+    });
+
+    softCostData.push(['']);
+    softCostData.push(['TOTAL SOFT COSTS', (analysis.softCostsTotal || 0).toString(),
+      `${(((analysis.softCostsTotal || 0) / analysis.total_amount) * 100).toFixed(2)}%`]);
+
+    const softCostWs = XLSX.utils.aoa_to_sheet(softCostData);
+
+    // Format currency columns
+    const range = XLSX.utils.decode_range(softCostWs['!ref']!);
+    for (let row = 3; row <= range.e.r; row++) { // Start from row 3 (after headers)
+      const costCell = XLSX.utils.encode_cell({ r: row, c: 1 }); // Column B (Amount)
+      if (softCostWs[costCell] && !isNaN(Number(softCostWs[costCell].v))) {
+        softCostWs[costCell].t = 'n';
+        softCostWs[costCell].z = '$#,##0';
+      }
+    }
+
+    softCostWs['!cols'] = [{ wch: 40 }, { wch: 15 }, { wch: 12 }];
+    XLSX.utils.book_append_sheet(wb, softCostWs, 'Soft Costs');
   }
 
   // Subcontractors Sheet
