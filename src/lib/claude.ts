@@ -59,10 +59,19 @@ EXTRACT PROFESSIONAL ESTIMATOR-LEVEL DETAIL:
 - Extract holds, TBD items, and unit price allowances
 - Look for General Conditions breakdown, CM fees, insurance, bonds
 
+🏢 EXTRACT PROJECT SIZE INFORMATION - CRITICAL FOR COST/SF CALCULATIONS:
+- Search for gross square footage, building square footage, total square footage
+- Common keywords: "gross sf", "gsf", "gross square feet", "building area", "floor area", "total sf", "project size", "building size", "sq ft", "square footage"
+- May appear in: project description, scope summary, unit cost calculations, specifications, or bid forms
+- Extract numeric value only (convert "25,000 SF" to 25000, "2.5K SF" to 2500)
+- If multiple square footage values exist, prioritize gross building area over net/usable area
+- Look for context clues like "gross building area", "total building sf", "overall project size"
+
 Return ONLY valid JSON with COMPLETE granular breakdown:
 {
   "contractor_name": "ACTUAL_COMPANY_NAME_FROM_DOCUMENT",
   "total_amount": ACTUAL_TOTAL_AMOUNT_NUMBER,
+  "gross_sqft": 25000,
   "project_name": "Project name if found",
   "bid_date": "2024-03-15",
   "base_bid_amount": 2850000,
