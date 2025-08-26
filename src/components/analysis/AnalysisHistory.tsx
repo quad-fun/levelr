@@ -478,6 +478,11 @@ export default function AnalysisHistory() {
                                 </div>
                                 <div className="text-right">
                                   <span className="font-medium">${data.cost.toLocaleString()}</span>
+                                  {analysis.result.gross_sqft && (
+                                    <span className="text-xs text-gray-600 block">
+                                      ${(data.cost / analysis.result.gross_sqft).toFixed(2)}/SF
+                                    </span>
+                                  )}
                                   <span className="text-xs text-gray-500 block">
                                     {((data.cost / analysis.result.total_amount) * 100).toFixed(1)}%
                                   </span>
@@ -561,6 +566,11 @@ export default function AnalysisHistory() {
                                 <span className="text-sm">{cost.description}</span>
                                 <div className="text-right">
                                   <span className="font-medium">${cost.cost.toLocaleString()}</span>
+                                  {analysis.result.gross_sqft && (
+                                    <span className="text-xs text-gray-600 block">
+                                      ${(cost.cost / analysis.result.gross_sqft).toFixed(2)}/SF
+                                    </span>
+                                  )}
                                   <span className="text-xs text-gray-500 block">
                                     {((cost.cost / analysis.result.total_amount) * 100).toFixed(1)}%
                                   </span>
@@ -604,6 +614,11 @@ export default function AnalysisHistory() {
                                   </span>
                                   <div className="text-right">
                                     <span className="font-bold">${allowance.amount.toLocaleString()}</span>
+                                    {analysis.result.gross_sqft && (
+                                      <span className="text-xs text-gray-600 block">
+                                        ${(allowance.amount / analysis.result.gross_sqft).toFixed(2)}/SF
+                                      </span>
+                                    )}
                                     {allowance.percentage_of_total && (
                                       <span className="text-xs text-gray-500 block">
                                         {allowance.percentage_of_total.toFixed(1)}%

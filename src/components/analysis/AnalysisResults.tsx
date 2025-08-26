@@ -322,6 +322,11 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-lg">${data.cost.toLocaleString()}</p>
+                    {analysis.gross_sqft && (
+                      <p className="text-xs text-gray-600">
+                        ${(data.cost / analysis.gross_sqft).toFixed(2)}/SF
+                      </p>
+                    )}
                     <p className="text-sm">{percentage}% of total</p>
                   </div>
                 </div>
@@ -431,6 +436,11 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
                 </div>
                 <div className="text-right ml-4">
                   <p className="font-semibold text-gray-900">${item.cost.toLocaleString()}</p>
+                  {analysis.gross_sqft && (
+                    <p className="text-xs text-gray-600">
+                      ${(item.cost / analysis.gross_sqft).toFixed(2)}/SF
+                    </p>
+                  )}
                   <p className="text-sm text-gray-600">
                     {(item.cost / analysis.total_amount * 100).toFixed(1)}%
                   </p>
@@ -567,6 +577,11 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
                       </div>
                       <div className="text-right">
                         <p className="font-bold text-lg">${allowance.amount.toLocaleString()}</p>
+                        {analysis.gross_sqft && (
+                          <p className="text-xs text-gray-600">
+                            ${(allowance.amount / analysis.gross_sqft).toFixed(2)}/SF
+                          </p>
+                        )}
                         {allowance.percentage_of_total && (
                           <p className="text-sm">{allowance.percentage_of_total.toFixed(1)}% of total</p>
                         )}
@@ -704,6 +719,11 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
                   </div>
                   <div className="text-right ml-4">
                     <p className="font-semibold text-gray-900">${item.cost.toLocaleString()}</p>
+                    {analysis.gross_sqft && (
+                      <p className="text-xs text-gray-600">
+                        ${(item.cost / analysis.gross_sqft).toFixed(2)}/SF
+                      </p>
+                    )}
                     <p className="text-sm text-gray-600">
                       {(item.cost / analysis.total_amount * 100).toFixed(1)}%
                     </p>
