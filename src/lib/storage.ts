@@ -1,5 +1,6 @@
 import CryptoJS from 'crypto-js';
 import { UsageData, AnalysisResult } from '@/types/analysis';
+import { RFPProject, SavedRFP } from '@/types/rfp';
 
 // MVP: Simple localStorage utilities with optional encryption
 export function secureStore(key: string, data: unknown, userSecret?: string): void {
@@ -312,4 +313,120 @@ export function getMarketIntelligence(): {
     divisionBenchmarks,
     riskDistribution
   };
+}
+
+// RFP Storage Functions
+export function saveRFP(project: RFPProject): string {
+  const id = `rfp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const savedRFP: SavedRFP = {
+    id,
+    timestamp: new Date().toISOString(),
+    project: {
+      ...project,
+      id,
+      updatedAt: new Date().toISOString()
+    },
+    status: 'draft',
+    receivedBids: []
+  };
+  
+  // Save individual RFP
+  secureStore(`rfp_${id}`, savedRFP);
+  
+  // Update RFP index
+  const rfps = getSavedRFPs();
+  const updatedIndex = [...rfps, id];
+  
+  // Keep only last 100 RFPs for performance
+  if (updatedIndex.length > 100) {
+    const oldRFPId = updatedIndex.shift();
+    if (oldRFPId) {
+      localStorage.removeItem(`rfp_${oldRFPId}`);
+    }
+  }
+  
+  secureStore('rfp_index', updatedIndex);
+  
+  return id;
+}
+
+export function getSavedRFPs(): string[] {
+  const index = secureRetrieve('rfp_index');
+  return Array.isArray(index) ? index : [];
+}
+
+export function getRFP(id: string): SavedRFP | null {
+  const rfp = secureRetrieve(`rfp_${id}`);
+  return rfp as SavedRFP | null;
+}
+
+export function getAllRFPs(): SavedRFP[] {
+  const ids = getSavedRFPs();
+  return ids
+    .map(id => getRFP(id))
+    .filter((rfp): rfp is SavedRFP => rfp !== null)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+export function updateRFP(id: string, updates: Partial<RFPProject>): void {
+  const existingRFP = getRFP(id);
+  if (!existingRFP) {
+    throw new Error('RFP not found');
+  }
+  
+  const updatedRFP: SavedRFP = {
+    ...existingRFP,
+    project: {
+      ...existingRFP.project,
+      ...updates,
+      updatedAt: new Date().toISOString()
+    }
+  };
+  
+  secureStore(`rfp_${id}`, updatedRFP);
+}
+
+export function updateRFPStatus(id: string, status: SavedRFP['status']): void {
+  const existingRFP = getRFP(id);
+  if (!existingRFP) {
+    throw new Error('RFP not found');
+  }
+  
+  const updatedRFP: SavedRFP = {
+    ...existingRFP,
+    status
+  };
+  
+  secureStore(`rfp_${id}`, updatedRFP);
+}
+
+export function deleteRFP(id: string): void {
+  localStorage.removeItem(`rfp_${id}`);
+  const rfps = getSavedRFPs().filter(rfpId => rfpId !== id);
+  secureStore('rfp_index', rfps);
+}
+
+export function linkBidToRFP(rfpId: string, bidAnalysisId: string): void {
+  const existingRFP = getRFP(rfpId);
+  if (!existingRFP) {
+    throw new Error('RFP not found');
+  }
+  
+  const receivedBids = existingRFP.receivedBids || [];
+  if (!receivedBids.includes(bidAnalysisId)) {
+    receivedBids.push(bidAnalysisId);
+    
+    const updatedRFP: SavedRFP = {
+      ...existingRFP,
+      receivedBids
+    };
+    
+    secureStore(`rfp_${rfpId}`, updatedRFP);
+  }
+}
+
+export function clearAllRFPs(): void {
+  const rfps = getSavedRFPs();
+  rfps.forEach(id => localStorage.removeItem(`rfp_${id}`));
+  localStorage.removeItem('rfp_index');
 }

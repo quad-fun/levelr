@@ -6,6 +6,7 @@ import AnalysisResults from '@/components/analysis/AnalysisResults';
 import ExportTools from '@/components/analysis/ExportTools';
 import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
+import RFPBuilder from '@/components/rfp/RFPBuilder';
 import { analyzeDocument } from '@/lib/claude-client';
 import { AnalysisResult } from '@/types/analysis';
 import { saveAnalysis } from '@/lib/storage';
@@ -15,7 +16,7 @@ export default function AnalyzePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'leveling'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'leveling' | 'rfp'>('upload');
   const [lastProcessedDoc, setLastProcessedDoc] = useState<{file: File, processedDoc: ProcessedDocument} | null>(null);
 
   const handleFileSelect = async (file: File, processedDoc: ProcessedDocument) => {
@@ -121,6 +122,16 @@ export default function AnalyzePage() {
               New Analysis
             </button>
             <button
+              onClick={() => setActiveTab('rfp')}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'rfp' 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Generate RFP
+            </button>
+            <button
               onClick={() => setActiveTab('history')}
               className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeTab === 'history' 
@@ -147,6 +158,8 @@ export default function AnalyzePage() {
           <AnalysisHistory />
         ) : activeTab === 'leveling' ? (
           <BidLeveling />
+        ) : activeTab === 'rfp' ? (
+          <RFPBuilder onCancel={() => setActiveTab('upload')} />
         ) : !analysisResult ? (
           <div className="space-y-8">
             {/* Title */}

@@ -1,0 +1,426 @@
+'use client';
+
+import { useState, useEffect } from 'react';
+import { RFPProject, CSIScopeItem } from '@/types/rfp';
+import { CSI_DIVISIONS, getCSIDivisionsForProjectType, getTypicalPercentage } from '@/lib/rfp/csi-data';
+import { getMarketIntelligence } from '@/lib/storage';
+import { 
+  CheckSquare, Square, AlertCircle, 
+  Plus, Minus, Lightbulb, BarChart3, Target
+} from 'lucide-react';
+
+interface ScopeBuilderProps {
+  project: RFPProject;
+  onUpdate: (updates: Partial<RFPProject>) => void;
+}
+
+export default function ScopeBuilder({ project, onUpdate }: ScopeBuilderProps) {
+  const [expandedDivision, setExpandedDivision] = useState<string | null>(null);
+  const [marketData, setMarketData] = useState(getMarketIntelligence());
+  const [showSuggestions, setShowSuggestions] = useState(true);
+
+  const suggestedDivisions = getCSIDivisionsForProjectType(project.projectType);
+  
+  useEffect(() => {
+    setMarketData(getMarketIntelligence());
+  }, []);
+
+  const updateScopeDefinition = (field: keyof RFPProject['scopeDefinition'], value: unknown) => {
+    onUpdate({
+      scopeDefinition: {
+        ...project.scopeDefinition,
+        [field]: value
+      }
+    });
+  };
+
+  const toggleDivision = (divisionCode: string) => {
+    const currentDivisions = { ...project.scopeDefinition.csiDivisions };
+    
+    if (currentDivisions[divisionCode]) {
+      delete currentDivisions[divisionCode];
+    } else {
+      const divisionInfo = CSI_DIVISIONS[divisionCode];
+      const projectTypeKey = project.projectType.includes('commercial') ? 'commercial' : 
+                           project.projectType === 'residential' ? 'residential' : 'industrial';
+      
+      currentDivisions[divisionCode] = {
+        included: true,
+        description: `${divisionInfo.name} - ${divisionInfo.description}`,
+        specifications: divisionInfo.commonItems.slice(0, 3),
+        performanceRequirements: [],
+        notes: '',
+        estimatedPercentage: getTypicalPercentage(divisionCode, projectTypeKey)
+      };
+    }
+    
+    updateScopeDefinition('csiDivisions', currentDivisions);
+  };
+
+  const updateDivisionDetails = (divisionCode: string, field: keyof CSIScopeItem, value: unknown) => {
+    const currentDivisions = { ...project.scopeDefinition.csiDivisions };
+    if (currentDivisions[divisionCode]) {
+      currentDivisions[divisionCode] = {
+        ...currentDivisions[divisionCode],
+        [field]: value
+      };
+      updateScopeDefinition('csiDivisions', currentDivisions);
+    }
+  };
+
+  const addSpecification = (divisionCode: string) => {
+    const currentDivisions = { ...project.scopeDefinition.csiDivisions };
+    const division = currentDivisions[divisionCode];
+    if (division) {
+      division.specifications = [...division.specifications, ''];
+      updateScopeDefinition('csiDivisions', currentDivisions);
+    }
+  };
+
+  const updateSpecification = (divisionCode: string, index: number, value: string) => {
+    const currentDivisions = { ...project.scopeDefinition.csiDivisions };
+    const division = currentDivisions[divisionCode];
+    if (division) {
+      division.specifications[index] = value;
+      updateScopeDefinition('csiDivisions', currentDivisions);
+    }
+  };
+
+  const removeSpecification = (divisionCode: string, index: number) => {
+    const currentDivisions = { ...project.scopeDefinition.csiDivisions };
+    const division = currentDivisions[divisionCode];
+    if (division) {
+      division.specifications = division.specifications.filter((_, i) => i !== index);
+      updateScopeDefinition('csiDivisions', currentDivisions);
+    }
+  };
+
+  const applySuggestions = () => {
+    const newDivisions = { ...project.scopeDefinition.csiDivisions };
+    
+    suggestedDivisions.forEach(code => {
+      if (!newDivisions[code]) {
+        const divisionInfo = CSI_DIVISIONS[code];
+        const projectTypeKey = project.projectType.includes('commercial') ? 'commercial' : 
+                             project.projectType === 'residential' ? 'residential' : 'industrial';
+        
+        newDivisions[code] = {
+          included: true,
+          description: `${divisionInfo.name} - ${divisionInfo.description}`,
+          specifications: divisionInfo.commonItems.slice(0, 3),
+          performanceRequirements: [],
+          notes: '',
+          estimatedPercentage: getTypicalPercentage(code, projectTypeKey)
+        };
+      }
+    });
+    
+    updateScopeDefinition('csiDivisions', newDivisions);
+    setShowSuggestions(false);
+  };
+
+  const getMarketBenchmark = (divisionCode: string) => {
+    return marketData.divisionBenchmarks[divisionCode] || null;
+  };
+
+  const selectedDivisions = Object.keys(project.scopeDefinition.csiDivisions);
+  const unselectedSuggested = suggestedDivisions.filter(code => !selectedDivisions.includes(code));
+
+  return (
+    <div className="p-8">
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Scope Definition</h2>
+        <p className="text-gray-600">
+          Define the work scope using CSI divisions. Select applicable divisions and specify requirements for each.
+        </p>
+      </div>
+
+      {/* Smart Suggestions */}
+      {showSuggestions && unselectedSuggested.length > 0 && (
+        <div className="mb-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="flex items-start">
+            <Lightbulb className="h-5 w-5 text-blue-600 mr-3 mt-0.5 flex-shrink-0" />
+            <div className="flex-1">
+              <h3 className="font-medium text-blue-900 mb-2">Smart Suggestions</h3>
+              <p className="text-blue-700 text-sm mb-3">
+                Based on your project type ({project.projectType.replace('_', ' ')}), we recommend including these divisions:
+              </p>
+              <div className="flex flex-wrap gap-2 mb-3">
+                {unselectedSuggested.map(code => (
+                  <span key={code} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                    {code} - {CSI_DIVISIONS[code]?.name}
+                  </span>
+                ))}
+              </div>
+              <div className="flex space-x-2">
+                <button
+                  onClick={applySuggestions}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded font-medium transition-colors"
+                >
+                  Apply All Suggestions
+                </button>
+                <button
+                  onClick={() => setShowSuggestions(false)}
+                  className="px-3 py-1 text-blue-600 hover:text-blue-700 text-sm font-medium"
+                >
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CSI Division Selection */}
+      <div className="mb-8">
+        <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+          <Target className="h-5 w-5 mr-2" />
+          CSI Division Selection ({selectedDivisions.length} selected)
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Object.entries(CSI_DIVISIONS).map(([code, divisionInfo]) => {
+            const isSelected = selectedDivisions.includes(code);
+            const isSuggested = suggestedDivisions.includes(code);
+            const marketBenchmark = getMarketBenchmark(code);
+            
+            return (
+              <div
+                key={code}
+                className={`border-2 rounded-lg p-4 cursor-pointer transition-colors ${
+                  isSelected
+                    ? 'border-blue-500 bg-blue-50'
+                    : isSuggested
+                    ? 'border-yellow-300 bg-yellow-50'
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+                onClick={() => toggleDivision(code)}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start">
+                    {isSelected ? (
+                      <CheckSquare className="h-5 w-5 text-blue-600 mr-2 mt-0.5" />
+                    ) : (
+                      <Square className="h-5 w-5 text-gray-400 mr-2 mt-0.5" />
+                    )}
+                    <div>
+                      <h4 className="font-medium text-gray-900">
+                        Division {code} - {divisionInfo.name}
+                      </h4>
+                      <p className="text-sm text-gray-600 mt-1">{divisionInfo.description}</p>
+                      
+                      {marketBenchmark && (
+                        <div className="mt-2 flex items-center text-xs text-gray-500">
+                          <BarChart3 className="h-3 w-3 mr-1" />
+                          Market avg: {marketBenchmark.average.toFixed(1)}%
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {isSuggested && !isSelected && (
+                    <span className="px-2 py-1 bg-yellow-200 text-yellow-800 text-xs rounded font-medium">
+                      Suggested
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Selected Divisions Details */}
+      {selectedDivisions.length > 0 && (
+        <div className="mb-8">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Division Details & Specifications</h3>
+          
+          <div className="space-y-4">
+            {selectedDivisions.sort((a, b) => a.localeCompare(b)).map(code => {
+              const division = project.scopeDefinition.csiDivisions[code];
+              const divisionInfo = CSI_DIVISIONS[code];
+              const isExpanded = expandedDivision === code;
+              
+              return (
+                <div key={code} className="border border-gray-200 rounded-lg">
+                  <div
+                    className="flex items-center justify-between p-4 cursor-pointer hover:bg-gray-50"
+                    onClick={() => setExpandedDivision(isExpanded ? null : code)}
+                  >
+                    <div className="flex items-center">
+                      <h4 className="font-medium text-gray-900">
+                        Division {code} - {divisionInfo.name}
+                      </h4>
+                      <span className="ml-2 px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                        {division.specifications.length} items
+                      </span>
+                    </div>
+                    <div className="flex items-center">
+                      {division.estimatedPercentage && (
+                        <span className="text-sm text-gray-500 mr-2">
+                          ~{division.estimatedPercentage}%
+                        </span>
+                      )}
+                      {isExpanded ? (
+                        <Minus className="h-4 w-4 text-gray-400" />
+                      ) : (
+                        <Plus className="h-4 w-4 text-gray-400" />
+                      )}
+                    </div>
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className="border-t border-gray-200 p-4 space-y-4">
+                      {/* Division Description */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Division Description
+                        </label>
+                        <textarea
+                          value={division.description}
+                          onChange={(e) => updateDivisionDetails(code, 'description', e.target.value)}
+                          rows={2}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      
+                      {/* Specifications */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Specifications & Work Items
+                        </label>
+                        <div className="space-y-2">
+                          {division.specifications.map((spec, index) => (
+                            <div key={index} className="flex items-center space-x-2">
+                              <input
+                                type="text"
+                                value={spec}
+                                onChange={(e) => updateSpecification(code, index, e.target.value)}
+                                placeholder="Enter specification or work item"
+                                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                              <button
+                                onClick={() => removeSpecification(code, index)}
+                                className="text-red-600 hover:text-red-700 p-1"
+                              >
+                                <Minus className="h-4 w-4" />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            onClick={() => addSpecification(code)}
+                            className="flex items-center text-blue-600 hover:text-blue-700 text-sm font-medium"
+                          >
+                            <Plus className="h-4 w-4 mr-1" />
+                            Add Specification
+                          </button>
+                        </div>
+                      </div>
+                      
+                      {/* Notes */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Special Notes & Requirements
+                        </label>
+                        <textarea
+                          value={division.notes}
+                          onChange={(e) => updateDivisionDetails(code, 'notes', e.target.value)}
+                          rows={2}
+                          placeholder="Add any special requirements, coordination notes, or clarifications"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      
+                      {/* Risk Factors */}
+                      {divisionInfo.riskFactors.length > 0 && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                          <h5 className="flex items-center text-sm font-medium text-amber-800 mb-2">
+                            <AlertCircle className="h-4 w-4 mr-1" />
+                            Risk Factors to Consider
+                          </h5>
+                          <ul className="text-sm text-amber-700 space-y-1">
+                            {divisionInfo.riskFactors.map((risk, index) => (
+                              <li key={index}>• {risk}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Special Requirements & Exclusions */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Special Requirements
+          </label>
+          <textarea
+            value={project.scopeDefinition.specialRequirements.join('\n')}
+            onChange={(e) => updateScopeDefinition('specialRequirements', 
+              e.target.value.split('\n').filter(req => req.trim()))}
+            rows={4}
+            placeholder="Enter special requirements (one per line)&#10;Example:&#10;LEED Gold certification required&#10;Prevailing wage compliance&#10;Union labor requirements"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Exclusions
+          </label>
+          <textarea
+            value={project.scopeDefinition.exclusions.join('\n')}
+            onChange={(e) => updateScopeDefinition('exclusions', 
+              e.target.value.split('\n').filter(exc => exc.trim()))}
+            rows={4}
+            placeholder="Enter exclusions (one per line)&#10;Example:&#10;Permits and fees&#10;Site survey&#10;Geotechnical investigation"
+            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+      </div>
+
+      {/* Scope Summary */}
+      <div className="mt-8 bg-gray-50 rounded-lg p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Scope Summary</h3>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <p className="text-gray-600">CSI Divisions Selected</p>
+            <p className="font-medium">{selectedDivisions.length}</p>
+          </div>
+          <div>
+            <p className="text-gray-600">Total Specifications</p>
+            <p className="font-medium">
+              {Object.values(project.scopeDefinition.csiDivisions)
+                .reduce((total, div) => total + div.specifications.length, 0)}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-600">Delivery Method</p>
+            <p className="font-medium capitalize">
+              {project.scopeDefinition.deliveryMethod.replace('_', ' ')}
+            </p>
+          </div>
+        </div>
+        
+        {selectedDivisions.length > 0 && (
+          <div className="mt-4">
+            <p className="text-sm text-gray-600 mb-2">Selected Divisions:</p>
+            <div className="flex flex-wrap gap-1">
+              {selectedDivisions.sort().map(code => (
+                <span key={code} className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded">
+                  {code} - {CSI_DIVISIONS[code]?.name}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

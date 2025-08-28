@@ -1,0 +1,249 @@
+// src/lib/rfp/rfp-generator.ts
+
+import { RFPGenerationRequest, RFPProject } from '@/types/rfp';
+
+export async function generateRFPContent(request: RFPGenerationRequest): Promise<string> {
+  try {
+    const response = await fetch('/api/rfp/generate', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to generate content');
+    }
+
+    const data = await response.json();
+    return data.content;
+  } catch (error) {
+    console.error('RFP generation error:', error);
+    throw error;
+  }
+}
+
+// Helper functions for generating different types of content
+export async function generateScopeContent(
+  projectType: string,
+  estimatedValue: number,
+  csiDivisions: string[],
+  context: Record<string, unknown>
+): Promise<string> {
+  return generateRFPContent({
+    projectType: projectType as RFPProject['projectType'],
+    estimatedValue,
+    csiDivisions,
+    sectionType: 'scope',
+    context
+  });
+}
+
+export async function generateCommercialTerms(
+  projectType: string,
+  estimatedValue: number,
+  context: Record<string, unknown>
+): Promise<string> {
+  return generateRFPContent({
+    projectType: projectType as RFPProject['projectType'],
+    estimatedValue,
+    csiDivisions: [],
+    sectionType: 'commercial',
+    context
+  });
+}
+
+export async function generateQualificationCriteria(
+  projectType: string,
+  estimatedValue: number,
+  context: Record<string, unknown>
+): Promise<string> {
+  return generateRFPContent({
+    projectType: projectType as RFPProject['projectType'],
+    estimatedValue,
+    csiDivisions: [],
+    sectionType: 'qualifications',
+    context
+  });
+}
+
+// Template functions for common RFP sections
+export function generateProjectDescription(
+  projectName: string,
+  projectType: string,
+  description: string,
+  location: { address: string; city: string; state: string; zipCode: string }
+): string {
+  return `
+# ${projectName}
+
+## Project Overview
+${description}
+
+**Project Type:** ${projectType.replace('_', ' ')}
+**Location:** ${location.address ? `${location.address}, ` : ''}${location.city}, ${location.state} ${location.zipCode}
+
+## Project Objectives
+This project seeks to engage a qualified contractor to provide construction services in accordance with the specifications and requirements outlined in this Request for Proposal (RFP).
+
+## Scope Summary
+The selected contractor will be responsible for all aspects of construction including but not limited to materials, labor, equipment, and services necessary to complete the work as specified.
+`.trim();
+}
+
+export function generateTimelineSection(timeline: {
+  rfpIssueDate: string;
+  questionsDeadline: string;
+  proposalDeadline: string;
+  awardDate: string;
+  constructionStart: string;
+  completion: string;
+}): string {
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  return `
+## Project Schedule
+
+| Milestone | Date |
+|-----------|------|
+| RFP Issue Date | ${formatDate(timeline.rfpIssueDate)} |
+| Questions Deadline | ${formatDate(timeline.questionsDeadline)} |
+| Proposal Deadline | **${formatDate(timeline.proposalDeadline)}** |
+| Contract Award | ${formatDate(timeline.awardDate)} |
+| Construction Start | ${formatDate(timeline.constructionStart)} |
+| Substantial Completion | ${formatDate(timeline.completion)} |
+
+**All times are local time. Late submissions will not be accepted.**
+`.trim();
+}
+
+export function generateSubmissionRequirements(requirements: {
+  technicalProposal: string[];
+  commercialProposal: string[];
+  qualifications: string[];
+  references: number;
+  presentationRequired: boolean;
+}): string {
+  return `
+## Submission Requirements
+
+### Technical Proposal
+${requirements.technicalProposal.map(req => `- ${req}`).join('\n')}
+
+### Commercial Proposal
+${requirements.commercialProposal.map(req => `- ${req}`).join('\n')}
+
+### Qualifications Package
+${requirements.qualifications.map(req => `- ${req}`).join('\n')}
+
+### References
+Provide ${requirements.references} references from similar projects completed within the last 5 years. Include project name, location, value, completion date, and owner contact information.
+
+${requirements.presentationRequired ? `### Presentation Requirement
+Selected finalists may be required to present their proposal to the selection committee. Presentation details will be provided to shortlisted contractors.` : ''}
+
+### Submission Format
+- Submit all documents in PDF format
+- Proposals must be signed by an authorized representative
+- Include all required insurance certificates and bonding capacity letters
+- Organize submission according to the outline provided above
+`.trim();
+}
+
+// RFP document assembly function
+export function assembleRFPDocument(
+  projectInfo: {
+    projectName: string;
+    projectType: string;
+    description: string;
+    location: { address: string; city: string; state: string; zipCode: string };
+    estimatedValue: number;
+  },
+  timeline: {
+    rfpIssueDate: string;
+    questionsDeadline: string;
+    proposalDeadline: string;
+    awardDate: string;
+    constructionStart: string;
+    completion: string;
+  },
+  scopeContent: string,
+  commercialTerms: string,
+  qualifications: string,
+  submissionReqs: {
+    technicalProposal: string[];
+    commercialProposal: string[];
+    qualifications: string[];
+    references: number;
+    presentationRequired: boolean;
+  }
+): string {
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  return `
+# REQUEST FOR PROPOSAL
+## ${projectInfo.projectName}
+
+---
+
+**Estimated Project Value:** ${formatCurrency(projectInfo.estimatedValue)}
+
+${generateProjectDescription(
+  projectInfo.projectName,
+  projectInfo.projectType,
+  projectInfo.description,
+  projectInfo.location
+)}
+
+---
+
+${generateTimelineSection(timeline)}
+
+---
+
+## Scope of Work
+
+${scopeContent}
+
+---
+
+## Commercial Terms and Conditions
+
+${commercialTerms}
+
+---
+
+## Qualification Requirements
+
+${qualifications}
+
+---
+
+${generateSubmissionRequirements(submissionReqs)}
+
+---
+
+## Contact Information
+
+For questions regarding this RFP, please contact [PROJECT CONTACT] by ${new Date(timeline.questionsDeadline).toLocaleDateString()}.
+
+---
+
+*This Request for Proposal was generated on ${new Date().toLocaleDateString()} using Levelr RFP Generator.*
+`.trim();
+}
