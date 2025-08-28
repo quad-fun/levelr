@@ -180,7 +180,12 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
         // Update delivery method to discipline-appropriate default
         updated.scopeDefinition = {
           ...updated.scopeDefinition,
-          deliveryMethod: getDefaultDeliveryMethod(updates.discipline)
+          deliveryMethod: getDefaultDeliveryMethod(updates.discipline),
+          // Clear framework sections when discipline changes
+          framework: {
+            type: 'csi' as const, // Will be auto-detected by ScopeFrameworkBuilder
+            sections: {}
+          }
         };
       }
       

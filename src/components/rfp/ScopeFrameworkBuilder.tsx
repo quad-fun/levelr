@@ -107,24 +107,25 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
             .map(([code, division]) => {
             const isIncluded = currentSections[code]?.included || false;
             return (
-              <div key={code} className={`border rounded-lg p-4 transition-all ${
-                isIncluded 
-                  ? 'border-blue-300 bg-blue-50' 
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}>
+              <button
+                key={code}
+                onClick={() => toggleScopeSection(code, division)}
+                className={`border rounded-lg p-4 transition-all text-left w-full ${
+                  isIncluded 
+                    ? 'border-blue-300 bg-blue-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
                 <div className="flex items-start space-x-3">
-                  <button
-                    onClick={() => toggleScopeSection(code, division)}
-                    className={`mt-1 transition-colors ${
-                      isIncluded ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
+                  <div className={`mt-1 transition-colors ${
+                    isIncluded ? 'text-blue-600' : 'text-gray-400'
+                  }`}>
                     {isIncluded ? (
                       <CheckCircle className="h-5 w-5" />
                     ) : (
                       <Circle className="h-5 w-5" />
                     )}
-                  </button>
+                  </div>
                   
                   <div className="flex-1">
                     <div className="flex items-center space-x-2 mb-1">
@@ -154,7 +155,7 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -182,24 +183,25 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
           {Object.entries(AIA_PHASES).map(([phaseKey, phase]) => {
             const isIncluded = currentSections[phaseKey]?.included || false;
             return (
-              <div key={phaseKey} className={`border rounded-lg p-4 transition-all ${
-                isIncluded 
-                  ? 'border-purple-300 bg-purple-50' 
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}>
+              <button
+                key={phaseKey}
+                onClick={() => toggleScopeSection(phaseKey, phase)}
+                className={`border rounded-lg p-4 transition-all text-left w-full ${
+                  isIncluded 
+                    ? 'border-purple-300 bg-purple-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
                 <div className="flex items-start space-x-3">
-                  <button
-                    onClick={() => toggleScopeSection(phaseKey, phase)}
-                    className={`mt-1 transition-colors ${
-                      isIncluded ? 'text-purple-600' : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
+                  <div className={`mt-1 transition-colors ${
+                    isIncluded ? 'text-purple-600' : 'text-gray-400'
+                  }`}>
                     {isIncluded ? (
                       <CheckCircle className="h-5 w-5" />
                     ) : (
                       <Circle className="h-5 w-5" />
                     )}
-                  </button>
+                  </div>
                   
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-2">
@@ -246,7 +248,7 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -274,24 +276,25 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
           {Object.entries(TECHNICAL_SPEC_TEMPLATES).map(([specKey, spec]) => {
             const isIncluded = currentSections[specKey]?.included || false;
             return (
-              <div key={specKey} className={`border rounded-lg p-4 transition-all ${
-                isIncluded 
-                  ? 'border-green-300 bg-green-50' 
-                  : 'border-gray-200 hover:border-gray-300'
-              }`}>
+              <button
+                key={specKey}
+                onClick={() => toggleScopeSection(specKey, spec)}
+                className={`border rounded-lg p-4 transition-all text-left w-full ${
+                  isIncluded 
+                    ? 'border-green-300 bg-green-50' 
+                    : 'border-gray-200 hover:border-gray-300'
+                }`}
+              >
                 <div className="flex items-start space-x-3">
-                  <button
-                    onClick={() => toggleScopeSection(specKey, spec)}
-                    className={`mt-1 transition-colors ${
-                      isIncluded ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'
-                    }`}
-                  >
+                  <div className={`mt-1 transition-colors ${
+                    isIncluded ? 'text-green-600' : 'text-gray-400'
+                  }`}>
                     {isIncluded ? (
                       <CheckCircle className="h-5 w-5" />
                     ) : (
                       <Circle className="h-5 w-5" />
                     )}
-                  </button>
+                  </div>
                   
                   <div className="flex-1">
                     <h4 className={`font-medium mb-2 ${
@@ -336,7 +339,7 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
                     )}
                   </div>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>
