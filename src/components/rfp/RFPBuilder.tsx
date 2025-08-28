@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { RFPProject, DEFAULT_EVALUATION_CRITERIA, DEFAULT_INSURANCE_REQUIREMENTS } from '@/types/rfp';
+import { RFPProject, DEFAULT_EVALUATION_CRITERIA, DEFAULT_INSURANCE_REQUIREMENTS, DISCIPLINE_DELIVERY_METHODS, ProjectDiscipline } from '@/types/rfp';
 import { saveRFP, updateRFP, getRFP } from '@/lib/storage';
 import ProjectSetupWizard from './ProjectSetupWizard';
 import ScopeBuilder from './ScopeBuilder';
@@ -19,6 +19,13 @@ interface RFPBuilderProps {
   onComplete?: (rfpId: string) => void;
   onCancel?: () => void;
 }
+
+// Helper function to get default delivery method for discipline
+const getDefaultDeliveryMethod = (discipline: ProjectDiscipline): string => {
+  const methods = DISCIPLINE_DELIVERY_METHODS[discipline];
+  const defaultMethod = methods.find(method => method.typical);
+  return defaultMethod?.value || methods[0]?.value || 'professional_services';
+};
 
 export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBuilderProps) {
   const [currentStep, setCurrentStep] = useState(1);
@@ -52,7 +59,7 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
     scopeDefinition: {
       specialRequirements: [],
       exclusions: [],
-      deliveryMethod: 'design_bid_build',
+      deliveryMethod: getDefaultDeliveryMethod('construction'),
       contractType: 'lump_sum',
       // Legacy support
       csiDivisions: {}
@@ -162,12 +169,18 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
     setProject(prev => {
       const updated = { ...prev, ...updates, updatedAt: new Date().toISOString() };
       
-      // Update evaluation criteria based on discipline
+      // Update evaluation criteria and delivery method based on discipline
       if (updates.discipline && updates.discipline !== prev.discipline) {
         const disciplineEvalCriteria = DEFAULT_EVALUATION_CRITERIA;
         updated.submissionRequirements = {
           ...updated.submissionRequirements,
           evaluationCriteria: disciplineEvalCriteria
+        };
+        
+        // Update delivery method to discipline-appropriate default
+        updated.scopeDefinition = {
+          ...updated.scopeDefinition,
+          deliveryMethod: getDefaultDeliveryMethod(updates.discipline)
         };
       }
       

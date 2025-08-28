@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RFPProject, PROJECT_TYPE_TEMPLATES, DISCIPLINE_OPTIONS } from '@/types/rfp';
+import { RFPProject, PROJECT_TYPE_TEMPLATES, DISCIPLINE_OPTIONS, DISCIPLINE_DELIVERY_METHODS } from '@/types/rfp';
 import { 
   MapPin, Calendar, DollarSign, Building2, FileText, 
   Clock, Truck, Settings
@@ -326,23 +326,7 @@ export default function ProjectSetupWizard({ project, onUpdate }: ProjectSetupWi
               Project Delivery Method
             </label>
             <div className="space-y-4">
-              {[
-                {
-                  value: 'design_bid_build',
-                  title: 'Design-Bid-Build',
-                  description: 'Traditional linear process: design completion, then bidding, then construction'
-                },
-                {
-                  value: 'design_build',
-                  title: 'Design-Build',
-                  description: 'Single entity responsible for both design and construction'
-                },
-                {
-                  value: 'cm_at_risk',
-                  title: 'Construction Manager at Risk',
-                  description: 'CM provides preconstruction services and guarantees maximum price'
-                }
-              ].map((method) => (
+              {project.discipline && DISCIPLINE_DELIVERY_METHODS[project.discipline as keyof typeof DISCIPLINE_DELIVERY_METHODS]?.map((method) => (
                 <label key={method.value} className="flex items-start space-x-3 cursor-pointer">
                   <input
                     type="radio"

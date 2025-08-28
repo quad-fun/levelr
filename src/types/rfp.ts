@@ -82,7 +82,7 @@ export interface RFPProject {
     framework?: ScopeFramework;
     specialRequirements: string[];
     exclusions: string[];
-    deliveryMethod: 'design_bid_build' | 'design_build' | 'cm_at_risk' | 'direct_contract' | 'consultant_agreement';
+    deliveryMethod: string;
     contractType: 'lump_sum' | 'unit_price' | 'cost_plus' | 'hourly' | 'percentage_of_cost';
     // Legacy CSI support for backward compatibility
     csiDivisions?: Record<string, CSIScopeItem>;
@@ -645,3 +645,91 @@ export const DEFAULT_EVALUATION_CRITERIA: EvaluationCriterion[] = [
   { category: 'Schedule', weight: 10, description: 'Realistic timeline and milestone planning' },
   { category: 'Safety Record', weight: 10, description: 'Safety performance history and program' }
 ];
+
+// Discipline-specific delivery method options
+export const DISCIPLINE_DELIVERY_METHODS: Record<ProjectDiscipline, Array<{
+  value: string;
+  title: string;
+  description: string;
+  typical?: boolean;
+}>> = {
+  construction: [
+    {
+      value: 'design_bid_build',
+      title: 'Design-Bid-Build',
+      description: 'Traditional linear process: design completion, then bidding, then construction',
+      typical: true
+    },
+    {
+      value: 'design_build',
+      title: 'Design-Build',
+      description: 'Single entity responsible for both design and construction'
+    },
+    {
+      value: 'cm_at_risk',
+      title: 'Construction Manager at Risk',
+      description: 'CM provides preconstruction services and guarantees maximum price'
+    },
+    {
+      value: 'cm_agent',
+      title: 'Construction Manager as Agent',
+      description: 'CM acts as agent for owner, manages multiple prime contracts'
+    }
+  ],
+  design: [
+    {
+      value: 'professional_services',
+      title: 'Professional Services Agreement',
+      description: 'Standard architect/engineer professional services contract',
+      typical: true
+    },
+    {
+      value: 'design_build_partner',
+      title: 'Design-Build Partnership',
+      description: 'Design services as part of design-build team'
+    },
+    {
+      value: 'consultant_agreement',
+      title: 'Owner\'s Representative/Consultant',
+      description: 'Advisory and oversight services throughout project delivery'
+    },
+    {
+      value: 'multiple_prime',
+      title: 'Multiple Prime Consultant',
+      description: 'Separate contracts for architecture, structural, MEP disciplines'
+    },
+    {
+      value: 'integrated_delivery',
+      title: 'Integrated Project Delivery (IPD)',
+      description: 'Collaborative delivery method with shared risks and rewards'
+    }
+  ],
+  trade: [
+    {
+      value: 'direct_contract',
+      title: 'Direct Trade Contract',
+      description: 'Direct contract between owner and trade contractor',
+      typical: true
+    },
+    {
+      value: 'subcontractor_agreement',
+      title: 'Subcontractor Agreement',
+      description: 'Trade work performed under general contractor'
+    },
+    {
+      value: 'design_assist',
+      title: 'Design-Assist Partnership',
+      description: 'Early involvement in design phase with guaranteed pricing'
+    },
+    {
+      value: 'design_build_trade',
+      title: 'Design-Build Trade Services',
+      description: 'Trade contractor responsible for both design and installation'
+    },
+    {
+      value: 'performance_contract',
+      title: 'Performance Contracting',
+      description: 'Guaranteed performance outcomes with shared savings'
+    }
+  ]
+};
