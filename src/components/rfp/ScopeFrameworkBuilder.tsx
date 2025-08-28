@@ -102,7 +102,9 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {Object.entries(CSI_DIVISIONS).map(([code, division]) => {
+          {Object.entries(CSI_DIVISIONS)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([code, division]) => {
             const isIncluded = currentSections[code]?.included || false;
             return (
               <div key={code} className={`border rounded-lg p-4 transition-all ${
