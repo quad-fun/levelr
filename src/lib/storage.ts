@@ -1,5 +1,5 @@
 import CryptoJS from 'crypto-js';
-import { UsageData, AnalysisResult } from '@/types/analysis';
+import { UsageData, AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
 import { RFPProject, SavedRFP } from '@/types/rfp';
 
 // MVP: Simple localStorage utilities with optional encryption
@@ -138,24 +138,35 @@ export function getUsageStatus(userId?: string): { canAnalyze: boolean; message?
   return { canAnalyze: true };
 }
 
-// Analysis History Management
+// Analysis History Management - Enhanced for Multi-Discipline
 export interface SavedAnalysis {
   id: string;
   timestamp: string;
   result: AnalysisResult;
+  marketVariance?: MarketVariance;
+  riskAssessment?: RiskAssessment;
   comparisonData?: {
     averageTotal: number;
-    divisionAverages: Record<string, number>;
+    divisionAverages?: Record<string, number>; // For construction
+    phaseAverages?: Record<string, number>; // For design
+    systemAverages?: Record<string, number>; // For trade
     riskLevel: string;
+    discipline: 'construction' | 'design' | 'trade';
   };
 }
 
-export function saveAnalysis(result: AnalysisResult): string {
+export function saveAnalysis(
+  result: AnalysisResult, 
+  marketVariance?: MarketVariance, 
+  riskAssessment?: RiskAssessment
+): string {
   const id = `analysis_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   const savedAnalysis: SavedAnalysis = {
     id,
     timestamp: new Date().toISOString(),
     result,
+    marketVariance,
+    riskAssessment,
     comparisonData: calculateComparisonData(result)
   };
   
@@ -212,23 +223,74 @@ export function clearAllAnalyses(): void {
   localStorage.removeItem('analysis_index');
 }
 
-// Leveling Database Functions
-function calculateComparisonData(_result: AnalysisResult): SavedAnalysis['comparisonData'] {
+// Leveling Database Functions - Enhanced for Multi-Discipline
+function calculateComparisonData(result: AnalysisResult): SavedAnalysis['comparisonData'] {
   const allAnalyses = getAllAnalyses();
   
   if (allAnalyses.length === 0) {
-    return undefined;
+    return {
+      averageTotal: result.total_amount,
+      riskLevel: 'MEDIUM',
+      discipline: result.discipline
+    };
   }
   
-  // Calculate averages from existing analyses
-  const totals = allAnalyses.map(a => a.result.total_amount);
+  // Filter analyses by discipline for more accurate comparisons
+  const disciplineAnalyses = allAnalyses.filter(a => a.result.discipline === result.discipline);
+  
+  if (disciplineAnalyses.length === 0) {
+    return {
+      averageTotal: result.total_amount,
+      riskLevel: 'MEDIUM',
+      discipline: result.discipline
+    };
+  }
+  
+  // Calculate averages from existing analyses of the same discipline
+  const totals = disciplineAnalyses.map(a => a.result.total_amount);
   const averageTotal = totals.reduce((sum, total) => sum + total, 0) / totals.length;
   
-  // Calculate division averages
+  let divisionAverages: Record<string, number> | undefined;
+  let phaseAverages: Record<string, number> | undefined;
+  let systemAverages: Record<string, number> | undefined;
+  
+  // Calculate discipline-specific averages
+  if (result.discipline === 'construction') {
+    divisionAverages = calculateDivisionAverages(disciplineAnalyses);
+  } else if (result.discipline === 'design') {
+    phaseAverages = calculatePhaseAverages(disciplineAnalyses);
+  } else if (result.discipline === 'trade') {
+    systemAverages = calculateSystemAverages(disciplineAnalyses);
+  }
+  
+  // Determine risk level distribution
+  const riskLevels = disciplineAnalyses.map(a => 
+    a.riskAssessment?.level || a.comparisonData?.riskLevel || 'MEDIUM'
+  );
+  const riskCounts = riskLevels.reduce((acc, level) => {
+    acc[level] = (acc[level] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+  
+  const mostCommonRisk = Object.entries(riskCounts)
+    .sort(([,a], [,b]) => b - a)[0]?.[0] || 'MEDIUM';
+  
+  return {
+    averageTotal,
+    divisionAverages,
+    phaseAverages,
+    systemAverages,
+    riskLevel: mostCommonRisk,
+    discipline: result.discipline
+  };
+}
+
+// Helper functions for discipline-specific calculations
+function calculateDivisionAverages(analyses: SavedAnalysis[]): Record<string, number> {
   const divisionAverages: Record<string, number> = {};
   const divisionCounts: Record<string, number> = {};
   
-  allAnalyses.forEach(analysis => {
+  analyses.forEach(analysis => {
     Object.entries(analysis.result.csi_divisions).forEach(([code, data]) => {
       const percentage = (data.cost / analysis.result.total_amount) * 100;
       divisionAverages[code] = (divisionAverages[code] || 0) + percentage;
@@ -241,68 +303,115 @@ function calculateComparisonData(_result: AnalysisResult): SavedAnalysis['compar
     divisionAverages[code] = divisionAverages[code] / divisionCounts[code];
   });
   
-  // Determine risk level distribution
-  const riskLevels = allAnalyses.map(a => a.comparisonData?.riskLevel || 'UNKNOWN');
-  const riskCounts = riskLevels.reduce((acc, level) => {
-    acc[level] = (acc[level] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  
-  const mostCommonRisk = Object.entries(riskCounts)
-    .sort(([,a], [,b]) => b - a)[0]?.[0] || 'MEDIUM';
-  
-  return {
-    averageTotal,
-    divisionAverages,
-    riskLevel: mostCommonRisk
-  };
+  return divisionAverages;
 }
 
-// Market Intelligence Functions  
-export function getMarketIntelligence(): {
+function calculatePhaseAverages(analyses: SavedAnalysis[]): Record<string, number> {
+  const phaseAverages: Record<string, number> = {};
+  const phaseCounts: Record<string, number> = {};
+  
+  analyses.forEach(analysis => {
+    if (analysis.result.aia_phases) {
+      Object.entries(analysis.result.aia_phases).forEach(([phaseKey, phase]) => {
+        const percentage = (phase.fee_amount / analysis.result.total_amount) * 100;
+        phaseAverages[phaseKey] = (phaseAverages[phaseKey] || 0) + percentage;
+        phaseCounts[phaseKey] = (phaseCounts[phaseKey] || 0) + 1;
+      });
+    }
+  });
+  
+  // Convert sums to averages
+  Object.keys(phaseAverages).forEach(phaseKey => {
+    phaseAverages[phaseKey] = phaseAverages[phaseKey] / phaseCounts[phaseKey];
+  });
+  
+  return phaseAverages;
+}
+
+function calculateSystemAverages(analyses: SavedAnalysis[]): Record<string, number> {
+  const systemAverages: Record<string, number> = {};
+  const systemCounts: Record<string, number> = {};
+  
+  analyses.forEach(analysis => {
+    if (analysis.result.technical_systems) {
+      Object.entries(analysis.result.technical_systems).forEach(([systemKey, system]) => {
+        const percentage = (system.total_cost / analysis.result.total_amount) * 100;
+        systemAverages[systemKey] = (systemAverages[systemKey] || 0) + percentage;
+        systemCounts[systemKey] = (systemCounts[systemKey] || 0) + 1;
+      });
+    }
+  });
+  
+  // Convert sums to averages
+  Object.keys(systemAverages).forEach(systemKey => {
+    systemAverages[systemKey] = systemAverages[systemKey] / systemCounts[systemKey];
+  });
+  
+  return systemAverages;
+}
+
+// Market Intelligence Functions - Enhanced for Multi-Discipline
+export function getMarketIntelligence(discipline?: 'construction' | 'design' | 'trade'): {
   totalProjects: number;
   averageProjectValue: number;
-  divisionBenchmarks: Record<string, { average: number; min: number; max: number }>;
+  disciplineBreakdown: Record<string, number>;
+  divisionBenchmarks?: Record<string, { average: number; min: number; max: number }>;
+  phaseBenchmarks?: Record<string, { average: number; min: number; max: number }>;
+  systemBenchmarks?: Record<string, { average: number; min: number; max: number }>;
   riskDistribution: Record<string, number>;
 } {
   const allAnalyses = getAllAnalyses();
   
-  if (allAnalyses.length === 0) {
+  // Filter by discipline if specified
+  const targetAnalyses = discipline 
+    ? allAnalyses.filter(a => a.result.discipline === discipline)
+    : allAnalyses;
+  
+  if (targetAnalyses.length === 0) {
     return {
       totalProjects: 0,
       averageProjectValue: 0,
-      divisionBenchmarks: {},
+      disciplineBreakdown: {},
       riskDistribution: {}
     };
   }
   
-  const totalProjects = allAnalyses.length;
-  const averageProjectValue = allAnalyses.reduce((sum, a) => sum + a.result.total_amount, 0) / totalProjects;
+  const totalProjects = targetAnalyses.length;
+  const averageProjectValue = targetAnalyses.reduce((sum, a) => sum + a.result.total_amount, 0) / totalProjects;
   
-  // Calculate division benchmarks from actual data
-  const divisionStats: Record<string, number[]> = {};
+  // Calculate discipline breakdown
+  const disciplineBreakdown = allAnalyses.reduce((acc, analysis) => {
+    const disc = analysis.result.discipline;
+    acc[disc] = (acc[disc] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
   
-  allAnalyses.forEach(analysis => {
-    Object.entries(analysis.result.csi_divisions).forEach(([code, data]) => {
-      const percentage = (data.cost / analysis.result.total_amount) * 100;
-      if (!divisionStats[code]) divisionStats[code] = [];
-      divisionStats[code].push(percentage);
-    });
-  });
+  // Calculate discipline-specific benchmarks
+  let divisionBenchmarks: Record<string, { average: number; min: number; max: number }> | undefined;
+  let phaseBenchmarks: Record<string, { average: number; min: number; max: number }> | undefined;
+  let systemBenchmarks: Record<string, { average: number; min: number; max: number }> | undefined;
   
-  const divisionBenchmarks: Record<string, { average: number; min: number; max: number }> = {};
-  Object.entries(divisionStats).forEach(([code, percentages]) => {
-    percentages.sort((a, b) => a - b);
-    divisionBenchmarks[code] = {
-      average: percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
-      min: percentages[0],
-      max: percentages[percentages.length - 1]
-    };
-  });
+  if (!discipline || discipline === 'construction') {
+    divisionBenchmarks = calculateDivisionBenchmarks(
+      discipline ? targetAnalyses : allAnalyses.filter(a => a.result.discipline === 'construction')
+    );
+  }
+  
+  if (!discipline || discipline === 'design') {
+    phaseBenchmarks = calculatePhaseBenchmarks(
+      discipline ? targetAnalyses : allAnalyses.filter(a => a.result.discipline === 'design')
+    );
+  }
+  
+  if (!discipline || discipline === 'trade') {
+    systemBenchmarks = calculateSystemBenchmarks(
+      discipline ? targetAnalyses : allAnalyses.filter(a => a.result.discipline === 'trade')
+    );
+  }
   
   // Risk distribution
-  const riskDistribution = allAnalyses.reduce((acc, analysis) => {
-    const risk = analysis.comparisonData?.riskLevel || 'UNKNOWN';
+  const riskDistribution = targetAnalyses.reduce((acc, analysis) => {
+    const risk = analysis.riskAssessment?.level || analysis.comparisonData?.riskLevel || 'UNKNOWN';
     acc[risk] = (acc[risk] || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
@@ -310,8 +419,141 @@ export function getMarketIntelligence(): {
   return {
     totalProjects,
     averageProjectValue,
+    disciplineBreakdown,
     divisionBenchmarks,
+    phaseBenchmarks,
+    systemBenchmarks,
     riskDistribution
+  };
+}
+
+// Benchmark calculation helpers
+function calculateDivisionBenchmarks(analyses: SavedAnalysis[]): Record<string, { average: number; min: number; max: number }> {
+  const divisionStats: Record<string, number[]> = {};
+  
+  analyses.forEach(analysis => {
+    Object.entries(analysis.result.csi_divisions).forEach(([code, data]) => {
+      const percentage = (data.cost / analysis.result.total_amount) * 100;
+      if (!divisionStats[code]) divisionStats[code] = [];
+      divisionStats[code].push(percentage);
+    });
+  });
+  
+  const benchmarks: Record<string, { average: number; min: number; max: number }> = {};
+  Object.entries(divisionStats).forEach(([code, percentages]) => {
+    percentages.sort((a, b) => a - b);
+    benchmarks[code] = {
+      average: percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
+      min: percentages[0],
+      max: percentages[percentages.length - 1]
+    };
+  });
+  
+  return benchmarks;
+}
+
+function calculatePhaseBenchmarks(analyses: SavedAnalysis[]): Record<string, { average: number; min: number; max: number }> {
+  const phaseStats: Record<string, number[]> = {};
+  
+  analyses.forEach(analysis => {
+    if (analysis.result.aia_phases) {
+      Object.entries(analysis.result.aia_phases).forEach(([phaseKey, phase]) => {
+        const percentage = (phase.fee_amount / analysis.result.total_amount) * 100;
+        if (!phaseStats[phaseKey]) phaseStats[phaseKey] = [];
+        phaseStats[phaseKey].push(percentage);
+      });
+    }
+  });
+  
+  const benchmarks: Record<string, { average: number; min: number; max: number }> = {};
+  Object.entries(phaseStats).forEach(([phaseKey, percentages]) => {
+    percentages.sort((a, b) => a - b);
+    benchmarks[phaseKey] = {
+      average: percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
+      min: percentages[0],
+      max: percentages[percentages.length - 1]
+    };
+  });
+  
+  return benchmarks;
+}
+
+function calculateSystemBenchmarks(analyses: SavedAnalysis[]): Record<string, { average: number; min: number; max: number }> {
+  const systemStats: Record<string, number[]> = {};
+  
+  analyses.forEach(analysis => {
+    if (analysis.result.technical_systems) {
+      Object.entries(analysis.result.technical_systems).forEach(([systemKey, system]) => {
+        const percentage = (system.total_cost / analysis.result.total_amount) * 100;
+        if (!systemStats[systemKey]) systemStats[systemKey] = [];
+        systemStats[systemKey].push(percentage);
+      });
+    }
+  });
+  
+  const benchmarks: Record<string, { average: number; min: number; max: number }> = {};
+  Object.entries(systemStats).forEach(([systemKey, percentages]) => {
+    percentages.sort((a, b) => a - b);
+    benchmarks[systemKey] = {
+      average: percentages.reduce((sum, p) => sum + p, 0) / percentages.length,
+      min: percentages[0],
+      max: percentages[percentages.length - 1]
+    };
+  });
+  
+  return benchmarks;
+}
+
+// Cross-discipline comparison functions
+export function compareAnalysisAcrossDisciplines(analysisId: string): {
+  analysis: SavedAnalysis;
+  constructionComparison?: { averageValue: number; riskDistribution: Record<string, number> };
+  designComparison?: { averageValue: number; riskDistribution: Record<string, number> };
+  tradeComparison?: { averageValue: number; riskDistribution: Record<string, number> };
+} {
+  const analysis = getAnalysis(analysisId);
+  if (!analysis) {
+    throw new Error('Analysis not found');
+  }
+  
+  const allAnalyses = getAllAnalyses();
+  
+  const constructionAnalyses = allAnalyses.filter(a => a.result.discipline === 'construction');
+  const designAnalyses = allAnalyses.filter(a => a.result.discipline === 'design');
+  const tradeAnalyses = allAnalyses.filter(a => a.result.discipline === 'trade');
+  
+  const constructionComparison = constructionAnalyses.length > 0 ? {
+    averageValue: constructionAnalyses.reduce((sum, a) => sum + a.result.total_amount, 0) / constructionAnalyses.length,
+    riskDistribution: constructionAnalyses.reduce((acc, a) => {
+      const risk = a.riskAssessment?.level || 'MEDIUM';
+      acc[risk] = (acc[risk] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  } : undefined;
+  
+  const designComparison = designAnalyses.length > 0 ? {
+    averageValue: designAnalyses.reduce((sum, a) => sum + a.result.total_amount, 0) / designAnalyses.length,
+    riskDistribution: designAnalyses.reduce((acc, a) => {
+      const risk = a.riskAssessment?.level || 'MEDIUM';
+      acc[risk] = (acc[risk] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  } : undefined;
+  
+  const tradeComparison = tradeAnalyses.length > 0 ? {
+    averageValue: tradeAnalyses.reduce((sum, a) => sum + a.result.total_amount, 0) / tradeAnalyses.length,
+    riskDistribution: tradeAnalyses.reduce((acc, a) => {
+      const risk = a.riskAssessment?.level || 'MEDIUM';
+      acc[risk] = (acc[risk] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>)
+  } : undefined;
+  
+  return {
+    analysis,
+    constructionComparison,
+    designComparison,
+    tradeComparison
   };
 }
 

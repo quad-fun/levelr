@@ -1,0 +1,75 @@
+==============================
+ DIAGNOSTICS FILE
+ Generated: 2025-08-28T14:13:50Z
+==============================
+
+ORIGINAL PATH: src/lib/analysis/market-analyzer.ts
+
+================================================================
+BEGIN CONTENT: src/lib/analysis/market-analyzer.ts
+================================================================
+import { MarketVariance } from '@/types/analysis';
+import { CSI_DIVISIONS } from './csi-analyzer';
+
+export function analyzeMarketVariance(divisionCost: number, totalCost: number, divisionCode: string): MarketVariance {
+  const percentage = (divisionCost / totalCost) * 100;
+  const division = CSI_DIVISIONS[divisionCode as keyof typeof CSI_DIVISIONS];
+  
+  if (!division) {
+    return {
+      status: "MARKET_RATE",
+      message: `${percentage.toFixed(1)}% - Division not recognized`,
+      severity: "low",
+      recommendation: `Review division ${divisionCode} classification`
+    };
+  }
+  
+  const [minPct, maxPct] = division.typicalPercentage;
+  
+  if (percentage > maxPct) {
+    const variance = percentage - maxPct;
+    return {
+      status: "ABOVE_MARKET",
+      message: `${percentage.toFixed(1)}% vs typical ${minPct}-${maxPct}% (+${variance.toFixed(1)}% variance)`,
+      severity: variance > 10 ? "high" : "medium",
+      recommendation: `Review specifications - ${division.name} costs significantly above market`
+    };
+  } else if (percentage < minPct) {
+    const variance = minPct - percentage;
+    return {
+      status: "BELOW_MARKET", 
+      message: `${percentage.toFixed(1)}% vs typical ${minPct}-${maxPct}% (-${variance.toFixed(1)}% variance)`,
+      severity: variance > 5 ? "medium" : "low",
+      recommendation: `Verify scope completeness - ${division.name} may be missing work items`
+    };
+  } else {
+    return {
+      status: "MARKET_RATE",
+      message: `${percentage.toFixed(1)}% within typical ${minPct}-${maxPct}% range`,
+      severity: "low",
+      recommendation: `${division.name} pricing appears competitive`
+    };
+  }
+}
+
+export function calculateSimpleROI(projectValue: number): {
+  monthlyFee: number;
+  potentialSavings: number;
+  paybackDays: number;
+  roi: string;
+} {
+  const monthlyFee = 299;
+  const potentialSavings = projectValue * 0.05; // Conservative 5% cost savings
+  const paybackDays = Math.round((monthlyFee / potentialSavings) * 30);
+  const annualROI = ((potentialSavings * 12 - monthlyFee * 12) / (monthlyFee * 12)) * 100;
+  
+  return {
+    monthlyFee,
+    potentialSavings,
+    paybackDays: Math.max(paybackDays, 1),
+    roi: annualROI > 1000 ? "1000%+" : `${Math.round(annualROI)}%`
+  };
+}
+================================================================
+END CONTENT: src/lib/analysis/market-analyzer.ts
+================================================================
