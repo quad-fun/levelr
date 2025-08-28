@@ -76,29 +76,61 @@ export default function ProjectSetupWizard({ project, onUpdate }: ProjectSetupWi
       {/* Tab Content */}
       {activeTab === 'basics' && (
         <div className="space-y-8">
-          {/* Project Type Selection */}
+          {/* Discipline Selection */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-4">
-              Project Type
+              Service Discipline *
             </label>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {Object.entries(PROJECT_TYPE_TEMPLATES).map(([key, template]) => (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {Object.entries(DISCIPLINE_OPTIONS).map(([disciplineKey, discipline]) => (
                 <button
-                  key={key}
-                  onClick={() => updateProject('projectType', key)}
-                  className={`p-4 rounded-lg border-2 transition-colors text-left ${
-                    project.projectType === key
-                      ? 'border-blue-500 bg-blue-50'
+                  key={disciplineKey}
+                  onClick={() => updateProject('discipline', disciplineKey)}
+                  className={`p-6 rounded-lg border-2 transition-colors text-left ${
+                    project.discipline === disciplineKey
+                      ? `border-${discipline.color}-500 bg-${discipline.color}-50`
                       : 'border-gray-200 hover:border-gray-300'
                   }`}
                 >
-                  <div className="text-2xl mb-2">{template.icon}</div>
-                  <h3 className="font-medium text-gray-900">{template.name}</h3>
-                  <p className="text-sm text-gray-600 mt-1">{template.description}</p>
+                  <div className="text-3xl mb-3">{discipline.icon}</div>
+                  <h3 className="font-semibold text-gray-900 mb-2">{discipline.title}</h3>
+                  <p className="text-sm text-gray-600 mb-3">{discipline.description}</p>
+                  <div className="space-y-1">
+                    {discipline.subtypes.slice(0, 3).map((subtype, index) => (
+                      <div key={index} className="text-xs text-gray-500">
+                        • {subtype.name}
+                      </div>
+                    ))}
+                  </div>
                 </button>
               ))}
             </div>
           </div>
+
+          {/* Project Subtype Selection (based on selected discipline) */}
+          {project.discipline && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-4">
+                Project Type *
+              </label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {DISCIPLINE_OPTIONS[project.discipline as keyof typeof DISCIPLINE_OPTIONS]?.subtypes.map((subtype, index) => (
+                  <button
+                    key={index}
+                    onClick={() => updateProject('projectType', subtype.value)}
+                    className={`p-4 rounded-lg border-2 transition-colors text-left ${
+                      project.projectType === subtype.value
+                        ? `border-${DISCIPLINE_OPTIONS[project.discipline as keyof typeof DISCIPLINE_OPTIONS].color}-500 bg-${DISCIPLINE_OPTIONS[project.discipline as keyof typeof DISCIPLINE_OPTIONS].color}-50`
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <h3 className="font-medium text-gray-900 mb-1">{subtype.name}</h3>
+                    <p className="text-sm text-gray-600">{subtype.description}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Project Name */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

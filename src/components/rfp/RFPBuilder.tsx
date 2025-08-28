@@ -116,7 +116,10 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
     { 
       id: 2, 
       title: 'Scope Definition', 
-      description: 'CSI divisions and work scope',
+      description: project.discipline === 'construction' ? 'CSI divisions and work scope' :
+                   project.discipline === 'design' ? 'AIA phases and deliverables' :
+                   project.discipline === 'trade' ? 'Technical systems and specifications' :
+                   'Project scope definition',
       completed: isStepComplete(2)
     },
     { 

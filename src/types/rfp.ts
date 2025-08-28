@@ -8,6 +8,7 @@ export interface ProjectTypeOption {
   title: string;
   description: string;
   icon: string;
+  color: string;
   subtypes: ProjectSubtype[];
 }
 
@@ -214,6 +215,7 @@ export const DISCIPLINE_OPTIONS: Record<ProjectDiscipline, ProjectTypeOption> = 
     title: 'Construction Services',
     description: 'General contracting, specialty construction, and building projects',
     icon: '🏗️',
+    color: 'blue',
     subtypes: [
       {
         value: 'commercial_office',
@@ -264,6 +266,7 @@ export const DISCIPLINE_OPTIONS: Record<ProjectDiscipline, ProjectTypeOption> = 
     title: 'Design Services',
     description: 'Architecture, engineering, and professional design services',
     icon: '📐',
+    color: 'purple',
     subtypes: [
       {
         value: 'architectural',
@@ -307,6 +310,7 @@ export const DISCIPLINE_OPTIONS: Record<ProjectDiscipline, ProjectTypeOption> = 
     title: 'Trade Services',
     description: 'Specialized mechanical, electrical, plumbing, and trade services',
     icon: '⚡',
+    color: 'green',
     subtypes: [
       {
         value: 'electrical',
