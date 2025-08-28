@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { RFPProject, InsuranceRequirement, EvaluationCriterion } from '@/types/rfp';
+import { RFPProject, InsuranceRequirement, EvaluationCriterion, ProjectDiscipline, DISCIPLINE_COMMERCIAL_TEMPLATES, DISCIPLINE_EVALUATION_CRITERIA } from '@/types/rfp';
 import { 
   DollarSign, Shield, Award, FileCheck, 
-  Plus, Minus, CreditCard, Percent
+  Plus, Minus, CreditCard, Percent, Wand2
 } from 'lucide-react';
 
 interface CommercialTermsBuilderProps {
@@ -14,6 +14,22 @@ interface CommercialTermsBuilderProps {
 
 export default function CommercialTermsBuilder({ project, onUpdate }: CommercialTermsBuilderProps) {
   const [activeTab, setActiveTab] = useState<'pricing' | 'qualifications' | 'submission' | 'insurance'>('pricing');
+  
+  // Get discipline-specific templates and theming
+  const currentDiscipline = project.discipline || 'construction';
+  const template = DISCIPLINE_COMMERCIAL_TEMPLATES[currentDiscipline];
+  const disciplineEvaluationCriteria = DISCIPLINE_EVALUATION_CRITERIA[currentDiscipline];
+  
+  const getDisciplineTheme = (discipline: ProjectDiscipline) => {
+    const themes = {
+      construction: { primary: 'blue', secondary: 'blue-50', icon: '🏗️' },
+      design: { primary: 'purple', secondary: 'purple-50', icon: '📐' },
+      trade: { primary: 'green', secondary: 'green-50', icon: '⚡' }
+    };
+    return themes[discipline as keyof typeof themes] || themes.construction;
+  };
+  
+  const currentTheme = getDisciplineTheme(currentDiscipline);
 
   const updateCommercialTerms = (field: keyof RFPProject['commercialTerms'], value: unknown) => {
     onUpdate({
@@ -43,12 +59,14 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
   };
 
   const addInsuranceRequirement = () => {
-    const newRequirement: InsuranceRequirement = {
+    // Use discipline-specific default
+    const defaults = template.insuranceDefaults[0] || {
       type: 'general_liability',
       minimumAmount: 1000000,
       description: '',
       additionalInsureds: []
     };
+    const newRequirement: InsuranceRequirement = { ...defaults };
     
     updateCommercialTerms('insuranceRequirements', [
       ...project.commercialTerms.insuranceRequirements,
@@ -106,6 +124,33 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
     { id: 'qualifications', name: 'Qualifications', icon: Award },
     { id: 'submission', name: 'Submission Requirements', icon: FileCheck }
   ];
+  
+  // Helper functions for applying discipline templates
+  const applyDisciplineDefaults = () => {
+    const defaults = template;
+    
+    // Apply commercial terms defaults
+    onUpdate({
+      commercialTerms: {
+        ...project.commercialTerms,
+        retainage: defaults.typicalRetainage,
+        bondingRequired: project.estimatedValue >= defaults.bondingThreshold,
+        insuranceRequirements: defaults.insuranceDefaults
+      },
+      qualificationCriteria: {
+        ...project.qualificationCriteria,
+        ...defaults.qualificationDefaults
+      },
+      submissionRequirements: {
+        ...project.submissionRequirements,
+        technicalProposal: defaults.submissionDefaults.technicalProposal,
+        commercialProposal: defaults.submissionDefaults.commercialProposal,
+        qualifications: defaults.submissionDefaults.qualifications,
+        references: defaults.submissionDefaults.references,
+        evaluationCriteria: disciplineEvaluationCriteria
+      }
+    });
+  };
 
   const totalEvaluationWeight = project.submissionRequirements.evaluationCriteria
     .reduce((sum, criterion) => sum + criterion.weight, 0);
@@ -117,6 +162,52 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
         <p className="text-gray-600">
           Define pricing structure, qualification requirements, and submission criteria for your RFP.
         </p>
+      </div>
+
+      {/* Discipline-Specific Banner */}
+      <div className={`mb-8 bg-${currentTheme.secondary} border border-${currentTheme.primary}-200 rounded-lg p-4`}>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-3">
+            <span className="text-2xl">{currentTheme.icon}</span>
+            <div>
+              <h3 className={`font-medium text-${currentTheme.primary}-900`}>
+                {currentDiscipline.charAt(0).toUpperCase() + currentDiscipline.slice(1)} Services Configuration
+              </h3>
+              <p className={`text-sm text-${currentTheme.primary}-700`}>
+                Commercial terms optimized for {currentDiscipline} projects
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={applyDisciplineDefaults}
+            className={`flex items-center px-4 py-2 bg-${currentTheme.primary}-600 hover:bg-${currentTheme.primary}-700 text-white rounded-lg font-medium transition-colors`}
+          >
+            <Wand2 className="h-4 w-4 mr-2" />
+            Apply {currentDiscipline} Defaults
+          </button>
+        </div>
+        
+        {/* Template Preview */}
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div>
+            <span className="text-gray-600">Typical Retainage:</span>
+            <span className={`ml-2 font-medium text-${currentTheme.primary}-800`}>
+              {template.typicalRetainage}%
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-600">Bonding Threshold:</span>
+            <span className={`ml-2 font-medium text-${currentTheme.primary}-800`}>
+              {formatCurrency(template.bondingThreshold)}
+            </span>
+          </div>
+          <div>
+            <span className="text-gray-600">Insurance Types:</span>
+            <span className={`ml-2 font-medium text-${currentTheme.primary}-800`}>
+              {template.insuranceDefaults.length} required
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Tab Navigation */}
@@ -131,7 +222,7 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
                   onClick={() => setActiveTab(tab.id as 'pricing' | 'qualifications' | 'submission' | 'insurance')}
                   className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                     activeTab === tab.id
-                      ? 'border-blue-500 text-blue-600'
+                      ? `border-${currentTheme.primary}-500 text-${currentTheme.primary}-600`
                       : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
                   }`}
                 >
@@ -154,28 +245,7 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
               Pricing Structure
             </label>
             <div className="space-y-4">
-              {[
-                {
-                  value: 'lump_sum',
-                  title: 'Lump Sum',
-                  description: 'Fixed price for defined scope of work'
-                },
-                {
-                  value: 'unit_price',
-                  title: 'Unit Price',
-                  description: 'Payment based on actual quantities and unit rates'
-                },
-                {
-                  value: 'cost_plus',
-                  title: 'Cost Plus Fee',
-                  description: 'Reimbursable costs plus fixed or percentage fee'
-                },
-                {
-                  value: 'hybrid',
-                  title: 'Hybrid',
-                  description: 'Combination of lump sum and unit price elements'
-                }
-              ].map((pricing) => (
+              {template.pricingOptions.map((pricing) => (
                 <label key={pricing.value} className="flex items-start space-x-3 cursor-pointer">
                   <input
                     type="radio"
@@ -183,10 +253,10 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
                     value={pricing.value}
                     checked={project.commercialTerms.pricingStructure === pricing.value}
                     onChange={(e) => updateCommercialTerms('pricingStructure', e.target.value)}
-                    className="mt-1 h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                    className={`mt-1 h-4 w-4 text-${currentTheme.primary}-600 border-gray-300 focus:ring-${currentTheme.primary}-500`}
                   />
                   <div>
-                    <p className="font-medium text-gray-900">{pricing.title}</p>
+                    <p className="font-medium text-gray-900">{pricing.label}</p>
                     <p className="text-sm text-gray-600">{pricing.description}</p>
                   </div>
                 </label>
@@ -203,11 +273,13 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
               <select
                 value={project.commercialTerms.paymentSchedule}
                 onChange={(e) => updateCommercialTerms('paymentSchedule', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-${currentTheme.primary}-500 focus:border-transparent`}
               >
-                <option value="monthly">Monthly Progress Payments</option>
-                <option value="milestone">Milestone-Based Payments</option>
-                <option value="custom">Custom Payment Schedule</option>
+                {template.paymentSchedules.map((schedule) => (
+                  <option key={schedule.value} value={schedule.value}>
+                    {schedule.label}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -224,11 +296,13 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
                   min="0"
                   max="20"
                   step="0.5"
-                  className="w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className={`w-full px-3 py-2 pr-8 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-${currentTheme.primary}-500 focus:border-transparent`}
                 />
                 <span className="absolute right-3 top-2 text-gray-400">%</span>
               </div>
-              <p className="text-sm text-gray-500 mt-1">Typical range: 5-10%</p>
+              <p className="text-sm text-gray-500 mt-1">
+                Typical for {currentDiscipline}: {template.typicalRetainage}%
+              </p>
             </div>
           </div>
 
@@ -239,12 +313,12 @@ export default function CommercialTermsBuilder({ project, onUpdate }: Commercial
                 type="checkbox"
                 checked={project.commercialTerms.bondingRequired}
                 onChange={(e) => updateCommercialTerms('bondingRequired', e.target.checked)}
-                className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                className={`h-4 w-4 text-${currentTheme.primary}-600 border-gray-300 rounded focus:ring-${currentTheme.primary}-500`}
               />
               <span className="text-sm font-medium text-gray-700">Performance and Payment Bonds Required</span>
             </label>
             <p className="text-sm text-gray-500 ml-6">
-              Typically required for projects over $100,000
+              Typically required for {currentDiscipline} projects over {formatCurrency(template.bondingThreshold)}
             </p>
           </div>
 

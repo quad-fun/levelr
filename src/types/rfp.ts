@@ -504,6 +504,136 @@ export const DISCIPLINE_EVALUATION_CRITERIA: Record<ProjectDiscipline, Evaluatio
   ]
 };
 
+// Discipline-specific commercial terms templates
+export const DISCIPLINE_COMMERCIAL_TEMPLATES: Record<ProjectDiscipline, {
+  pricingOptions: Array<{ value: string; label: string; description: string; }>;
+  contractTypes: Array<{ value: string; label: string; description: string; typical?: boolean; }>;
+  paymentSchedules: Array<{ value: string; label: string; description: string; }>;
+  typicalRetainage: number;
+  bondingThreshold: number;
+  insuranceDefaults: InsuranceRequirement[];
+  qualificationDefaults: Partial<RFPProject['qualificationCriteria']>;
+  submissionDefaults: {
+    technicalProposal: string[];
+    commercialProposal: string[];
+    qualifications: string[];
+    references: number;
+  };
+}> = {
+  construction: {
+    pricingOptions: [
+      { value: 'lump_sum', label: 'Lump Sum', description: 'Fixed price for defined scope of work' },
+      { value: 'unit_price', label: 'Unit Price', description: 'Payment based on actual quantities and unit rates' },
+      { value: 'cost_plus', label: 'Cost Plus Fee', description: 'Reimbursable costs plus fixed or percentage fee' },
+      { value: 'hybrid', label: 'Hybrid', description: 'Combination of lump sum and unit price elements' }
+    ],
+    contractTypes: [
+      { value: 'design_bid_build', label: 'Design-Bid-Build', description: 'Traditional linear process', typical: true },
+      { value: 'design_build', label: 'Design-Build', description: 'Single entity for design and construction' },
+      { value: 'cm_at_risk', label: 'Construction Manager at Risk', description: 'CM provides preconstruction services' }
+    ],
+    paymentSchedules: [
+      { value: 'monthly', label: 'Monthly Progress Payments', description: 'Based on work completed' },
+      { value: 'milestone', label: 'Milestone-Based Payments', description: 'Tied to project milestones' },
+      { value: 'custom', label: 'Custom Schedule', description: 'Project-specific payment terms' }
+    ],
+    typicalRetainage: 10,
+    bondingThreshold: 100000,
+    insuranceDefaults: [
+      { type: 'general_liability', minimumAmount: 1000000, description: 'General Liability Insurance', additionalInsureds: ['Owner', 'Architect'] },
+      { type: 'workers_comp', minimumAmount: 1000000, description: 'Workers Compensation Insurance', additionalInsureds: [] },
+      { type: 'auto', minimumAmount: 1000000, description: 'Commercial Automobile Liability', additionalInsureds: ['Owner'] }
+    ],
+    qualificationDefaults: {
+      minimumExperience: 5,
+      minimumAnnualRevenue: 5000000,
+      requiredProjectTypes: ['Similar construction projects', 'Projects of comparable size', 'Local/regional experience'],
+      keyPersonnelRequirements: ['Licensed project manager', 'OSHA 30-hour certified superintendent'],
+      safetyRequirements: ['EMR below 1.0', 'Written safety program', 'OSHA 10-hour minimum for workers'],
+      certificationRequirements: ['State contractor license', 'Workers compensation coverage']
+    },
+    submissionDefaults: {
+      technicalProposal: ['Construction methodology', 'Project schedule', 'Quality control plan', 'Safety plan'],
+      commercialProposal: ['Base bid amount', 'Unit prices if applicable', 'Allowances and exclusions', 'Change order procedures'],
+      qualifications: ['Company profile', 'Project team resumes', 'Financial statements', 'References'],
+      references: 3
+    }
+  },
+  design: {
+    pricingOptions: [
+      { value: 'percentage_of_cost', label: 'Percentage of Construction Cost', description: 'Fee as percentage of project cost' },
+      { value: 'lump_sum', label: 'Lump Sum', description: 'Fixed fee for defined services' },
+      { value: 'hourly', label: 'Hourly Rates', description: 'Time-based billing for services' },
+      { value: 'cost_plus', label: 'Cost Plus Fee', description: 'Reimbursable expenses plus fee' }
+    ],
+    contractTypes: [
+      { value: 'consultant_agreement', label: 'Professional Services Agreement', description: 'Standard design consultant contract', typical: true },
+      { value: 'design_build', label: 'Design-Build', description: 'Combined design and construction services' }
+    ],
+    paymentSchedules: [
+      { value: 'milestone', label: 'Phase-Based Payments', description: 'Payments tied to design phase completion' },
+      { value: 'monthly', label: 'Monthly Progress Payments', description: 'Based on work completed' },
+      { value: 'custom', label: 'Custom Schedule', description: 'Project-specific payment terms' }
+    ],
+    typicalRetainage: 5,
+    bondingThreshold: 500000,
+    insuranceDefaults: [
+      { type: 'professional', minimumAmount: 1000000, description: 'Professional Liability Insurance', additionalInsureds: [] },
+      { type: 'general_liability', minimumAmount: 1000000, description: 'General Liability Insurance', additionalInsureds: ['Client'] },
+      { type: 'auto', minimumAmount: 1000000, description: 'Commercial Auto Liability', additionalInsureds: [] }
+    ],
+    qualificationDefaults: {
+      minimumExperience: 10,
+      minimumAnnualRevenue: 2000000,
+      requiredProjectTypes: ['Similar project types', 'Comparable project scale', 'Relevant building codes experience'],
+      keyPersonnelRequirements: ['Licensed architect or engineer', 'Project manager with PE/RA license'],
+      safetyRequirements: ['Professional liability coverage', 'Continuing education compliance'],
+      certificationRequirements: ['Professional license (Architecture/Engineering)', 'Professional liability insurance']
+    },
+    submissionDefaults: {
+      technicalProposal: ['Design approach and methodology', 'Project understanding', 'Scope of services', 'Project schedule'],
+      commercialProposal: ['Fee schedule by phase', 'Reimbursable expenses', 'Additional services rates'],
+      qualifications: ['Firm profile', 'Project team credentials', 'Relevant project experience', 'References'],
+      references: 5
+    }
+  },
+  trade: {
+    pricingOptions: [
+      { value: 'lump_sum', label: 'Lump Sum', description: 'Fixed price for defined trade work' },
+      { value: 'unit_price', label: 'Unit Price', description: 'Payment based on installed units' },
+      { value: 'cost_plus', label: 'Time and Material', description: 'Labor plus materials with markup' }
+    ],
+    contractTypes: [
+      { value: 'direct_contract', label: 'Direct Trade Contract', description: 'Direct contract with trade contractor', typical: true },
+      { value: 'design_build', label: 'Design-Build Trade', description: 'Design and install services' }
+    ],
+    paymentSchedules: [
+      { value: 'milestone', label: 'Installation Milestones', description: 'Payments based on installation progress' },
+      { value: 'monthly', label: 'Monthly Progress', description: 'Based on work completed' }
+    ],
+    typicalRetainage: 5,
+    bondingThreshold: 50000,
+    insuranceDefaults: [
+      { type: 'general_liability', minimumAmount: 1000000, description: 'General Liability Insurance', additionalInsureds: ['Owner', 'General Contractor'] },
+      { type: 'workers_comp', minimumAmount: 1000000, description: 'Workers Compensation Insurance', additionalInsureds: [] }
+    ],
+    qualificationDefaults: {
+      minimumExperience: 3,
+      minimumAnnualRevenue: 1000000,
+      requiredProjectTypes: ['Similar trade installations', 'Comparable system complexity'],
+      keyPersonnelRequirements: ['Licensed trade professionals', 'Certified technicians'],
+      safetyRequirements: ['Trade-specific safety training', 'OSHA compliance'],
+      certificationRequirements: ['Trade license', 'Manufacturer certifications', 'Union affiliations if applicable']
+    },
+    submissionDefaults: {
+      technicalProposal: ['Installation methodology', 'Equipment specifications', 'Testing and commissioning plan'],
+      commercialProposal: ['Trade contract amount', 'Material allowances', 'Change order rates'],
+      qualifications: ['Trade experience', 'Certifications', 'Equipment and tools', 'References'],
+      references: 3
+    }
+  }
+};
+
 export const DEFAULT_EVALUATION_CRITERIA: EvaluationCriterion[] = [
   { category: 'Technical Approach', weight: 30, description: 'Quality and feasibility of proposed technical solution' },
   { category: 'Experience & Qualifications', weight: 25, description: 'Relevant project experience and team qualifications' },
