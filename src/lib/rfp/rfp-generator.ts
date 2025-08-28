@@ -1,6 +1,6 @@
 // src/lib/rfp/rfp-generator.ts
 
-import { RFPGenerationRequest, RFPProject } from '@/types/rfp';
+import { RFPGenerationRequest } from '@/types/rfp';
 
 export async function generateRFPContent(request: RFPGenerationRequest): Promise<string> {
   try {
@@ -27,43 +27,49 @@ export async function generateRFPContent(request: RFPGenerationRequest): Promise
 
 // Helper functions for generating different types of content
 export async function generateScopeContent(
+  discipline: string,
   projectType: string,
   estimatedValue: number,
-  csiDivisions: string[],
+  scopeSections: string[],
   context: Record<string, unknown>
 ): Promise<string> {
   return generateRFPContent({
-    projectType: projectType as RFPProject['projectType'],
+    discipline: discipline as 'construction' | 'design' | 'trade',
+    projectType,
     estimatedValue,
-    csiDivisions,
+    scopeSections,
     sectionType: 'scope',
     context
   });
 }
 
 export async function generateCommercialTerms(
+  discipline: string,
   projectType: string,
   estimatedValue: number,
   context: Record<string, unknown>
 ): Promise<string> {
   return generateRFPContent({
-    projectType: projectType as RFPProject['projectType'],
+    discipline: discipline as 'construction' | 'design' | 'trade',
+    projectType,
     estimatedValue,
-    csiDivisions: [],
+    scopeSections: [],
     sectionType: 'commercial',
     context
   });
 }
 
 export async function generateQualificationCriteria(
+  discipline: string,
   projectType: string,
   estimatedValue: number,
   context: Record<string, unknown>
 ): Promise<string> {
   return generateRFPContent({
-    projectType: projectType as RFPProject['projectType'],
+    discipline: discipline as 'construction' | 'design' | 'trade',
+    projectType,
     estimatedValue,
-    csiDivisions: [],
+    scopeSections: [],
     sectionType: 'qualifications',
     context
   });

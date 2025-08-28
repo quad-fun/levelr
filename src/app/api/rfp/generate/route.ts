@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     // Parse the request body
     const body: RFPGenerationRequest = await request.json();
-    const { projectType, estimatedValue, csiDivisions, sectionType, context } = body;
+    const { discipline, projectType, estimatedValue, scopeSections, sectionType, context } = body;
 
     // Check API key
     if (!process.env.CLAUDE_API_KEY) {
@@ -20,11 +20,11 @@ export async function POST(request: NextRequest) {
     let prompt = '';
     
     if (sectionType === 'scope') {
-      prompt = generateScopePrompt(projectType, estimatedValue, csiDivisions, context);
+      prompt = generateScopePrompt(discipline, projectType, estimatedValue, scopeSections, context);
     } else if (sectionType === 'commercial') {
-      prompt = generateCommercialPrompt(projectType, estimatedValue, context);
+      prompt = generateCommercialPrompt(discipline, projectType, estimatedValue, context);
     } else if (sectionType === 'qualifications') {
-      prompt = generateQualificationsPrompt(projectType, estimatedValue, context);
+      prompt = generateQualificationsPrompt(discipline, projectType, estimatedValue, context);
     } else {
       return NextResponse.json(
         { error: 'Invalid section type specified' },
@@ -91,9 +91,10 @@ export async function POST(request: NextRequest) {
 }
 
 function generateScopePrompt(
+  discipline: string,
   projectType: string, 
   estimatedValue: number, 
-  csiDivisions: string[], 
+  scopeSections: string[], 
   context: Record<string, unknown>
 ): string {
   return `
@@ -102,11 +103,12 @@ You are a professional construction RFP writer. Generate detailed scope descript
 Project Details:
 - Type: ${projectType.replace('_', ' ')}
 - Estimated Value: $${estimatedValue.toLocaleString()}
-- CSI Divisions: ${csiDivisions.join(', ')}
+- Scope Sections: ${scopeSections.join(', ')}
+- Discipline: ${discipline}
 - Location: ${context.location || 'Not specified'}
 - Special Requirements: ${context.specialRequirements || 'None specified'}
 
-Generate professional, detailed scope descriptions for each CSI division. Include:
+Generate professional, detailed scope descriptions for each section. Include:
 - Specific work items and deliverables
 - Performance standards and quality requirements  
 - Coordination requirements with other trades
@@ -114,11 +116,12 @@ Generate professional, detailed scope descriptions for each CSI division. Includ
 
 Write in professional RFP language that is clear, comprehensive, and legally appropriate for construction contracting.
 
-Focus on typical work items for each division in a ${projectType.replace('_', ' ')} project of this size and complexity.
+Focus on typical ${discipline} work items for each section in a ${projectType.replace('_', ' ')} project of this size and complexity.
 `;
 }
 
 function generateCommercialPrompt(
+  discipline: string,
   projectType: string, 
   estimatedValue: number, 
   context: Record<string, unknown>
@@ -131,6 +134,7 @@ Project Details:
 - Estimated Value: $${estimatedValue.toLocaleString()}
 - Contract Type: ${context.contractType || 'Lump Sum'}
 - Delivery Method: ${context.deliveryMethod || 'Design-Bid-Build'}
+- Discipline: ${discipline}
 
 Generate professional commercial terms including:
 - Payment terms and schedule
@@ -148,6 +152,7 @@ Write in professional contract language suitable for construction projects of th
 }
 
 function generateQualificationsPrompt(
+  discipline: string,
   projectType: string, 
   estimatedValue: number, 
   context: Record<string, unknown>
@@ -160,6 +165,7 @@ Project Details:
 - Estimated Value: $${estimatedValue.toLocaleString()}
 - Project Complexity: ${context.complexity || 'Standard'}
 - Special Requirements: ${context.specialRequirements || 'None'}
+- Discipline: ${discipline}
 
 Generate appropriate qualification criteria including:
 - Minimum experience requirements (years in business, similar project experience)

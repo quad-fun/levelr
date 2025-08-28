@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { RFPProject, PROJECT_TYPE_TEMPLATES } from '@/types/rfp';
+import { RFPProject, PROJECT_TYPE_TEMPLATES, DISCIPLINE_OPTIONS } from '@/types/rfp';
 import { 
   MapPin, Calendar, DollarSign, Building2, FileText, 
   Clock, Truck, Settings
@@ -380,7 +380,10 @@ export default function ProjectSetupWizard({ project, onUpdate }: ProjectSetupWi
           <div>
             <p className="text-gray-600">Project Type</p>
             <p className="font-medium">
-              {PROJECT_TYPE_TEMPLATES[project.projectType]?.name || 'Not selected'}
+              {project.discipline && project.projectSubtype
+                ? DISCIPLINE_OPTIONS[project.discipline]?.subtypes.find((s) => s.value === project.projectSubtype)?.name
+                : PROJECT_TYPE_TEMPLATES[project.projectType]?.name || 'Not selected'
+              }
             </p>
           </div>
           <div>

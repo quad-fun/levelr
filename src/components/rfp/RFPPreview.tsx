@@ -33,7 +33,7 @@ export default function RFPPreview({ project }: RFPPreviewProps) {
     });
   };
 
-  const selectedDivisions = Object.keys(project.scopeDefinition.csiDivisions);
+  const selectedDivisions = project.scopeDefinition.csiDivisions ? Object.keys(project.scopeDefinition.csiDivisions) : [];
   const totalEvaluationWeight = project.submissionRequirements.evaluationCriteria
     .reduce((sum, criterion) => sum + criterion.weight, 0);
 
@@ -297,7 +297,7 @@ export default function RFPPreview({ project }: RFPPreviewProps) {
             <h4 className="font-medium text-gray-900 mb-3">CSI Divisions Included</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {selectedDivisions.sort().map(code => {
-                const division = project.scopeDefinition.csiDivisions[code];
+                const division = project.scopeDefinition.csiDivisions![code];
                 return (
                   <div key={code} className="border border-gray-200 rounded-lg p-4">
                     <h5 className="font-medium text-gray-900 mb-2">

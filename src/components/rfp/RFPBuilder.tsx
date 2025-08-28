@@ -5,6 +5,7 @@ import { RFPProject, DEFAULT_EVALUATION_CRITERIA, DEFAULT_INSURANCE_REQUIREMENTS
 import { saveRFP, updateRFP, getRFP } from '@/lib/storage';
 import ProjectSetupWizard from './ProjectSetupWizard';
 import ScopeBuilder from './ScopeBuilder';
+import ScopeFrameworkBuilder from './ScopeFrameworkBuilder';
 import CommercialTermsBuilder from './CommercialTermsBuilder';
 import RFPPreview from './RFPPreview';
 import RFPExportTools from './RFPExportTools';
@@ -29,7 +30,9 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
   const [project, setProject] = useState<RFPProject>({
     id: '',
     projectName: '',
-    projectType: 'commercial_office',
+    discipline: 'construction',
+    projectType: '',
+    projectSubtype: '',
     description: '',
     estimatedValue: 1000000,
     location: {
@@ -47,11 +50,16 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
       completion: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     },
     scopeDefinition: {
-      csiDivisions: {},
+      framework: {
+        type: 'csi',
+        sections: {}
+      },
       specialRequirements: [],
       exclusions: [],
       deliveryMethod: 'design_bid_build',
-      contractType: 'lump_sum'
+      contractType: 'lump_sum',
+      // Legacy support
+      csiDivisions: {}
     },
     siteConditions: {
       siteAccess: '',
@@ -134,9 +142,14 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
   function isStepComplete(step: number): boolean {
     switch (step) {
       case 1:
-        return !!(project.projectName && project.description && project.location.city);
+        return !!(project.projectName && project.description && project.location.city && project.discipline);
       case 2:
-        return Object.keys(project.scopeDefinition.csiDivisions).length > 0;
+        // Check both new framework and legacy CSI divisions
+        const hasFrameworkSections = project.scopeDefinition.framework?.sections && 
+          Object.values(project.scopeDefinition.framework.sections).some(section => section.included);
+        const hasCSIDivisions = project.scopeDefinition.csiDivisions && 
+          Object.keys(project.scopeDefinition.csiDivisions).length > 0;
+        return !!(hasFrameworkSections || hasCSIDivisions);
       case 3:
         return project.commercialTerms.insuranceRequirements.length > 0;
       case 4:
@@ -147,11 +160,20 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
   }
 
   const updateProject = (updates: Partial<RFPProject>) => {
-    setProject(prev => ({
-      ...prev,
-      ...updates,
-      updatedAt: new Date().toISOString()
-    }));
+    setProject(prev => {
+      const updated = { ...prev, ...updates, updatedAt: new Date().toISOString() };
+      
+      // Update evaluation criteria based on discipline
+      if (updates.discipline && updates.discipline !== prev.discipline) {
+        const disciplineEvalCriteria = DEFAULT_EVALUATION_CRITERIA;
+        updated.submissionRequirements = {
+          ...updated.submissionRequirements,
+          evaluationCriteria: disciplineEvalCriteria
+        };
+      }
+      
+      return updated;
+    });
   };
 
   const saveProgress = async () => {
@@ -205,6 +227,16 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
           />
         );
       case 2:
+        // Use new ScopeFrameworkBuilder for multi-discipline support
+        if (project.discipline) {
+          return (
+            <ScopeFrameworkBuilder
+              project={project}
+              onUpdate={updateProject}
+            />
+          );
+        }
+        // Legacy fallback for projects without discipline
         return (
           <ScopeBuilder
             project={project}

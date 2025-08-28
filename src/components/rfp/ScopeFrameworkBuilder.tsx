@@ -1,0 +1,403 @@
+'use client';
+
+import React from 'react';
+import { RFPProject, ScopeSection, ProjectDiscipline, AIA_PHASES, TECHNICAL_SPEC_TEMPLATES } from '@/types/rfp';
+import { 
+  CheckCircle, Circle, FileText, 
+  Wrench, Palette
+} from 'lucide-react';
+import { CSI_DIVISIONS } from '@/lib/rfp/csi-data';
+
+interface ScopeFrameworkBuilderProps {
+  project: RFPProject;
+  onUpdate: (updates: Partial<RFPProject>) => void;
+}
+
+export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFrameworkBuilderProps) {
+  const activeFramework = project.scopeDefinition.framework?.type || 'csi';
+
+  const getDisciplineTheme = (discipline: ProjectDiscipline) => {
+    const themes = {
+      construction: { primary: 'blue', secondary: 'blue-50', icon: '🏗️' },
+      design: { primary: 'purple', secondary: 'purple-50', icon: '📐' },
+      trade: { primary: 'green', secondary: 'green-50', icon: '⚡' }
+    };
+    return themes[discipline as keyof typeof themes] || themes.construction;
+  };
+
+  const currentTheme = project.discipline ? getDisciplineTheme(project.discipline) : { primary: 'blue', secondary: 'blue-50', icon: '🔧' };
+
+  const updateScopeFramework = (frameworkType: 'csi' | 'aia' | 'technical', sections: Record<string, ScopeSection>) => {
+    onUpdate({
+      scopeDefinition: {
+        ...project.scopeDefinition,
+        framework: {
+          type: frameworkType,
+          sections
+        }
+      }
+    });
+  };
+
+  const toggleScopeSection = (sectionCode: string, sectionData: unknown) => {
+    const currentSections = project.scopeDefinition.framework?.sections || {};
+    const isIncluded = currentSections[sectionCode]?.included || false;
+    
+    const updatedSections = {
+      ...currentSections,
+      [sectionCode]: {
+        code: sectionCode,
+        title: String((sectionData as Record<string, unknown>).name || (sectionData as Record<string, unknown>).title || (sectionData as Record<string, unknown>).category || 'Untitled'),
+        description: String((sectionData as Record<string, unknown>).description || ''),
+        included: !isIncluded,
+        specifications: (sectionData as Record<string, unknown>).specifications as string[] || (sectionData as Record<string, unknown>).typicalDeliverables as string[] || [],
+        deliverables: (sectionData as Record<string, unknown>).deliverables as string[] || (sectionData as Record<string, unknown>).typicalDeliverables as string[] || [],
+        notes: '',
+        estimatedPercentage: (sectionData as Record<string, unknown>).percentageOfFee as number || ((sectionData as Record<string, unknown>).typicalPercentage as Record<string, unknown>)?.commercial as number,
+        dependencies: (sectionData as Record<string, unknown>).dependencies as string[],
+        riskFactors: (sectionData as Record<string, unknown>).riskFactors as string[]
+      }
+    };
+
+    updateScopeFramework(activeFramework, updatedSections);
+  };
+
+  const updateScopeSection = (sectionCode: string, field: keyof ScopeSection, value: unknown) => {
+    const currentSections = project.scopeDefinition.framework?.sections || {};
+    const updatedSections = {
+      ...currentSections,
+      [sectionCode]: {
+        ...currentSections[sectionCode],
+        [field]: value
+      }
+    };
+
+    updateScopeFramework(activeFramework, updatedSections);
+  };
+
+  const renderCSIScope = () => {
+    const currentSections = project.scopeDefinition.framework?.sections || {};
+    
+    return (
+      <div className="space-y-6">
+        <div className="bg-blue-50 rounded-lg p-4">
+          <h3 className="flex items-center text-lg font-medium text-blue-900 mb-2">
+            <FileText className="h-5 w-5 mr-2" />
+            CSI MasterFormat 2018 Divisions
+          </h3>
+          <p className="text-blue-700 text-sm">
+            Select the Construction Specifications Institute (CSI) divisions that apply to your project. 
+            These will form the basis of your scope definition.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.entries(CSI_DIVISIONS).map(([code, division]) => {
+            const isIncluded = currentSections[code]?.included || false;
+            return (
+              <div key={code} className={`border rounded-lg p-4 transition-all ${
+                isIncluded 
+                  ? 'border-blue-300 bg-blue-50' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <div className="flex items-start space-x-3">
+                  <button
+                    onClick={() => toggleScopeSection(code, division)}
+                    className={`mt-1 transition-colors ${
+                      isIncluded ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {isIncluded ? (
+                      <CheckCircle className="h-5 w-5" />
+                    ) : (
+                      <Circle className="h-5 w-5" />
+                    )}
+                  </button>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-2 mb-1">
+                      <span className="text-sm font-mono text-gray-500">{code}</span>
+                      <h4 className={`font-medium ${
+                        isIncluded ? 'text-blue-900' : 'text-gray-900'
+                      }`}>
+                        {division.name}
+                      </h4>
+                    </div>
+                    <p className={`text-sm ${
+                      isIncluded ? 'text-blue-700' : 'text-gray-600'
+                    }`}>
+                      {division.description}
+                    </p>
+                    
+                    {isIncluded && (
+                      <div className="mt-3 space-y-2">
+                        <textarea
+                          value={currentSections[code]?.notes || ''}
+                          onChange={(e) => updateScopeSection(code, 'notes', e.target.value)}
+                          placeholder="Add specific requirements or notes for this division..."
+                          rows={2}
+                          className="w-full text-xs px-2 py-1 border border-blue-200 rounded focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderAIAScope = () => {
+    const currentSections = project.scopeDefinition.framework?.sections || {};
+    
+    return (
+      <div className="space-y-6">
+        <div className="bg-purple-50 rounded-lg p-4">
+          <h3 className="flex items-center text-lg font-medium text-purple-900 mb-2">
+            <Palette className="h-5 w-5 mr-2" />
+            AIA Project Phases
+          </h3>
+          <p className="text-purple-700 text-sm">
+            Select the American Institute of Architects (AIA) project phases that will be included 
+            in your design services scope. Each phase has typical deliverables and fee percentages.
+          </p>
+        </div>
+
+        <div className="space-y-4">
+          {Object.entries(AIA_PHASES).map(([phaseKey, phase]) => {
+            const isIncluded = currentSections[phaseKey]?.included || false;
+            return (
+              <div key={phaseKey} className={`border rounded-lg p-4 transition-all ${
+                isIncluded 
+                  ? 'border-purple-300 bg-purple-50' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <div className="flex items-start space-x-3">
+                  <button
+                    onClick={() => toggleScopeSection(phaseKey, phase)}
+                    className={`mt-1 transition-colors ${
+                      isIncluded ? 'text-purple-600' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {isIncluded ? (
+                      <CheckCircle className="h-5 w-5" />
+                    ) : (
+                      <Circle className="h-5 w-5" />
+                    )}
+                  </button>
+                  
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className={`font-medium ${
+                        isIncluded ? 'text-purple-900' : 'text-gray-900'
+                      }`}>
+                        {phase.phase.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                      </h4>
+                      <span className={`text-sm font-medium px-2 py-1 rounded ${
+                        isIncluded ? 'bg-purple-100 text-purple-700' : 'bg-gray-100 text-gray-600'
+                      }`}>
+                        {phase.percentageOfFee}% of fee
+                      </span>
+                    </div>
+                    
+                    <p className={`text-sm mb-3 ${
+                      isIncluded ? 'text-purple-700' : 'text-gray-600'
+                    }`}>
+                      {phase.description}
+                    </p>
+                    
+                    <div className="mb-3">
+                      <h5 className="text-xs font-medium text-gray-700 mb-1">Typical Deliverables:</h5>
+                      <ul className="text-xs text-gray-600 space-y-1">
+                        {phase.typicalDeliverables.map((deliverable, idx) => (
+                          <li key={idx} className="flex items-center space-x-1">
+                            <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                            <span>{deliverable}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                    
+                    {isIncluded && (
+                      <div className="mt-3">
+                        <textarea
+                          value={currentSections[phaseKey]?.notes || ''}
+                          onChange={(e) => updateScopeSection(phaseKey, 'notes', e.target.value)}
+                          placeholder="Add specific requirements, modifications, or additional deliverables for this phase..."
+                          rows={2}
+                          className="w-full text-xs px-2 py-1 border border-purple-200 rounded focus:outline-none focus:ring-1 focus:ring-purple-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const renderTechnicalScope = () => {
+    const currentSections = project.scopeDefinition.framework?.sections || {};
+    
+    return (
+      <div className="space-y-6">
+        <div className="bg-green-50 rounded-lg p-4">
+          <h3 className="flex items-center text-lg font-medium text-green-900 mb-2">
+            <Wrench className="h-5 w-5 mr-2" />
+            Technical Specifications
+          </h3>
+          <p className="text-green-700 text-sm">
+            Define the technical scope for specialized trade services. Each category includes 
+            relevant specifications, standards, testing requirements, and certifications.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {Object.entries(TECHNICAL_SPEC_TEMPLATES).map(([specKey, spec]) => {
+            const isIncluded = currentSections[specKey]?.included || false;
+            return (
+              <div key={specKey} className={`border rounded-lg p-4 transition-all ${
+                isIncluded 
+                  ? 'border-green-300 bg-green-50' 
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}>
+                <div className="flex items-start space-x-3">
+                  <button
+                    onClick={() => toggleScopeSection(specKey, spec)}
+                    className={`mt-1 transition-colors ${
+                      isIncluded ? 'text-green-600' : 'text-gray-400 hover:text-gray-600'
+                    }`}
+                  >
+                    {isIncluded ? (
+                      <CheckCircle className="h-5 w-5" />
+                    ) : (
+                      <Circle className="h-5 w-5" />
+                    )}
+                  </button>
+                  
+                  <div className="flex-1">
+                    <h4 className={`font-medium mb-2 ${
+                      isIncluded ? 'text-green-900' : 'text-gray-900'
+                    }`}>
+                      {specKey.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+                    </h4>
+                    
+                    {isIncluded && (
+                      <div className="space-y-3">
+                        <div>
+                          <h5 className="text-xs font-medium text-gray-700 mb-1">Specifications:</h5>
+                          <ul className="text-xs text-gray-600 space-y-1">
+                            {spec.specifications.map((item, idx) => (
+                              <li key={idx} className="flex items-center space-x-1">
+                                <span className="w-1 h-1 bg-gray-400 rounded-full"></span>
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        
+                        <div>
+                          <h5 className="text-xs font-medium text-gray-700 mb-1">Standards & Codes:</h5>
+                          <div className="flex flex-wrap gap-1">
+                            {spec.standards.map((standard, idx) => (
+                              <span key={idx} className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded">
+                                {standard}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                        
+                        <textarea
+                          value={currentSections[specKey]?.notes || ''}
+                          onChange={(e) => updateScopeSection(specKey, 'notes', e.target.value)}
+                          placeholder="Add specific requirements, performance criteria, or project-specific modifications..."
+                          rows={2}
+                          className="w-full text-xs px-2 py-1 border border-green-200 rounded focus:outline-none focus:ring-1 focus:ring-green-500"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-8">
+      <div className="mb-8">
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Scope Definition</h2>
+        <p className="text-gray-600">
+          Define the scope of work using the appropriate framework for your project discipline.
+        </p>
+      </div>
+
+      {/* Framework Selection */}
+      {project.discipline && (
+        <div className="mb-8">
+          <div className="flex items-center space-x-4">
+            <div className={`px-4 py-2 rounded-lg bg-${currentTheme.secondary} border border-${currentTheme.primary}-200`}>
+              <div className="flex items-center space-x-2">
+                <span className="text-lg">{currentTheme.icon}</span>
+                <span className={`text-sm font-medium text-${currentTheme.primary}-800`}>
+                  {project.discipline.charAt(0).toUpperCase() + project.discipline.slice(1)} Services
+                </span>
+              </div>
+            </div>
+            <div className={`text-sm text-gray-600`}>
+              Framework: <span className="font-medium">{activeFramework.toUpperCase()}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scope Content */}
+      <div className="space-y-8">
+        {activeFramework === 'csi' && renderCSIScope()}
+        {activeFramework === 'aia' && renderAIAScope()}
+        {activeFramework === 'technical' && renderTechnicalScope()}
+      </div>
+
+      {/* Scope Summary */}
+      <div className="mt-8 bg-gray-50 rounded-lg p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-4">Scope Summary</h3>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+          <div>
+            <p className="text-gray-600">Framework</p>
+            <p className="font-medium">{activeFramework.toUpperCase()}</p>
+          </div>
+          <div>
+            <p className="text-gray-600">Sections Selected</p>
+            <p className="font-medium">
+              {Object.values(project.scopeDefinition.framework?.sections || {}).filter(s => s.included).length}
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-600">Estimated Coverage</p>
+            <p className="font-medium">
+              {Object.values(project.scopeDefinition.framework?.sections || {})
+                .filter(s => s.included)
+                .reduce((sum, section) => sum + (section.estimatedPercentage || 0), 0)
+                .toFixed(0)}%
+            </p>
+          </div>
+          <div>
+            <p className="text-gray-600">Discipline</p>
+            <p className="font-medium capitalize">
+              {project.discipline || 'Construction'}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

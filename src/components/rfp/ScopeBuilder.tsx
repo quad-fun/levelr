@@ -123,7 +123,7 @@ export default function ScopeBuilder({ project, onUpdate }: ScopeBuilderProps) {
     return marketData.divisionBenchmarks[divisionCode] || null;
   };
 
-  const selectedDivisions = Object.keys(project.scopeDefinition.csiDivisions);
+  const selectedDivisions = project.scopeDefinition.csiDivisions ? Object.keys(project.scopeDefinition.csiDivisions) : [];
   const unselectedSuggested = suggestedDivisions.filter(code => !selectedDivisions.includes(code));
 
   return (
@@ -237,7 +237,7 @@ export default function ScopeBuilder({ project, onUpdate }: ScopeBuilderProps) {
           
           <div className="space-y-4">
             {selectedDivisions.sort((a, b) => a.localeCompare(b)).map(code => {
-              const division = project.scopeDefinition.csiDivisions[code];
+              const division = project.scopeDefinition.csiDivisions![code];
               const divisionInfo = CSI_DIVISIONS[code];
               const isExpanded = expandedDivision === code;
               
@@ -396,8 +396,9 @@ export default function ScopeBuilder({ project, onUpdate }: ScopeBuilderProps) {
           <div>
             <p className="text-gray-600">Total Specifications</p>
             <p className="font-medium">
-              {Object.values(project.scopeDefinition.csiDivisions)
-                .reduce((total, div) => total + div.specifications.length, 0)}
+              {project.scopeDefinition.csiDivisions 
+                ? Object.values(project.scopeDefinition.csiDivisions).reduce((total, div) => total + div.specifications.length, 0)
+                : 0}
             </p>
           </div>
           <div>

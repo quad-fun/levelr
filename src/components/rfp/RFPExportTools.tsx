@@ -67,9 +67,10 @@ export default function RFPExportTools({ project, rfpId, onComplete }: RFPExport
     }
   };
 
-  const selectedDivisions = Object.keys(project.scopeDefinition.csiDivisions);
-  const totalSpecifications = Object.values(project.scopeDefinition.csiDivisions)
-    .reduce((total, div) => total + div.specifications.length, 0);
+  const selectedDivisions = project.scopeDefinition.csiDivisions ? Object.keys(project.scopeDefinition.csiDivisions) : [];
+  const totalSpecifications = project.scopeDefinition.csiDivisions 
+    ? Object.values(project.scopeDefinition.csiDivisions).reduce((total, div) => total + div.specifications.length, 0)
+    : 0;
 
   return (
     <div className="p-8">
