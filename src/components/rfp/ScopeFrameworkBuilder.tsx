@@ -14,7 +14,17 @@ interface ScopeFrameworkBuilderProps {
 }
 
 export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFrameworkBuilderProps) {
-  const activeFramework = project.scopeDefinition.framework?.type || 'csi';
+  // Auto-detect framework based on discipline
+  const getDefaultFramework = (discipline: ProjectDiscipline): 'csi' | 'aia' | 'technical' => {
+    switch (discipline) {
+      case 'construction': return 'csi';
+      case 'design': return 'aia';
+      case 'trade': return 'technical';
+      default: return 'csi';
+    }
+  };
+
+  const activeFramework = project.scopeDefinition.framework?.type || getDefaultFramework(project.discipline);
 
   const getDisciplineTheme = (discipline: ProjectDiscipline) => {
     const themes = {
