@@ -50,10 +50,6 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
       completion: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     },
     scopeDefinition: {
-      framework: {
-        type: 'csi',
-        sections: {}
-      },
       specialRequirements: [],
       exclusions: [],
       deliveryMethod: 'design_bid_build',

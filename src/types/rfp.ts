@@ -79,7 +79,7 @@ export interface RFPProject {
     completion: string;
   };
   scopeDefinition: {
-    framework: ScopeFramework;
+    framework?: ScopeFramework;
     specialRequirements: string[];
     exclusions: string[];
     deliveryMethod: 'design_bid_build' | 'design_build' | 'cm_at_risk' | 'direct_contract' | 'consultant_agreement';
