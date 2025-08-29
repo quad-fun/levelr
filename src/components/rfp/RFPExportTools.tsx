@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { RFPProject } from '@/types/rfp';
 import { saveRFP, updateRFPStatus } from '@/lib/storage';
+import { generateRFPDocument, downloadFile, RFPExportOptions } from '@/lib/export/rfp-document-generator';
 import { 
   Download, FileText, Sheet, Mail, CheckCircle, 
   AlertCircle, Share2, Printer, Copy
@@ -16,13 +17,12 @@ interface RFPExportToolsProps {
 
 export default function RFPExportTools({ project, rfpId, onComplete }: RFPExportToolsProps) {
   const [isExporting, setIsExporting] = useState<string | null>(null);
-  // Export options state - currently for future implementation
-  // const [exportOptions, setExportOptions] = useState<RFPExportOptions>({
-  //   format: 'pdf',
-  //   sections: ['all'],
-  //   includeEvaluationSheets: true,
-  //   includeScopeMatrix: true
-  // });
+  const [exportOptions] = useState<RFPExportOptions>({
+    format: 'pdf',
+    sections: ['all'],
+    includeEvaluationSheets: true,
+    includeScopeMatrix: true
+  });
 
   const handleExport = async (format: 'pdf' | 'word' | 'excel') => {
     setIsExporting(format);
@@ -39,22 +39,22 @@ export default function RFPExportTools({ project, rfpId, onComplete }: RFPExport
         updateRFPStatus(finalRFPId, 'issued');
       }
       
-      // Simulate export process
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Generate the document
+      const options: RFPExportOptions = {
+        ...exportOptions,
+        format
+      };
       
-      if (format === 'pdf') {
-        // In a real implementation, this would generate and download a PDF
-        console.log('Generating PDF export for RFP:', project.projectName);
-        alert('PDF export would be generated here. This is a demo implementation.');
-      } else if (format === 'word') {
-        // In a real implementation, this would generate and download a Word document
-        console.log('Generating Word export for RFP:', project.projectName);
-        alert('Word export would be generated here. This is a demo implementation.');
-      } else if (format === 'excel') {
-        // In a real implementation, this would generate and download Excel files
-        console.log('Generating Excel export for RFP:', project.projectName);
-        alert('Excel export would be generated here. This is a demo implementation.');
-      }
+      const blob = await generateRFPDocument(project, options);
+      
+      // Generate filename
+      const projectNameSlug = project.projectName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      const timestamp = new Date().toISOString().split('T')[0];
+      const extension = format === 'word' ? 'docx' : format === 'excel' ? 'xlsx' : 'pdf';
+      const filename = `rfp-${projectNameSlug}-${timestamp}.${extension}`;
+      
+      // Download the file
+      downloadFile(blob, filename);
       
       if (onComplete && finalRFPId) {
         onComplete(finalRFPId);
@@ -276,7 +276,24 @@ export default function RFPExportTools({ project, rfpId, onComplete }: RFPExport
                 <p className="text-gray-600 text-sm mt-1 mb-4">
                   Send RFP directly to your contractor email list with tracking.
                 </p>
-                <button className="w-full flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors">
+                <div className="space-y-2 text-sm text-gray-500 mb-4">
+                  <div className="flex items-center">
+                    <CheckCircle className="h-3 w-3 text-green-600 mr-2" />
+                    <span>Automated email delivery</span>
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle className="h-3 w-3 text-green-600 mr-2" />
+                    <span>Read receipts and tracking</span>
+                  </div>
+                  <div className="flex items-center">
+                    <CheckCircle className="h-3 w-3 text-green-600 mr-2" />
+                    <span>Customizable email templates</span>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => alert('Email distribution feature coming soon! Export PDF/Word for manual distribution.')}
+                  className="w-full flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+                >
                   <Mail className="h-4 w-4 mr-2" />
                   Set Up Distribution
                 </button>
@@ -284,45 +301,37 @@ export default function RFPExportTools({ project, rfpId, onComplete }: RFPExport
             </div>
           </div>
 
-          {/* Sharing Options */}
+          {/* Quick Actions */}
           <div className="border border-gray-200 rounded-lg p-6">
             <div className="flex items-start">
-              <div className="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                <Share2 className="h-6 w-6 text-blue-600" />
+              <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center">
+                <Share2 className="h-6 w-6 text-indigo-600" />
               </div>
               <div className="ml-4 flex-1">
-                <h4 className="text-lg font-medium text-gray-900">Sharing Link</h4>
+                <h4 className="text-lg font-medium text-gray-900">Quick Actions</h4>
                 <p className="text-gray-600 text-sm mt-1 mb-4">
-                  Generate a secure link to share your RFP online.
+                  Additional tools for RFP management.
                 </p>
-                <div className="flex space-x-2">
-                  <button className="flex-1 flex items-center justify-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
-                    <Share2 className="h-4 w-4 mr-1" />
-                    Share
+                <div className="space-y-2">
+                  <button 
+                    onClick={() => window.print()}
+                    className="w-full flex items-center justify-center px-3 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <Printer className="h-4 w-4 mr-2" />
+                    Print Current View
                   </button>
-                  <button className="px-3 py-2 text-blue-600 hover:bg-blue-50 border border-blue-300 rounded-lg transition-colors">
-                    <Copy className="h-4 w-4" />
+                  <button 
+                    onClick={() => {
+                      const rfpUrl = `${window.location.origin}/rfp/${rfpId || 'preview'}`;
+                      navigator.clipboard.writeText(rfpUrl);
+                      alert('RFP link copied to clipboard!');
+                    }}
+                    className="w-full flex items-center justify-center px-3 py-2 text-indigo-600 hover:bg-indigo-50 border border-indigo-300 rounded-lg transition-colors"
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy RFP Link
                   </button>
                 </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Print Options */}
-          <div className="border border-gray-200 rounded-lg p-6">
-            <div className="flex items-start">
-              <div className="flex-shrink-0 w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center">
-                <Printer className="h-6 w-6 text-gray-600" />
-              </div>
-              <div className="ml-4 flex-1">
-                <h4 className="text-lg font-medium text-gray-900">Print Options</h4>
-                <p className="text-gray-600 text-sm mt-1 mb-4">
-                  Print-optimized version for physical distribution.
-                </p>
-                <button className="w-full flex items-center justify-center px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-lg font-medium transition-colors">
-                  <Printer className="h-4 w-4 mr-2" />
-                  Print Version
-                </button>
               </div>
             </div>
           </div>
