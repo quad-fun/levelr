@@ -181,9 +181,11 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
         updated.scopeDefinition = {
           ...updated.scopeDefinition,
           deliveryMethod: getDefaultDeliveryMethod(updates.discipline),
-          // Clear framework sections when discipline changes
+          // Clear framework sections when discipline changes - set correct framework type
           framework: {
-            type: 'csi' as const, // Will be auto-detected by ScopeFrameworkBuilder
+            type: updates.discipline === 'construction' ? 'csi' as const : 
+                  updates.discipline === 'design' ? 'aia' as const :
+                  updates.discipline === 'trade' ? 'technical' as const : 'csi' as const,
             sections: {}
           }
         };
