@@ -34,7 +34,7 @@ Levelr is the first complete construction bidding ecosystem that combines AI-enh
 - **Market Intelligence Integration**: Scope recommendations using historical bid analysis data
 - **Professional Content Generation**: Claude AI creates industry-standard RFP language
 - **Comprehensive Templates**: Cover 6 project types with 33 CSI divisions
-- **Export Options**: PDF, Word, and Excel formats with distribution tools
+- **Export Options**: Professional PDF, Word, and Excel generation with real document creation (not demos)
 
 ### **⚖️ Advanced Bid Leveling**
 - **Multi-Bid Comparison**: Compare up to 5 bids side-by-side with variance analysis
