@@ -52,18 +52,6 @@ ProLeveler is a secure construction bid analysis platform that uses encrypted cl
 4. **Open browser:**
    Navigate to `http://localhost:3000`
 
-## 🔐 Authentication
-
-The `/analyze` page is protected with basic HTTP authentication:
-
-**Default Credentials:**
-- Username: `powerbid` (or set via `BASIC_AUTH_USER`)
-- Password: `demo2024` (or set via `BASIC_AUTH_PASSWORD`)
-
-**Special Access:**
-- Username: `shorewood`
-- Password: `shorewood2025`
-- Purpose: Backdoor access for Shorewood users
 
 ## 📋 Recent Updates
 
@@ -85,15 +73,6 @@ The `/analyze` page is protected with basic HTTP authentication:
 - ✅ Updated security messaging for accurate data processing descriptions
 - ✅ Added navigation links to documentation
 
-## 🏢 Business Model (MVP)
-
-**Target**: Real estate developers managing $5M+ projects  
-**Pricing**: $299/month for 10 analyses  
-**Value Prop**: One prevented mistake saves 10x-100x the monthly cost
-
-### ROI Examples:
-- $5M Project: $299/month cost, $250K potential savings = 83,600% ROI
-- $10M Project: $299/month cost, $500K potential savings = 167,100% ROI
 
 ## 🔒 Security Architecture
 
