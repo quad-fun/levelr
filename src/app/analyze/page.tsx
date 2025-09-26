@@ -39,15 +39,22 @@ export default function AnalyzePage() {
       let result: AnalysisResult;
       
       if (useMultiDisciplineAnalysis) {
-        // Use new multi-discipline analyzer
-        result = await MultiDisciplineAnalyzer.analyzeProposal(
-          processedDoc.content,
-          selectedDiscipline,
-          {
-            projectType: 'general',
-            estimatedValue: 0 // Will be extracted from document
-          }
-        );
+        // Use new multi-discipline analyzer or existing construction system
+        if (selectedDiscipline === 'construction') {
+          // Use existing proven construction analysis
+          result = await analyzeDocument(processedDoc);
+          result.discipline = 'construction';
+        } else {
+          // Use new AI-powered design/trade analyzers
+          result = await MultiDisciplineAnalyzer.analyzeProposal(
+            processedDoc,
+            selectedDiscipline,
+            {
+              projectType: 'general',
+              estimatedValue: 0 // Will be extracted from document
+            }
+          );
+        }
         
         // Generate market analysis
         if (selectedDiscipline === 'design' && result.aia_phases) {
