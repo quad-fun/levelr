@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getAllAnalyses, getMarketIntelligence, deleteAnalysis, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
-import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/export-generator';
+import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   Trash2, TrendingUp, BarChart3, Building, Calendar, DollarSign, AlertTriangle, 

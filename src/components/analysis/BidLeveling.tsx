@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
-import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/export-generator';
+import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
 import { BarChart3, Download, DollarSign } from 'lucide-react';
 
 interface BidComparison {
