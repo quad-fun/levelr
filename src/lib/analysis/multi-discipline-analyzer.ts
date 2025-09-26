@@ -1,7 +1,6 @@
 // src/lib/analysis/multi-discipline-analyzer.ts
 
-import { AnalysisResult, AIAPhaseAnalysis, TechnicalSystemAnalysis, DesignDeliverable, EquipmentSpec } from '@/types/analysis';
-import { AIA_PHASES, TECHNICAL_SPEC_TEMPLATES } from '@/types/rfp';
+import { AnalysisResult, AIAPhaseAnalysis, TechnicalSystemAnalysis } from '@/types/analysis';
 import { ProcessedDocument } from '@/lib/document-processor';
 import { analyzeDesignProposal } from './aia-analyzer';
 import { analyzeTradeProposal } from './trade-analyzer';

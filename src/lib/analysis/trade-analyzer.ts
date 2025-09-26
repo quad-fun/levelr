@@ -1,8 +1,7 @@
 // src/lib/analysis/trade-analyzer.ts
 
-import { AnalysisResult, TechnicalSystemAnalysis, EquipmentSpec } from '@/types/analysis';
+import { AnalysisResult } from '@/types/analysis';
 import { ProcessedDocument } from '@/lib/document-processor';
-import { TECHNICAL_SPEC_TEMPLATES } from '@/types/rfp';
 
 export async function analyzeTradeProposal(processedDoc: ProcessedDocument): Promise<AnalysisResult> {
   const prompt = `

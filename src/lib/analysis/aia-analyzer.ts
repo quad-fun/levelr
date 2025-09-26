@@ -1,8 +1,7 @@
 // src/lib/analysis/aia-analyzer.ts
 
-import { AnalysisResult, AIAPhaseAnalysis } from '@/types/analysis';
+import { AnalysisResult } from '@/types/analysis';
 import { ProcessedDocument } from '@/lib/document-processor';
-import { AIA_PHASES } from '@/types/rfp';
 
 export async function analyzeDesignProposal(processedDoc: ProcessedDocument): Promise<AnalysisResult> {
   const prompt = `
