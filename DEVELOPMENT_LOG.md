@@ -47,6 +47,61 @@ Browser-only real estate document analysis platform with Claude AI integration f
 - Professional Excel formatting with freeze panes, merged headers, currency formatting
 - Comprehensive Grand Total: Trades + Overhead + Soft Costs + Uncategorized
 
+### 6. Enhanced Multi-Discipline Analysis System (January 2025)
+**Revolutionary Platform Expansion**:
+- **Multi-Discipline Support**: Added comprehensive analysis for Construction, Design, and Trade proposals
+- **Intelligent Document Routing**: Automatic discipline detection and routing to specialized Claude API endpoints
+- **Industry-Specific Analysis**: Each discipline uses appropriate industry standards and frameworks
+
+**Discipline-Specific Implementations**:
+
+**Construction Analysis** (Enhanced):
+- Uses proven CSI (Construction Specifications Institute) MasterFormat 2018 system
+- Market variance analysis with proprietary benchmarking
+- Advanced project risk assessment with scoring algorithms
+- Routes through main `/api/claude` endpoint
+
+**Design Analysis** (New):
+- **AIA Phase Breakdown**: Standard AIA phases (SD, DD, CD, BN, CA) with typical fee percentages
+- **Design Deliverables Tracking**: Architecture, engineering, and consultant deliverables
+- **Project Overhead Analysis**: Design-specific administrative costs and subconsultant coordination
+- Routes through dedicated `/api/claude/design` endpoint
+
+**Trade Analysis** (New):
+- **Technical Systems Categorization**: Electrical, mechanical, plumbing, and specialty systems
+- **Equipment Specifications**: Detailed equipment specs with model numbers, quantities, and unit costs
+- **Testing & Commissioning**: Industry-specific testing requirements and warranty terms
+- Routes through dedicated `/api/claude/trade` endpoint
+
+**Modular Export System Refactoring**:
+- **Clean Architecture**: Separated exports into discipline-specific modules for maintainability
+- **Smart Export Router**: Automatically detects discipline and routes to appropriate exporter
+- **Shared Utilities**: Common PDF/Excel formatting helpers prevent code duplication
+- **Backward Compatibility**: Existing construction exports preserved exactly as-is
+- **Professional Styling**: All exports maintain consistent Levelr branding across disciplines
+
+**Technical Architecture**:
+```
+src/lib/analysis/
+├── multi-discipline-analyzer.ts    # Smart routing to discipline analyzers
+├── aia-analyzer.ts                 # Design/AIA phase analysis
+├── trade-analyzer.ts               # Trade/technical systems analysis
+└── exports/                        # Modular export system
+    ├── index.ts                    # Smart export router
+    ├── construction-exports.ts     # CSI division exports (preserved)
+    ├── design-exports.ts           # AIA phase exports (new)
+    ├── trade-exports.ts            # Technical systems exports (new)
+    └── shared/                     # Common utilities
+        ├── pdf-helpers.ts          # PDF formatting helpers
+        └── excel-helpers.ts        # Excel formatting helpers
+```
+
+**Enhanced User Experience**:
+- **Seamless Integration**: Users upload any document type and get appropriate analysis automatically
+- **Industry Standards Compliance**: Each discipline follows its industry's standard practices
+- **Comprehensive Reports**: Professional PDF and Excel exports tailored to each discipline
+- **One Platform, Three Industries**: Construction contractors, design firms, and trade specialists all supported
+
 ## Current Architecture
 
 ### Core Components
