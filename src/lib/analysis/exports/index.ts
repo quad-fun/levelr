@@ -106,5 +106,4 @@ export {
   exportTradeAnalysisToExcel
 } from './trade-exports';
 
-// Re-export from original export-generator for any remaining imports
-export * from '../export-generator';
+// Note: Legacy export-generator.ts is deprecated in favor of discipline-specific exports above

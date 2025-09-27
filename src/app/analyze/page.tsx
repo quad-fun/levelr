@@ -14,6 +14,7 @@ import { MultiDisciplineAnalyzer, MultiDisciplineMarketAnalyzer } from '@/lib/an
 import { AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
 import { saveAnalysis } from '@/lib/storage';
 import { ProcessedDocument } from '@/lib/document-processor';
+import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 
 export default function AnalyzePage() {
   const [isProcessing, setIsProcessing] = useState(false);
@@ -445,8 +446,17 @@ export default function AnalyzePage() {
                 marketVariance={marketVariance || undefined}
                 riskAssessment={riskAssessment || undefined}
                 onExport={(format) => {
-                  console.log(`Exporting ${format} for ${analysisResult.discipline} analysis`);
-                  handleExport();
+                  if (!analysisResult) return;
+                  try {
+                    if (format === 'pdf') {
+                      exportAnalysisToPDF(analysisResult);
+                    } else if (format === 'excel') {
+                      exportAnalysisToExcel(analysisResult);
+                    }
+                  } catch (error) {
+                    console.error(`Error exporting ${format}:`, error);
+                    alert(`Error exporting ${format}. Please try again.`);
+                  }
                 }}
               />
             ) : (
