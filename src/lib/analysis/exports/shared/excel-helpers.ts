@@ -80,7 +80,7 @@ export function formatPercentageColumns(
 
 export function addProjectOverheadSheet(
   wb: XLSX.WorkBook,
-  analysis: { project_overhead?: any; total_amount: number },
+  analysis: { project_overhead?: Record<string, number | undefined> & { total_overhead: number }; total_amount: number },
   sheetName: string = 'Project Overhead'
 ): void {
   if (!analysis.project_overhead) return;
