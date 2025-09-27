@@ -113,7 +113,7 @@ export function addProjectOverheadSheet(
   overheadFields.forEach(field => {
     if (analysis.project_overhead) {
       const value = analysis.project_overhead[field.key as keyof ProjectOverhead];
-      if (typeof value === 'number') {
+      if (typeof value === 'number' && value != null) {
         overheadData.push([
           field.label,
           value.toString(),
@@ -124,7 +124,7 @@ export function addProjectOverheadSheet(
   });
 
   overheadData.push(['']);
-  if (analysis.project_overhead) {
+  if (analysis.project_overhead && analysis.project_overhead.total_overhead != null) {
     overheadData.push([
       'TOTAL OVERHEAD',
       analysis.project_overhead.total_overhead.toString(),

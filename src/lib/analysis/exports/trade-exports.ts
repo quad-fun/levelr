@@ -211,7 +211,7 @@ export function exportTradeAnalysisToExcel(analysis: AnalysisResult): void {
       systemsData.push([
         systemData.system_name,
         systemData.category.toUpperCase(),
-        systemData.total_cost.toString(),
+        (systemData.total_cost || 0).toString(),
         (systemData.equipment_cost || 0).toString(),
         (systemData.labor_cost || 0).toString(),
         (systemData.installation_cost || 0).toString(),
@@ -241,8 +241,8 @@ export function exportTradeAnalysisToExcel(analysis: AnalysisResult): void {
         spec.description,
         spec.model || '',
         spec.quantity?.toString() || '1',
-        spec.unit_cost.toString(),
-        spec.total_cost.toString()
+        (spec.unit_cost || 0).toString(),
+        (spec.total_cost || 0).toString()
       ]);
     });
 

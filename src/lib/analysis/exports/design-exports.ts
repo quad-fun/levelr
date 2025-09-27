@@ -194,8 +194,8 @@ export function exportDesignAnalysisToExcel(analysis: AnalysisResult): void {
 
       aiaData.push([
         phaseData.phase_name,
-        phaseData.fee_amount.toString(),
-        `${phaseData.percentage_of_total}%`,
+        phaseData.fee_amount?.toString() || '0',
+        `${phaseData.percentage_of_total || 0}%`,
         deliverables,
         phaseData.scope_notes || ''
       ]);

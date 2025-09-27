@@ -685,8 +685,10 @@ export function exportConstructionAnalysisToExcel(analysis: AnalysisResult): voi
     }
 
     overheadData.push(['']);
-    overheadData.push(['TOTAL OVERHEAD', analysis.project_overhead.total_overhead.toString(),
-      `${((analysis.project_overhead.total_overhead / analysis.total_amount) * 100).toFixed(2)}%`]);
+    if (analysis.project_overhead.total_overhead != null) {
+      overheadData.push(['TOTAL OVERHEAD', analysis.project_overhead.total_overhead.toString(),
+        `${((analysis.project_overhead.total_overhead / analysis.total_amount) * 100).toFixed(2)}%`]);
+    }
 
     const overheadWs = XLSX.utils.aoa_to_sheet(overheadData);
 
