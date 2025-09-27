@@ -91,11 +91,20 @@ function detectAnalysisDiscipline(analysis: AnalysisResult): 'construction' | 'd
 export {
   exportConstructionAnalysisToPDF,
   exportConstructionAnalysisToExcel,
+  // Bid leveling functions (construction-focused for now)
+  exportBidLevelingToExcel,
+  exportBidLevelingToPDF
+} from './construction-exports';
+
+export {
   exportDesignAnalysisToPDF,
-  exportDesignAnalysisToExcel,
+  exportDesignAnalysisToExcel
+} from './design-exports';
+
+export {
   exportTradeAnalysisToPDF,
   exportTradeAnalysisToExcel
-};
+} from './trade-exports';
 
 // Re-export from original export-generator for any remaining imports
 export * from '../export-generator';

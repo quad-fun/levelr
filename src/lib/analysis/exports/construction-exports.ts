@@ -2,9 +2,10 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
 import { AnalysisResult } from '@/types/analysis';
+import { SavedAnalysis } from '@/lib/storage';
 import { analyzeMarketVariance } from '../market-analyzer';
 import { calculateProjectRisk } from '../risk-analyzer';
-import { CSI_DIVISIONS } from '../csi-analyzer';
+import { CSI_DIVISIONS, LEVELING_DIVISIONS, LEVELING_LABELS, PSEUDO_SCOPES } from '../csi-analyzer';
 
 // Extend jsPDF type to include autoTable properties
 interface JsPDFWithAutoTable extends jsPDF {
@@ -860,4 +861,461 @@ export function exportConstructionAnalysisToExcel(analysis: AnalysisResult): voi
   // Save the Excel file
   const fileName = `bid-analysis-${analysis.contractor_name.replace(/[^a-zA-Z0-9]/g, '_')}-${Date.now()}.xlsx`;
   XLSX.writeFile(wb, fileName);
+}
+
+// ============== BID LEVELING FUNCTIONS ==============
+
+// Helper function to synthesize division comments
+function synthesizeDivisionComment(analysis: SavedAnalysis, code: string): string {
+  const exclusions = (analysis.result.exclusions || []).join(' ').toLowerCase();
+  const cost = analysis.result.csi_divisions?.[code]?.cost ?? 0;
+
+  if (cost === 0) {
+    if (code === '28' && exclusions.includes('security')) return 'Excluded per bid (Security)';
+    if (code === '27' && (exclusions.includes('tele') || exclusions.includes('communications'))) return 'Excluded per bid (Comms)';
+    return 'No cost; likely excluded';
+  }
+  return '';
+}
+
+// Helper function to calculate trades subtotal
+function calculateTradesSubtotal(analysis: SavedAnalysis): number {
+  return LEVELING_DIVISIONS.reduce((sum, code) => {
+    return sum + (analysis.result.csi_divisions?.[code]?.cost ?? 0);
+  }, 0);
+}
+
+// Main leveling worksheet function
+export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
+  const sheetData: (string | number)[][] = [];
+
+  // Calculate column positions
+  // SCOPE (1) + bidder blocks (3 cols each: COST, COST/SF, COMMENTS) + spacers between (not after last)
+  const bidderBlockSize = 3; // 3 data columns per bidder
+  const spacersCount = bids.length - 1; // Spacers only between bidders
+  const totalCols = 1 + (bids.length * bidderBlockSize) + spacersCount;
+
+  // Row 1: "SCOPE" then bidder names merged across 3 columns each
+  const row1: (string | number)[] = ['SCOPE'];
+  bids.forEach((bid, index) => {
+    row1.push(bid.result.contractor_name);
+    row1.push(''); // For merge
+    row1.push(''); // For merge
+    if (index < bids.length - 1) row1.push(''); // Spacer column only between bidders
+  });
+  sheetData.push(row1);
+
+  // Row 2: "" then "COST", "COST/SF", "COMMENTS" for each bidder
+  const row2: (string | number)[] = [''];
+  bids.forEach((bid, index) => {
+    row2.push('COST');
+    row2.push('COST/SF');
+    row2.push('COMMENTS');
+    if (index < bids.length - 1) row2.push(''); // Spacer column only between bidders
+  });
+  sheetData.push(row2);
+
+  // Body rows - All LEVELING_DIVISIONS using LEVELING_LABELS
+  LEVELING_DIVISIONS.forEach(code => {
+    const row: (string | number)[] = [`${code} - ${LEVELING_LABELS[code] || `Division ${code}`}`];
+
+    bids.forEach((bid, index) => {
+      const divisionData = bid.result.csi_divisions?.[code];
+      const cost = divisionData?.cost ?? 0;
+      const grossSqft = bid.result.gross_sqft;
+
+      // COST column
+      row.push(cost);
+
+      // COST/SF column
+      const costPerSF = grossSqft && grossSqft > 0 ? cost / grossSqft : null;
+      row.push(costPerSF ?? '—');
+
+      // COMMENTS column
+      row.push(synthesizeDivisionComment(bid, code));
+
+      // Spacer column only between bidders
+      if (index < bids.length - 1) row.push('');
+    });
+
+    sheetData.push(row);
+  });
+
+  // "Soft Costs" row
+  const softCostsRow: (string | number)[] = [PSEUDO_SCOPES.SOFT];
+  bids.forEach((bid, index) => {
+    const softCostAmount = bid.result.softCostsTotal ?? 0;
+    const grossSqft = bid.result.gross_sqft;
+
+    softCostsRow.push(softCostAmount);
+    softCostsRow.push(grossSqft && grossSqft > 0 ? softCostAmount / grossSqft : '—');
+
+    // Generate intelligent comment based on soft costs data
+    let comment = 'No soft costs identified';
+    if (softCostAmount > 0) {
+      const softCostCount = bid.result.softCosts?.length ?? 0;
+      if (softCostCount > 0) {
+        comment = `${softCostCount} soft cost item${softCostCount > 1 ? 's' : ''} (permits, fees, etc.)`;
+      } else {
+        comment = 'Soft costs identified but not itemized';
+      }
+    }
+    softCostsRow.push(comment);
+
+    if (index < bids.length - 1) softCostsRow.push('');
+  });
+  sheetData.push(softCostsRow);
+
+  // "Uncategorized" row
+  const uncategorizedRow: (string | number)[] = [PSEUDO_SCOPES.UNC];
+  bids.forEach((bid, index) => {
+    const uncategorizedAmount = bid.result.uncategorizedTotal ?? 0;
+    const grossSqft = bid.result.gross_sqft;
+
+    uncategorizedRow.push(uncategorizedAmount);
+    uncategorizedRow.push(grossSqft && grossSqft > 0 ? uncategorizedAmount / grossSqft : '—');
+    uncategorizedRow.push(uncategorizedAmount > 0 ? 'Items not categorized to CSI divisions' : 'All costs categorized');
+
+    if (index < bids.length - 1) uncategorizedRow.push('');
+  });
+  sheetData.push(uncategorizedRow);
+
+  // Blank separator
+  const blankRow: (string | number)[] = new Array(totalCols).fill('');
+  sheetData.push(blankRow);
+
+  // "TRADES SUBTOTAL" (sum divisions only)
+  const tradesSubtotalRow: (string | number)[] = ['TRADES SUBTOTAL'];
+  bids.forEach((bid, index) => {
+    const tradesSubtotal = calculateTradesSubtotal(bid);
+    const grossSqft = bid.result.gross_sqft;
+
+    tradesSubtotalRow.push(tradesSubtotal);
+    tradesSubtotalRow.push(grossSqft && grossSqft > 0 ? tradesSubtotal / grossSqft : '—');
+    tradesSubtotalRow.push('Sum of all CSI divisions');
+
+    if (index < bids.length - 1) tradesSubtotalRow.push('');
+  });
+  sheetData.push(tradesSubtotalRow);
+
+  // Add markup rows (CM Fee, Insurance, Bond, OH&P) based on project_overhead
+  bids.forEach((bid, bidIndex) => {
+    const overhead = bid.result.project_overhead;
+
+    // Only create markup rows for the first bid, then populate all bids
+    if (bidIndex === 0) {
+      // CM Fee row
+      if (overhead?.cm_fee && overhead.cm_fee > 0) {
+        const cmFeeRow: (string | number)[] = ['CM Fee'];
+        bids.forEach((b, i) => {
+          const cmFee = b.result.project_overhead?.cm_fee ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (cmFee / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+
+          cmFeeRow.push(cmFee);
+          cmFeeRow.push(grossSqft && grossSqft > 0 ? cmFee / grossSqft : '—');
+          cmFeeRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No CM fee');
+
+          if (i < bids.length - 1) cmFeeRow.push('');
+        });
+        sheetData.push(cmFeeRow);
+      }
+
+      // Insurance row
+      if (overhead?.insurance && overhead.insurance > 0) {
+        const insuranceRow: (string | number)[] = ['Insurance'];
+        bids.forEach((b, i) => {
+          const insurance = b.result.project_overhead?.insurance ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (insurance / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+
+          insuranceRow.push(insurance);
+          insuranceRow.push(grossSqft && grossSqft > 0 ? insurance / grossSqft : '—');
+          insuranceRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No insurance cost');
+
+          if (i < bids.length - 1) insuranceRow.push('');
+        });
+        sheetData.push(insuranceRow);
+      }
+
+      // Bond row
+      if (overhead?.bonds && overhead.bonds > 0) {
+        const bondsRow: (string | number)[] = ['Bond'];
+        bids.forEach((b, i) => {
+          const bonds = b.result.project_overhead?.bonds ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (bonds / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+
+          bondsRow.push(bonds);
+          bondsRow.push(grossSqft && grossSqft > 0 ? bonds / grossSqft : '—');
+          bondsRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No bond cost');
+
+          if (i < bids.length - 1) bondsRow.push('');
+        });
+        sheetData.push(bondsRow);
+      }
+
+      // General Conditions / OH&P row
+      if (overhead?.general_conditions && overhead.general_conditions > 0) {
+        const gcRow: (string | number)[] = ['General Conditions'];
+        bids.forEach((b, i) => {
+          const gc = b.result.project_overhead?.general_conditions ?? 0;
+          const bTradesSubtotal = calculateTradesSubtotal(b);
+          const percentage = bTradesSubtotal > 0 ? (gc / bTradesSubtotal) * 100 : 0;
+          const grossSqft = b.result.gross_sqft;
+
+          gcRow.push(gc);
+          gcRow.push(grossSqft && grossSqft > 0 ? gc / grossSqft : '—');
+          gcRow.push(percentage > 0 ? `${percentage.toFixed(2)}% of Trades Subtotal` : 'No general conditions');
+
+          if (i < bids.length - 1) gcRow.push('');
+        });
+        sheetData.push(gcRow);
+      }
+    }
+  });
+
+  // "GRAND TOTAL" (trades + overhead + soft costs + uncategorized)
+  const grandTotalRow: (string | number)[] = ['GRAND TOTAL'];
+  bids.forEach((bid, index) => {
+    const tradesSubtotal = calculateTradesSubtotal(bid);
+    const overhead = bid.result.project_overhead;
+    const overheadTotal = (overhead?.cm_fee ?? 0) + (overhead?.insurance ?? 0) + (overhead?.bonds ?? 0) + (overhead?.general_conditions ?? 0);
+    const softCostsAmount = bid.result.softCostsTotal ?? 0;
+    const uncategorizedAmount = bid.result.uncategorizedTotal ?? 0;
+    const grandTotal = tradesSubtotal + overheadTotal + softCostsAmount + uncategorizedAmount;
+    const grossSqft = bid.result.gross_sqft;
+
+    grandTotalRow.push(grandTotal);
+    grandTotalRow.push(grossSqft && grossSqft > 0 ? grandTotal / grossSqft : '—');
+    grandTotalRow.push('Complete project total');
+
+    if (index < bids.length - 1) grandTotalRow.push('');
+  });
+  sheetData.push(grandTotalRow);
+
+  // Create worksheet
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+  // Set column widths
+  const colWidths = [{ wch: 35 }]; // SCOPE column
+  bids.forEach(() => {
+    colWidths.push({ wch: 15 }); // COST
+    colWidths.push({ wch: 12 }); // COST/SF
+    colWidths.push({ wch: 40 }); // COMMENTS
+    if (colWidths.length < totalCols) {
+      colWidths.push({ wch: 2 }); // Spacer
+    }
+  });
+  ws['!cols'] = colWidths;
+
+  // Format currency and merge cells for headers
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+
+  // Merge bidder name headers (row 1)
+  const merges = [];
+  let currentCol = 1; // Start after SCOPE column
+  bids.forEach((_, index) => {
+    const startCol = currentCol;
+    const endCol = currentCol + 2; // Merge across 3 columns
+    merges.push({
+      s: { r: 0, c: startCol },
+      e: { r: 0, c: endCol }
+    });
+    currentCol = endCol + 1;
+    if (index < bids.length - 1) currentCol++; // Skip spacer
+  });
+  ws['!merges'] = merges;
+
+  // Format currency columns (COST columns)
+  currentCol = 1;
+  bids.forEach((_, index) => {
+    for (let row = 2; row <= range.e.r; row++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: currentCol });
+      if (ws[cellAddr] && typeof ws[cellAddr].v === 'number') {
+        ws[cellAddr].z = '$#,##0';
+      }
+    }
+    currentCol += 3; // Move to next bidder's COST column
+    if (index < bids.length - 1) currentCol++; // Skip spacer
+  });
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Leveled Comparison');
+}
+
+// Construction bid leveling Excel export
+export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
+  const wb = XLSX.utils.book_new();
+
+  // Sort bids by total amount for consistent ranking
+  const sortedBids = selectedAnalyses.sort((a, b) => a.result.total_amount - b.result.total_amount);
+
+  // SHEET 1 - LEVELED COMPARISON (NEW PRIMARY SHEET)
+  exportLeveledComparisonSheet(wb, sortedBids);
+  const lowBid = sortedBids[0].result.total_amount;
+
+  // SHEET 2 - EXECUTIVE SUMMARY
+  const execData = [
+    ['BID LEVELING ANALYSIS - EXECUTIVE SUMMARY'],
+    [`Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}`],
+    [`Number of Bids Analyzed: ${selectedAnalyses.length}`],
+    [''],
+    ['RANKING & RECOMMENDATIONS'],
+    ['Rank', 'Contractor', 'Total Bid Amount', 'Dollar Difference', 'Percentage Variance', 'Uncategorized %', 'Risk Level', 'Recommendation']
+  ];
+
+  sortedBids.forEach((bid, index) => {
+    const dollarDiff = bid.result.total_amount - lowBid;
+    const variance = lowBid > 0 ? (dollarDiff / lowBid) * 100 : 0;
+
+    // Calculate comprehensive risk assessment
+    const risk = calculateProjectRisk(
+      Object.fromEntries(Object.entries(bid.result.csi_divisions).map(([code, data]) => [code, data.cost])),
+      bid.result.total_amount,
+      bid.result.uncategorizedTotal || 0,
+      bid.result
+    );
+
+    // Generate intelligent recommendations with emojis
+    let recommendation = '';
+    if (index === 0) {
+      if (risk.level === 'LOW') recommendation = '✅ RECOMMENDED - Lowest bid with low risk';
+      else if (risk.level === 'MEDIUM') recommendation = '⚠️ CAUTION - Low bid but moderate risk factors';
+      else recommendation = '🚨 HIGH RISK - Low bid with significant risk concerns';
+    } else if (variance <= 5) {
+      if (risk.level === 'LOW') recommendation = '✅ COMPETITIVE - Close to low bid with low risk';
+      else if (risk.level === 'MEDIUM') recommendation = '⚠️ CONSIDER - Competitive pricing but some risks';
+      else recommendation = '🚨 REVIEW - Higher risk despite competitive pricing';
+    } else if (variance <= 15) {
+      if (risk.level === 'LOW') recommendation = '⚠️ MODERATE - Higher cost but lower risk profile';
+      else recommendation = '🚨 EXPENSIVE - Higher cost AND higher risk';
+    } else {
+      recommendation = '🚨 SIGNIFICANTLY HIGHER - Review scope differences';
+    }
+
+    // Calculate uncategorized percentage for this bid
+    const uncategorizedPct = bid.result.uncategorizedTotal ?
+      ((bid.result.uncategorizedTotal / bid.result.total_amount) * 100).toFixed(1) : '0.0';
+
+    execData.push([
+      (index + 1).toString(),
+      bid.result.contractor_name,
+      bid.result.total_amount.toString(),
+      dollarDiff.toString(),
+      variance.toFixed(1) + '%', // Display as percentage
+      `${uncategorizedPct}%`,
+      risk.level,
+      recommendation
+    ]);
+  });
+
+  const execWS = XLSX.utils.aoa_to_sheet(execData);
+
+  // Format Executive Summary
+  execWS['!cols'] = [
+    { wch: 6 },   // Rank
+    { wch: 30 },  // Contractor
+    { wch: 18 },  // Total Amount
+    { wch: 18 },  // Dollar Difference
+    { wch: 15 },  // Percentage
+    { wch: 15 },  // Uncategorized %
+    { wch: 12 },  // Risk Level
+    { wch: 50 }   // Recommendation
+  ];
+
+  // Apply formatting and color coding
+  const execRange = XLSX.utils.decode_range(execWS['!ref'] || 'A1');
+  for (let row = 0; row <= execRange.e.r; row++) {
+    for (let col = 0; col <= execRange.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = execWS[cellAddr];
+      if (!cell) continue;
+
+      // Format currency columns (Total Amount, Dollar Difference)
+      if ((col === 2 || col === 3) && row > 5) {
+        if (typeof cell.v === 'string' && !isNaN(Number(cell.v))) {
+          cell.v = Number(cell.v);
+          cell.t = 'n';
+        }
+        if (typeof cell.v === 'number') {
+          cell.z = '$#,##0';
+        }
+      }
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, execWS, 'Executive Summary');
+
+  // Save
+  const fileName = `bid-leveling-comparison-${Date.now()}.xlsx`;
+  XLSX.writeFile(wb, fileName);
+}
+
+// Construction bid leveling PDF export
+export function exportBidLevelingToPDF(selectedAnalyses: SavedAnalysis[]) {
+  const doc = new jsPDF();
+  let currentY = 20;
+
+  // Title Page
+  doc.setFontSize(24);
+  doc.text('BID LEVELING ANALYSIS', 20, currentY);
+  currentY += 15;
+
+  doc.setFontSize(12);
+  doc.text(`Generated: ${new Date().toLocaleDateString()}`, 20, currentY);
+  currentY += 10;
+  doc.text(`Number of Bids Analyzed: ${selectedAnalyses.length}`, 20, currentY);
+  currentY += 20;
+
+  // Executive Summary
+  doc.setFontSize(16);
+  doc.text('EXECUTIVE SUMMARY', 20, currentY);
+  currentY += 15;
+
+  const sortedBids = selectedAnalyses.sort((a, b) => a.result.total_amount - b.result.total_amount);
+  const lowBid = sortedBids[0].result.total_amount;
+  const highBid = sortedBids[sortedBids.length - 1].result.total_amount;
+  const spread = ((highBid - lowBid) / lowBid) * 100;
+
+  doc.setFontSize(10);
+  doc.text(`Lowest Bid: ${sortedBids[0].result.contractor_name} - $${lowBid.toLocaleString()}`, 20, currentY);
+  currentY += 8;
+  doc.text(`Highest Bid: ${sortedBids[sortedBids.length - 1].result.contractor_name} - $${highBid.toLocaleString()}`, 20, currentY);
+  currentY += 8;
+  doc.text(`Bid Spread: ${spread.toFixed(1)}%`, 20, currentY);
+  currentY += 15;
+
+  // Bid Ranking Table
+  const rankingData = sortedBids.map((bid, index) => {
+    const variance = ((bid.result.total_amount - lowBid) / lowBid) * 100;
+    const risk = calculateProjectRisk(
+      Object.fromEntries(Object.entries(bid.result.csi_divisions).map(([code, data]) => [code, data.cost])),
+      bid.result.total_amount,
+      bid.result.uncategorizedTotal || 0,
+      bid.result
+    );
+
+    return [
+      (index + 1).toString(),
+      bid.result.contractor_name,
+      `$${bid.result.total_amount.toLocaleString()}`,
+      risk.level,
+      `+${variance.toFixed(1)}%`
+    ];
+  });
+
+  autoTable(doc, {
+    head: [['Rank', 'Contractor', 'Total Amount', 'Risk', 'Variance']],
+    body: rankingData,
+    startY: currentY,
+    styles: { fontSize: 9 },
+    headStyles: { fillColor: [41, 128, 185] }
+  });
+
+  // Save
+  const fileName = `bid-leveling-analysis-${Date.now()}.pdf`;
+  doc.save(fileName);
 }

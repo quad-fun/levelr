@@ -22,7 +22,7 @@ export default function MultiDisciplineAnalysisResults({
   riskAssessment,
   onExport 
 }: MultiDisciplineAnalysisResultsProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'scope' | 'commercial' | 'risk'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'scope' | 'soft-costs' | 'commercial' | 'risk'>('overview');
 
   const getDisciplineConfig = (discipline: string) => {
     const configs = {
@@ -89,6 +89,7 @@ export default function MultiDisciplineAnalysisResults({
   const tabs = [
     { id: 'overview', name: 'Overview', icon: FileText },
     { id: 'scope', name: disciplineConfig.scopeLabel, icon: disciplineConfig.icon },
+    { id: 'soft-costs', name: 'Soft Costs', icon: Building },
     { id: 'commercial', name: 'Commercial', icon: DollarSign },
     { id: 'risk', name: 'Risk Analysis', icon: Shield }
   ];
@@ -194,8 +195,15 @@ export default function MultiDisciplineAnalysisResults({
           />
         )}
         
+        {activeTab === 'soft-costs' && (
+          <SoftCostsTab
+            analysis={analysis}
+            _disciplineConfig={disciplineConfig}
+          />
+        )}
+
         {activeTab === 'commercial' && (
-          <CommercialTab 
+          <CommercialTab
             analysis={analysis}
             _disciplineConfig={disciplineConfig}
           />
@@ -375,7 +383,9 @@ function ScopeTab({
       <div className="space-y-6">
         <h3 className="text-lg font-semibold">CSI Division Breakdown</h3>
         <div className="space-y-4">
-          {Object.entries(analysis.csi_divisions).map(([divisionCode, division]) => (
+          {Object.entries(analysis.csi_divisions)
+            .sort(([a], [b]) => parseInt(a) - parseInt(b))
+            .map(([divisionCode, division]) => (
             <div key={divisionCode} className="border rounded-lg p-4">
               <div className="flex justify-between items-start mb-2">
                 <div>
@@ -437,7 +447,9 @@ function ScopeTab({
       <div className="space-y-6">
         <h3 className="text-lg font-semibold">Technical Systems Breakdown</h3>
         <div className="space-y-4">
-          {Object.entries(analysis.technical_systems).map(([systemKey, system]) => (
+          {Object.entries(analysis.technical_systems)
+            .sort(([a], [b]) => a.localeCompare(b))
+            .map(([systemKey, system]) => (
             <div key={systemKey} className="border rounded-lg p-4">
               <div className="flex justify-between items-start mb-2">
                 <div>
@@ -479,6 +491,136 @@ function ScopeTab({
     <div className="text-center text-gray-500 py-8">
       <Layers className="h-12 w-12 mx-auto mb-4 opacity-50" />
       <p>No scope data available for this {analysis.discipline} proposal.</p>
+    </div>
+  );
+}
+
+// Soft Costs Tab Component
+function SoftCostsTab({
+  analysis,
+  _disciplineConfig
+}: {
+  analysis: AnalysisResult;
+  _disciplineConfig: { title: string; icon: React.ComponentType<{ className?: string }>; color: string; scopeLabel: string };
+}) {
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
+
+  if (!analysis.softCosts || analysis.softCosts.length === 0) {
+    return (
+      <div className="text-center text-gray-500 py-12">
+        <Building className="h-16 w-16 mx-auto mb-4 opacity-30" />
+        <h3 className="text-lg font-medium mb-2">No Soft Costs Identified</h3>
+        <p className="text-sm">
+          This analysis did not identify any soft costs such as design fees, permits, bonds, or professional services.
+        </p>
+        <div className="mt-4 text-xs text-gray-400">
+          <p>Soft costs typically represent 3-15% of total project cost</p>
+        </div>
+      </div>
+    );
+  }
+
+  const softCostsTotal = analysis.softCostsTotal || 0;
+  const softCostsPercentage = ((softCostsTotal / analysis.total_amount) * 100).toFixed(1);
+
+  return (
+    <div className="space-y-6">
+      {/* Soft Costs Overview */}
+      <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center">
+            <Building className="h-6 w-6 text-purple-600 mr-3" />
+            <div>
+              <h3 className="text-xl font-bold text-gray-900">
+                Soft Costs Summary
+              </h3>
+              <p className="text-sm text-purple-800">
+                Administrative, professional, and non-construction expenses
+              </p>
+            </div>
+          </div>
+          <div className="text-right">
+            <p className="text-2xl font-bold text-purple-900">
+              {formatCurrency(softCostsTotal)}
+            </p>
+            <p className="text-sm text-purple-700">
+              {softCostsPercentage}% of total project cost
+            </p>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+          <div className="text-center">
+            <p className="text-2xl font-bold text-purple-900">{analysis.softCosts.length}</p>
+            <p className="text-sm text-purple-700">Soft Cost Items</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-purple-900">
+              {analysis.gross_sqft ? `$${(softCostsTotal / analysis.gross_sqft).toFixed(0)}` : '—'}
+            </p>
+            <p className="text-sm text-purple-700">Cost per SF</p>
+          </div>
+          <div className="text-center">
+            <p className="text-2xl font-bold text-purple-900">
+              {formatCurrency(softCostsTotal / analysis.softCosts.length)}
+            </p>
+            <p className="text-sm text-purple-700">Average Item Cost</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Detailed Soft Costs Breakdown */}
+      <div>
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">Itemized Soft Costs</h4>
+        <div className="space-y-3">
+          {analysis.softCosts.map((item, index) => (
+            <div key={index} className="bg-white border border-purple-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+              <div className="flex justify-between items-start">
+                <div className="flex-1">
+                  <h5 className="font-medium text-gray-900 mb-1">{item.description}</h5>
+                  <p className="text-sm text-gray-600">
+                    {((item.cost / analysis.total_amount) * 100).toFixed(1)}% of total project cost
+                  </p>
+                </div>
+                <div className="text-right ml-4">
+                  <p className="text-lg font-bold text-gray-900">{formatCurrency(item.cost)}</p>
+                  {analysis.gross_sqft && (
+                    <p className="text-sm text-gray-600">
+                      ${(item.cost / analysis.gross_sqft).toFixed(2)}/SF
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Soft Costs Guidelines */}
+      <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
+        <h4 className="font-medium text-gray-900 mb-3">Soft Costs Guidelines</h4>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
+          <div>
+            <p className="font-medium mb-2">Typical Soft Costs Include:</p>
+            <ul className="space-y-1">
+              <li>• Design and engineering fees</li>
+              <li>• Permits and approvals</li>
+              <li>• Legal and professional services</li>
+              <li>• Insurance and bonds</li>
+            </ul>
+          </div>
+          <div>
+            <p className="font-medium mb-2">Industry Benchmarks:</p>
+            <ul className="space-y-1">
+              <li>• Residential: 8-15% of total cost</li>
+              <li>• Commercial: 10-20% of total cost</li>
+              <li>• Infrastructure: 15-25% of total cost</li>
+              <li>• Your project: <strong>{softCostsPercentage}%</strong></li>
+            </ul>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
