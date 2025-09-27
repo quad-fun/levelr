@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { ProjectOverhead } from '@/types/analysis';
 
 export function createOverviewSheet(
   wb: XLSX.WorkBook,
@@ -80,7 +81,7 @@ export function formatPercentageColumns(
 
 export function addProjectOverheadSheet(
   wb: XLSX.WorkBook,
-  analysis: { project_overhead?: Record<string, number | undefined> & { total_overhead: number }; total_amount: number },
+  analysis: { project_overhead?: ProjectOverhead; total_amount: number },
   sheetName: string = 'Project Overhead'
 ): void {
   if (!analysis.project_overhead) return;
@@ -110,21 +111,26 @@ export function addProjectOverheadSheet(
   ];
 
   overheadFields.forEach(field => {
-    if (analysis.project_overhead[field.key]) {
-      overheadData.push([
-        field.label,
-        analysis.project_overhead[field.key].toString(),
-        `${((analysis.project_overhead[field.key] / analysis.total_amount) * 100).toFixed(2)}%`
-      ]);
+    if (analysis.project_overhead) {
+      const value = analysis.project_overhead[field.key as keyof ProjectOverhead];
+      if (typeof value === 'number') {
+        overheadData.push([
+          field.label,
+          value.toString(),
+          `${((value / analysis.total_amount) * 100).toFixed(2)}%`
+        ]);
+      }
     }
   });
 
   overheadData.push(['']);
-  overheadData.push([
-    'TOTAL OVERHEAD',
-    analysis.project_overhead.total_overhead.toString(),
-    `${((analysis.project_overhead.total_overhead / analysis.total_amount) * 100).toFixed(2)}%`
-  ]);
+  if (analysis.project_overhead) {
+    overheadData.push([
+      'TOTAL OVERHEAD',
+      analysis.project_overhead.total_overhead.toString(),
+      `${((analysis.project_overhead.total_overhead / analysis.total_amount) * 100).toFixed(2)}%`
+    ]);
+  }
 
   const overheadWs = XLSX.utils.aoa_to_sheet(overheadData);
 
