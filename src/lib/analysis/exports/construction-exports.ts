@@ -1116,7 +1116,7 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
 
   // Merge bidder name headers (row 1)
-  const merges = [];
+  const merges: { s: { r: number; c: number }; e: { r: number; c: number } }[] = [];
   let currentCol = 1; // Start after SCOPE column
   bids.forEach((_, index) => {
     const startCol = currentCol;
