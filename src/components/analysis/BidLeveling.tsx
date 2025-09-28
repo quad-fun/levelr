@@ -212,7 +212,7 @@ export default function BidLeveling() {
           ].map((discipline) => (
             <button
               key={discipline.key}
-              onClick={() => handleDisciplineChange(discipline.key as any)}
+              onClick={() => handleDisciplineChange(discipline.key as 'all' | 'construction' | 'design' | 'trade')}
               className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
                 activeDiscipline === discipline.key
                   ? 'bg-white text-gray-900 shadow-sm'
