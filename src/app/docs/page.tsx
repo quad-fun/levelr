@@ -348,6 +348,184 @@ export default function HowToGuidePage() {
           </div>
         </section>
 
+        {/* AIA Phase Analysis */}
+        <section className="bg-white rounded-lg shadow-md p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">AIA Phase Analysis (Design Services)</h2>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">AIA Phases & Typical Fee Distribution</h3>
+              <div className="space-y-3">
+                <div className="bg-purple-50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium">Schematic Design (SD)</span>
+                    <span className="text-sm text-gray-600 bg-purple-100 px-2 py-1 rounded">15%</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Conceptual design, programming, site analysis, basic drawings</p>
+                </div>
+                <div className="bg-purple-50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium">Design Development (DD)</span>
+                    <span className="text-sm text-gray-600 bg-purple-100 px-2 py-1 rounded">20%</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Design refinement, coordination, material selection, specifications</p>
+                </div>
+                <div className="bg-purple-50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium">Construction Documents (CD)</span>
+                    <span className="text-sm text-gray-600 bg-purple-100 px-2 py-1 rounded">40%</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Final drawings, detailed specifications, permitting documents</p>
+                </div>
+                <div className="bg-purple-50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium">Bidding/Negotiation (BN)</span>
+                    <span className="text-sm text-gray-600 bg-purple-100 px-2 py-1 rounded">5%</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Bidding assistance, contractor selection, proposal evaluation</p>
+                </div>
+                <div className="bg-purple-50 p-3 rounded-lg">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-medium">Construction Administration (CA)</span>
+                    <span className="text-sm text-gray-600 bg-purple-100 px-2 py-1 rounded">20%</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Construction oversight, shop drawing review, site visits</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Design Deliverables & Disciplines</h3>
+              <p className="text-gray-600 mb-4">
+                Levelr automatically identifies design deliverables and responsible disciplines:
+              </p>
+              <ul className="space-y-2 text-gray-700 text-sm">
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  Architectural drawings and plans
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  Structural engineering calculations
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  MEP engineering systems design
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  Technical specifications and schedules
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  3D models and renderings
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  Code analysis and compliance reports
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2"></div>
+                  Sustainability and LEED documentation
+                </li>
+              </ul>
+
+              <div className="mt-4 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                <p className="text-sm text-purple-800">
+                  <strong>Design Overhead:</strong> Project management, subconsultant coordination, insurance, and travel expenses are tracked separately from phase-specific work.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Technical Systems Analysis (Trade Services) */}
+        <section className="bg-white rounded-lg shadow-md p-8 mb-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Technical Systems Analysis (Trade Services)</h2>
+
+          <div className="grid md:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">MEP & Specialty Systems</h3>
+              <div className="space-y-3">
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="flex items-center mb-1">
+                    <span className="text-lg mr-2">⚡</span>
+                    <span className="font-medium">Electrical Systems</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Power distribution, lighting, fire alarm, security, communications</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="flex items-center mb-1">
+                    <span className="text-lg mr-2">🌡️</span>
+                    <span className="font-medium">HVAC Systems</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Equipment, ductwork, controls, ventilation, building automation</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="flex items-center mb-1">
+                    <span className="text-lg mr-2">🚿</span>
+                    <span className="font-medium">Plumbing Systems</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Water supply, drainage, fixtures, hot water systems</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="flex items-center mb-1">
+                    <span className="text-lg mr-2">🛡️</span>
+                    <span className="font-medium">Fire Protection</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Sprinklers, standpipes, pumps, alarm integration</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-lg">
+                  <div className="flex items-center mb-1">
+                    <span className="text-lg mr-2">🏗️</span>
+                    <span className="font-medium">Specialty Systems</span>
+                  </div>
+                  <p className="text-sm text-gray-600">Elevators, kitchen equipment, technology infrastructure</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Equipment Specifications & Testing</h3>
+              <p className="text-gray-600 mb-4">
+                Trade analysis includes detailed equipment tracking and commissioning requirements:
+              </p>
+              <ul className="space-y-2 text-gray-700 text-sm">
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                  Manufacturer and model specifications
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                  Capacity ratings (BTU, amperage, GPM)
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                  Equipment vs. labor cost breakdown
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                  Installation and commissioning requirements
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                  Testing protocols and startup procedures
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
+                  Warranty and service provisions
+                </li>
+              </ul>
+
+              <div className="mt-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                <p className="text-sm text-green-800">
+                  <strong>Trade Overhead:</strong> Supervision, permits, bonds, material handling, and testing costs are identified separately from equipment and installation.
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+
         {/* Risk Assessment Guide */}
         <section className="bg-white rounded-lg shadow-md p-8 mb-8">
           <div className="flex items-center mb-6">
@@ -455,10 +633,10 @@ export default function HowToGuidePage() {
         <section className="bg-white rounded-lg shadow-md p-8 mb-8">
           <div className="flex items-center mb-6">
             <FileSpreadsheet className="h-8 w-8 text-blue-600 mr-3" />
-            <h2 className="text-2xl font-bold text-gray-900">Working with Excel Exports</h2>
+            <h2 className="text-2xl font-bold text-gray-900">Excel Export Analysis & Tips</h2>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
+          <div className="grid lg:grid-cols-3 gap-6">
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-4">What's Included</h3>
               <ul className="space-y-2 text-gray-700 text-sm">
@@ -480,36 +658,97 @@ export default function HowToGuidePage() {
                 </li>
                 <li className="flex items-center">
                   <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
-                  Pre-formatted for immediate analysis
+                  Pre-formatted tables ready for analysis
+                </li>
+                <li className="flex items-center">
+                  <div className="w-2 h-2 bg-blue-600 rounded-full mr-2"></div>
+                  Industry benchmark percentages
                 </li>
               </ul>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-gray-800 mb-4">Advanced Analysis Tips</h3>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Formatting & Visualization</h3>
               <ul className="space-y-2 text-gray-700 text-sm">
-                <li className="flex items-center">
-                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                  Use conditional formatting for variance visualization
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">Conditional Formatting:</span> Highlight variances >10% from benchmarks with red/yellow/green colors
+                  </div>
                 </li>
-                <li className="flex items-center">
-                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                  Create pivot tables for multi-bid comparisons
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">Data Bars:</span> Add data bars to cost columns for visual comparison
+                  </div>
                 </li>
-                <li className="flex items-center">
-                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                  Add your own formulas for custom calculations
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">Charts:</span> Create pie charts for CSI/AIA distribution, column charts for bid comparisons
+                  </div>
                 </li>
-                <li className="flex items-center">
-                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                  Charts and graphs for stakeholder presentations
-                </li>
-                <li className="flex items-center">
-                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2"></div>
-                  Combine with your internal cost databases
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-green-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">Freeze Panes:</span> Lock headers and contractor names for easy scrolling
+                  </div>
                 </li>
               </ul>
             </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">Advanced Analysis</h3>
+              <ul className="space-y-2 text-gray-700 text-sm">
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">Pivot Tables:</span> Summarize multiple bids by division or contractor for executive dashboards
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">VLOOKUP/INDEX:</span> Reference your historical cost database for deeper benchmarking
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">Custom Formulas:</span> Add escalation factors, contingency calculations, or weighted scoring
+                  </div>
+                </li>
+                <li className="flex items-start">
+                  <div className="w-2 h-2 bg-purple-600 rounded-full mr-2 mt-1.5"></div>
+                  <div>
+                    <span className="font-medium">Scenario Modeling:</span> Create "what-if" scenarios with different contractors or change orders
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <h4 className="font-semibold text-blue-800 mb-2">📊 Pro Tip: Multi-Bid Comparison</h4>
+            <p className="text-blue-700 text-sm mb-2">
+              Export multiple analyses, then copy/paste the data into a master comparison spreadsheet:
+            </p>
+            <ul className="text-blue-700 text-sm space-y-1 ml-4">
+              <li>• Use one column per contractor for easy side-by-side comparison</li>
+              <li>• Calculate variance formulas: =(B2-MIN($B$2:$E$2))/MIN($B$2:$E$2)*100</li>
+              <li>• Add conditional formatting to highlight outliers automatically</li>
+              <li>• Create summary charts for stakeholder presentations</li>
+            </ul>
+          </div>
+
+          <div className="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+            <h4 className="font-semibold text-yellow-800 mb-2">⚠️ Important Excel Notes</h4>
+            <ul className="text-yellow-700 text-sm space-y-1">
+              <li>• All monetary values are exported as numbers (not text) for calculations</li>
+              <li>• Percentage columns include formulas for automatic recalculation</li>
+              <li>• Multiple sheets allow focused analysis by category (Overview, CSI, Soft Costs)</li>
+              <li>• Save as .xlsx to preserve formatting and formulas</li>
+            </ul>
           </div>
         </section>
 
