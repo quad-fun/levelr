@@ -6,7 +6,7 @@ import {
   FileText, DollarSign, AlertTriangle, CheckCircle,
   Building, Palette, Zap, TrendingUp, TrendingDown,
   Calendar, User, Layers, Target,
-  BarChart3, Shield, ChevronDown, ChevronUp, Eye
+  BarChart3, Shield, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { analyzeMarketVariance } from '@/lib/analysis/market-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
