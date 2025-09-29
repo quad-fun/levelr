@@ -752,6 +752,147 @@ export default function HowToGuidePage() {
           </div>
         </section>
 
+        {/* RFP Generation & Project Ecosystem */}
+        <section className="bg-white rounded-lg shadow-md p-8 mb-8">
+          <div className="flex items-center mb-6">
+            <FileSpreadsheet className="h-8 w-8 text-indigo-600 mr-3" />
+            <h2 className="text-2xl font-bold text-gray-900">RFP Generation & Project Ecosystem</h2>
+          </div>
+
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+            <p className="text-indigo-800 font-semibold">
+              🚧 Beta Features: RFP generation and project ecosystem analysis are actively being refined based on user feedback
+            </p>
+          </div>
+
+          <div className="grid lg:grid-cols-2 gap-8">
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">🤖 AI-Powered RFP Generation</h3>
+              <p className="text-gray-600 mb-4">
+                Generate professional Request for Proposal documents based on your analysis results and project requirements:
+              </p>
+
+              <div className="space-y-3 mb-6">
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-gray-800 mb-2">Scope Framework Selection</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Construction: CSI MasterFormat divisions</li>
+                    <li>• Design: AIA phases and deliverables</li>
+                    <li>• Trade: Technical systems and specifications</li>
+                  </ul>
+                </div>
+
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-gray-800 mb-2">Delivery Methods</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Design-Bid-Build (traditional)</li>
+                    <li>• Design-Build (integrated)</li>
+                    <li>• Construction Manager at Risk</li>
+                    <li>• Design services professional agreements</li>
+                  </ul>
+                </div>
+
+                <div className="bg-gray-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-gray-800 mb-2">Generated Documents</h4>
+                  <ul className="text-sm text-gray-600 space-y-1">
+                    <li>• Complete RFP with scope definitions</li>
+                    <li>• Technical specifications</li>
+                    <li>• Evaluation criteria and scoring</li>
+                    <li>• Professional Word document export</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-yellow-800 text-sm">
+                  <strong>Pro Tip:</strong> Use your bid analysis results to inform RFP scope requirements and realistic budget expectations.
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 Project Ecosystem Analysis</h3>
+              <p className="text-gray-600 mb-4">
+                Get comprehensive insights into your project's financial and operational ecosystem:
+              </p>
+
+              <div className="space-y-3 mb-6">
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-2">Financial Overview</h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• Total project investment analysis</li>
+                    <li>• Cost distribution across disciplines</li>
+                    <li>• Soft costs as percentage of total</li>
+                    <li>• Market benchmark comparisons</li>
+                  </ul>
+                </div>
+
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-2">Stakeholder Mapping</h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• Design team coordination requirements</li>
+                    <li>• Construction contractor dependencies</li>
+                    <li>• Trade contractor interfaces</li>
+                    <li>• Professional service providers</li>
+                  </ul>
+                </div>
+
+                <div className="bg-blue-50 p-3 rounded-lg">
+                  <h4 className="font-medium text-blue-800 mb-2">Risk & Timeline Insights</h4>
+                  <ul className="text-sm text-blue-700 space-y-1">
+                    <li>• Project complexity assessment</li>
+                    <li>• Critical path dependencies</li>
+                    <li>• Budget variance risk factors</li>
+                    <li>• Coordination complexity scoring</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-800 text-sm">
+                  <strong>Use Case:</strong> Perfect for executive presentations and project planning sessions with stakeholders and investors.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-8 p-4 bg-gray-50 border border-gray-200 rounded-lg">
+            <h4 className="font-semibold text-gray-800 mb-2">🔄 Integration Workflow</h4>
+            <div className="grid md:grid-cols-4 gap-4 text-sm">
+              <div className="text-center">
+                <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold mx-auto mb-2">1</div>
+                <p className="font-medium">Analyze Proposals</p>
+                <p className="text-gray-600">Upload and analyze multiple bids</p>
+              </div>
+              <div className="text-center">
+                <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold mx-auto mb-2">2</div>
+                <p className="font-medium">Review Ecosystem</p>
+                <p className="text-gray-600">Understand project complexity</p>
+              </div>
+              <div className="text-center">
+                <div className="w-8 h-8 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-bold mx-auto mb-2">3</div>
+                <p className="font-medium">Generate RFP</p>
+                <p className="text-gray-600">Create professional procurement docs</p>
+              </div>
+              <div className="text-center">
+                <div className="w-8 h-8 bg-green-100 text-green-600 rounded-full flex items-center justify-center text-sm font-bold mx-auto mb-2">4</div>
+                <p className="font-medium">Download & Share</p>
+                <p className="text-gray-600">Export for team collaboration</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+            <h4 className="font-semibold text-red-800 mb-2">⚠️ Beta Feature Notes</h4>
+            <ul className="text-red-700 text-sm space-y-1">
+              <li>• RFP generation and ecosystem analysis are being actively refined</li>
+              <li>• Features may change based on user feedback and industry requirements</li>
+              <li>• Always review generated content before using in official procurement</li>
+              <li>• Download all outputs immediately as they're stored in browser only</li>
+            </ul>
+          </div>
+        </section>
+
         {/* Call to Action */}
         <section className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-lg shadow-md p-8 text-white">
           <h2 className="text-2xl font-bold mb-4">Ready to Analyze Your Proposals?</h2>
