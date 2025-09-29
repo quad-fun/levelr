@@ -390,7 +390,18 @@ function ScopeTab({
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <h4 className="font-medium">Division {divisionCode}</h4>
-                  <p className="text-sm text-gray-600">{division.items.join(', ')}</p>
+                  <p className="text-sm text-gray-600 mb-2">
+                    {Array.isArray(division.items) ? division.items.length : 0} items
+                  </p>
+                  {Array.isArray(division.items) && division.items.length > 0 && (
+                    <div className="space-y-1 mt-2">
+                      {division.items.map((item, index) => (
+                        <div key={index} className="bg-white bg-opacity-60 rounded p-2 text-sm">
+                          <p className="font-medium text-gray-900">{item}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="font-bold">{formatCurrency(division.cost)}</p>
@@ -450,9 +461,21 @@ function ScopeTab({
               <div className="flex justify-between items-start mb-2">
                 <div>
                   <h4 className="font-medium capitalize">{phase.phase_name.replace(/_/g, ' ')}</h4>
-                  <p className="text-sm text-gray-600">
-                    {phase.deliverables.map(d => d.description).join(', ')}
+                  <p className="text-sm text-gray-600 mb-2">
+                    {Array.isArray(phase.deliverables) ? phase.deliverables.length : 0} deliverables
                   </p>
+                  {Array.isArray(phase.deliverables) && phase.deliverables.length > 0 && (
+                    <div className="space-y-1 mt-2">
+                      {phase.deliverables.map((deliverable, index) => (
+                        <div key={index} className="bg-white bg-opacity-60 rounded p-2 text-sm">
+                          <p className="font-medium text-gray-900">{deliverable.description}</p>
+                          {deliverable.quantity && deliverable.unit && (
+                            <p className="text-xs text-gray-600">{deliverable.quantity} {deliverable.unit}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="text-right">
                   <p className="font-bold">{formatCurrency(phase.fee_amount)}</p>
@@ -521,12 +544,17 @@ function ScopeTab({
               
               {system.specifications.length > 0 && (
                 <div className="mt-3">
-                  <h5 className="text-sm font-medium text-gray-700 mb-2">Equipment:</h5>
+                  <h5 className="text-sm font-medium text-gray-700 mb-2">Equipment & Specifications:</h5>
                   <div className="space-y-1">
-                    {system.specifications.slice(0, 3).map((spec, idx) => (
-                      <div key={idx} className="flex justify-between text-sm">
-                        <span>{spec.description}</span>
-                        <span>{formatCurrency(spec.total_cost)}</span>
+                    {system.specifications.map((spec, idx) => (
+                      <div key={idx} className="bg-white bg-opacity-60 rounded p-2 text-sm">
+                        <div className="flex justify-between items-start">
+                          <p className="font-medium text-gray-900 flex-1">{spec.description}</p>
+                          <p className="font-semibold text-gray-900 ml-2">{formatCurrency(spec.total_cost)}</p>
+                        </div>
+                        {spec.quantity && (
+                          <p className="text-xs text-gray-600">Qty: {spec.quantity}</p>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -593,7 +621,21 @@ function SoftCostsTab({
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
 
-  if (!analysis.softCosts || analysis.softCosts.length === 0) {
+  // Debug logging to understand soft costs data
+  console.log('🔍 SoftCostsTab Debug:', {
+    softCosts: analysis.softCosts,
+    softCostsType: typeof analysis.softCosts,
+    isArray: Array.isArray(analysis.softCosts),
+    length: analysis.softCosts?.length,
+    softCostsTotal: analysis.softCostsTotal,
+    hasTotal: (analysis.softCostsTotal || 0) > 0
+  });
+
+  // Show soft costs section if we have either items or a total > 0
+  const hasValidSoftCosts = (analysis.softCosts && Array.isArray(analysis.softCosts) && analysis.softCosts.length > 0) ||
+                           (analysis.softCostsTotal && analysis.softCostsTotal > 0);
+
+  if (!hasValidSoftCosts) {
     return (
       <div className="text-center text-gray-500 py-12">
         <Building className="h-16 w-16 mx-auto mb-4 opacity-30" />
@@ -639,7 +681,9 @@ function SoftCostsTab({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
           <div className="text-center">
-            <p className="text-2xl font-bold text-purple-900">{analysis.softCosts.length}</p>
+            <p className="text-2xl font-bold text-purple-900">
+              {(analysis.softCosts && Array.isArray(analysis.softCosts)) ? analysis.softCosts.length : 0}
+            </p>
             <p className="text-sm text-purple-700">Soft Cost Items</p>
           </div>
           <div className="text-center">
@@ -650,9 +694,14 @@ function SoftCostsTab({
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-purple-900">
-              {formatCurrency(softCostsTotal / analysis.softCosts.length)}
+              {(analysis.softCosts && Array.isArray(analysis.softCosts) && analysis.softCosts.length > 0)
+                ? formatCurrency(softCostsTotal / analysis.softCosts.length)
+                : formatCurrency(softCostsTotal)}
             </p>
-            <p className="text-sm text-purple-700">Average Item Cost</p>
+            <p className="text-sm text-purple-700">
+              {(analysis.softCosts && Array.isArray(analysis.softCosts) && analysis.softCosts.length > 0)
+                ? 'Average Item Cost' : 'Total Cost'}
+            </p>
           </div>
         </div>
       </div>
@@ -660,28 +709,39 @@ function SoftCostsTab({
       {/* Detailed Soft Costs Breakdown */}
       <div>
         <h4 className="text-lg font-semibold text-gray-900 mb-4">Itemized Soft Costs</h4>
-        <div className="space-y-3">
-          {analysis.softCosts.map((item, index) => (
-            <div key={index} className="bg-white border border-purple-200 rounded-lg p-4 hover:shadow-md transition-shadow">
-              <div className="flex justify-between items-start">
-                <div className="flex-1">
-                  <h5 className="font-medium text-gray-900 mb-1">{item.description}</h5>
-                  <p className="text-sm text-gray-600">
-                    {((item.cost / analysis.total_amount) * 100).toFixed(1)}% of total project cost
-                  </p>
-                </div>
-                <div className="text-right ml-4">
-                  <p className="text-lg font-bold text-gray-900">{formatCurrency(item.cost)}</p>
-                  {analysis.gross_sqft && (
+        {analysis.softCosts && Array.isArray(analysis.softCosts) && analysis.softCosts.length > 0 ? (
+          <div className="space-y-3">
+            {analysis.softCosts.map((item, index) => (
+              <div key={index} className="bg-white border border-purple-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <h5 className="font-medium text-gray-900 mb-1">{item.description}</h5>
                     <p className="text-sm text-gray-600">
-                      ${(item.cost / analysis.gross_sqft).toFixed(2)}/SF
+                      {((item.cost / analysis.total_amount) * 100).toFixed(1)}% of total project cost
                     </p>
-                  )}
+                  </div>
+                  <div className="text-right ml-4">
+                    <p className="text-lg font-bold text-gray-900">{formatCurrency(item.cost)}</p>
+                    {analysis.gross_sqft && (
+                      <p className="text-sm text-gray-600">
+                        ${(item.cost / analysis.gross_sqft).toFixed(2)}/SF
+                      </p>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center text-gray-500 py-8 bg-gray-50 rounded-lg">
+            <p className="text-sm">
+              Individual soft cost items are not available, but total soft costs are calculated: {formatCurrency(softCostsTotal)}
+            </p>
+            <p className="text-xs text-gray-400 mt-2">
+              This may indicate soft costs were identified through validation rather than direct parsing
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Soft Costs Guidelines */}
