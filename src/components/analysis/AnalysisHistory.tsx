@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getAllAnalyses, getMarketIntelligence, deleteAnalysis, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
-import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/export-generator';
+import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import { formatDistanceToNow } from 'date-fns';
 import { 
   Trash2, TrendingUp, BarChart3, Building, Calendar, DollarSign, AlertTriangle, 
@@ -175,7 +175,7 @@ export default function AnalysisHistory() {
           <div className="text-center bg-purple-50 rounded-lg p-4">
             <Target className="h-6 w-6 text-purple-600 mx-auto mb-2" />
             <p className="text-2xl font-bold text-purple-600">
-              {Object.keys(marketIntel.divisionBenchmarks).length}
+              {marketIntel.divisionBenchmarks ? Object.keys(marketIntel.divisionBenchmarks).length : 0}
             </p>
             <p className="text-sm text-gray-600">CSI Divisions</p>
           </div>
@@ -367,7 +367,7 @@ export default function AnalysisHistory() {
                         <h6 className="font-semibold text-gray-900 mb-3">Top Cost Categories</h6>
                         <div className="space-y-2">
                           {top5Categories.map((category, index) => {
-                            const benchmark = marketIntel.divisionBenchmarks[category.code];
+                            const benchmark = marketIntel.divisionBenchmarks?.[category.code];
                             const isAboveMarket = benchmark && category.percentage > benchmark.average * 1.2;
                             const isBelowMarket = benchmark && category.percentage < benchmark.average * 0.8;
                             

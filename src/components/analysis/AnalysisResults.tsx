@@ -283,7 +283,7 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
         
         <div className="space-y-4">
           {Object.entries(analysis.csi_divisions)
-            .sort(([a], [b]) => a.localeCompare(b))
+            .sort(([a], [b]) => parseInt(a) - parseInt(b))
             .map(([code, data]) => {
             const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
             const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);

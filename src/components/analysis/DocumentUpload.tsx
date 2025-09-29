@@ -144,10 +144,10 @@ export default function DocumentUpload({ onFileSelect, isProcessing }: DocumentU
           <div className="flex flex-col items-center">
             <Upload className="h-12 w-12 text-gray-400 mb-4" />
             <p className="text-lg font-medium text-gray-900 mb-2">
-              Upload Construction Bid Document
+              Upload Project Document
             </p>
             <p className="text-gray-600 mb-4">
-              Drag and drop your file here, or click to browse
+              Construction bids, design proposals, trade estimates & more
             </p>
             <div className="flex flex-wrap justify-center gap-2 text-sm text-gray-500">
               <span className="bg-green-100 text-green-700 px-2 py-1 rounded">Excel (.xlsx)</span>

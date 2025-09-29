@@ -286,8 +286,8 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-3-5-sonnet-20241022',
-        max_tokens: 2000,
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4000,
         messages: [{
           role: 'user',
           content: messageContent

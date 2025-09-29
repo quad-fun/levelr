@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
-import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/export-generator';
+import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
 import { BarChart3, Download, DollarSign } from 'lucide-react';
 
 interface BidComparison {
@@ -24,10 +24,27 @@ export default function BidLeveling() {
   const [sortBy, setSortBy] = useState<'price' | 'risk' | 'date'>('price');
   const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf'>('excel');
+  const [activeDiscipline, setActiveDiscipline] = useState<'all' | 'construction' | 'design' | 'trade'>('all');
 
   const loadAnalyses = () => {
     const savedAnalyses = getAllAnalyses();
     setAnalyses(savedAnalyses);
+  };
+
+  // Filter analyses by discipline
+  const getFilteredAnalyses = () => {
+    if (activeDiscipline === 'all') return analyses;
+
+    return analyses.filter(analysis => {
+      const discipline = analysis.result.discipline || 'construction';
+      return discipline === activeDiscipline;
+    });
+  };
+
+  // Clear selected bids when switching disciplines
+  const handleDisciplineChange = (discipline: 'all' | 'construction' | 'design' | 'trade') => {
+    setActiveDiscipline(discipline);
+    setSelectedBids([]); // Reset selection when changing disciplines
   };
 
   const calculateComparisons = useCallback(() => {
@@ -183,55 +200,111 @@ export default function BidLeveling() {
         </div>
       </div>
 
+      {/* Discipline Tabs */}
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">Filter by Discipline</h4>
+        <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
+          {[
+            { key: 'all', label: 'All Disciplines', icon: '📊' },
+            { key: 'construction', label: 'Construction', icon: '🏗️' },
+            { key: 'design', label: 'Design Services', icon: '📐' },
+            { key: 'trade', label: 'Trade Services', icon: '⚡' }
+          ].map((discipline) => (
+            <button
+              key={discipline.key}
+              onClick={() => handleDisciplineChange(discipline.key as 'all' | 'construction' | 'design' | 'trade')}
+              className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeDiscipline === discipline.key
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <span className="mr-2">{discipline.icon}</span>
+              {discipline.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Bid Selection */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4">Select Bids to Compare (up to 5)</h4>
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">
+          Select {activeDiscipline === 'all' ? 'Bids' : `${activeDiscipline.charAt(0).toUpperCase() + activeDiscipline.slice(1)} Proposals`} to Compare (up to 5)
+        </h4>
         
-        <div className="grid gap-3">
-          {analyses.map((analysis) => (
-            <div
-              key={analysis.id}
-              className={`border rounded-lg p-4 cursor-pointer transition-colors ${
-                selectedBids.includes(analysis.id)
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-200 hover:bg-gray-50'
-              }`}
-              onClick={() => toggleBidSelection(analysis.id)}
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex-1">
-                  <div className="flex items-center mb-2">
-                    <input
-                      type="checkbox"
-                      checked={selectedBids.includes(analysis.id)}
-                      onChange={() => {}} // Handled by parent onClick
-                      className="mr-3"
-                    />
-                    <h5 className="font-semibold text-gray-900">
-                      {analysis.result.contractor_name}
-                    </h5>
-                  </div>
-                  
-                  <div className="grid md:grid-cols-4 gap-4 text-sm text-gray-600">
-                    <div className="flex items-center">
-                      <DollarSign className="h-3 w-3 mr-1" />
-                      ${analysis.result.total_amount.toLocaleString()}
+        {getFilteredAnalyses().length === 0 ? (
+          <div className="text-center py-8">
+            <div className="text-4xl mb-4">
+              {activeDiscipline === 'construction' ? '🏗️' :
+               activeDiscipline === 'design' ? '📐' :
+               activeDiscipline === 'trade' ? '⚡' : '📊'}
+            </div>
+            <h5 className="text-lg font-semibold text-gray-900 mb-2">
+              No {activeDiscipline === 'all' ? 'analyses' : `${activeDiscipline} proposals`} available
+            </h5>
+            <p className="text-gray-600">
+              {activeDiscipline === 'all'
+                ? 'Analyze some documents first to start comparing bids.'
+                : `Upload and analyze ${activeDiscipline} proposals to compare them here.`
+              }
+            </p>
+          </div>
+        ) : (
+          <div className="grid gap-3">
+            {getFilteredAnalyses().map((analysis) => (
+              <div
+                key={analysis.id}
+                className={`border rounded-lg p-4 cursor-pointer transition-colors ${
+                  selectedBids.includes(analysis.id)
+                    ? 'border-blue-500 bg-blue-50'
+                    : 'border-gray-200 hover:bg-gray-50'
+                }`}
+                onClick={() => toggleBidSelection(analysis.id)}
+              >
+                <div className="flex justify-between items-center">
+                  <div className="flex-1">
+                    <div className="flex items-center mb-2">
+                      <input
+                        type="checkbox"
+                        checked={selectedBids.includes(analysis.id)}
+                        onChange={() => {}} // Handled by parent onClick
+                        className="mr-3"
+                      />
+                      <h5 className="font-semibold text-gray-900">
+                        {analysis.result.contractor_name}
+                      </h5>
+                      <span className={`ml-2 px-2 py-1 text-xs rounded-full font-medium ${
+                        analysis.result.discipline === 'design' ? 'bg-purple-100 text-purple-700' :
+                        analysis.result.discipline === 'trade' ? 'bg-green-100 text-green-700' :
+                        'bg-blue-100 text-blue-700'
+                      }`}>
+                        {analysis.result.discipline === 'design' ? '📐 Design' :
+                         analysis.result.discipline === 'trade' ? '⚡ Trade' :
+                         '🏗️ Construction'}
+                      </span>
                     </div>
-                    <div>
-                      Divisions: {Object.keys(analysis.result.csi_divisions).length}
-                    </div>
-                    <div>
-                      {new Date(analysis.timestamp).toLocaleDateString()}
-                    </div>
-                    <div>
-                      {analysis.result.project_name || 'No project name'}
+
+                    <div className="grid md:grid-cols-4 gap-4 text-sm text-gray-600">
+                      <div className="flex items-center">
+                        <DollarSign className="h-3 w-3 mr-1" />
+                        ${analysis.result.total_amount.toLocaleString()}
+                      </div>
+                      <div>
+                        Divisions: {Object.keys(analysis.result.csi_divisions).length}
+                      </div>
+                      <div>
+                        {new Date(analysis.timestamp).toLocaleDateString()}
+                      </div>
+                      <div>
+                        {analysis.result.project_name || 'No project name'}
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Comparison Results */}
@@ -301,7 +374,7 @@ export default function BidLeveling() {
                 </thead>
                 <tbody>
                   {Object.entries(CSI_DIVISIONS)
-                    .sort(([a], [b]) => a.localeCompare(b))
+                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
                     .map(([code, division]) => {
                     // Check if any bid has this division
                     const hasData = bidComparisons.some(comp => 

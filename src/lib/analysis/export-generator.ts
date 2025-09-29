@@ -760,35 +760,6 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
     ]);
   }
   
-  // Add soft costs section to CSI data
-  if (analysis.softCosts && analysis.softCosts.length > 0) {
-    csiData.push(['']); // Empty row separator
-    csiData.push(['SOFT COSTS', '', '', '', '', '', '', '', '', '', '', '']);
-    csiData.push(['Description', 'Cost', 'Cost/SF', '% of Total', '', '', '', '', '', '', '', '']);
-    
-    analysis.softCosts.forEach(cost => {
-      const percentage = ((cost.cost / analysis.total_amount) * 100).toFixed(1);
-      const costPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? (cost.cost / analysis.gross_sqft).toFixed(2) : '—';
-      csiData.push([
-        cost.description,
-        cost.cost.toString(),
-        costPerSF,
-        `${percentage}%`,
-        '', '', '', '', '', '', '', ''
-      ]);
-    });
-    
-    // Add total soft costs row
-    const totalSoftPercentage = (((analysis.softCostsTotal || 0) / analysis.total_amount) * 100).toFixed(1);
-    const totalSoftCostPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? ((analysis.softCostsTotal || 0) / analysis.gross_sqft).toFixed(2) : '—';
-    csiData.push([
-      'TOTAL SOFT COSTS',
-      (analysis.softCostsTotal || 0).toString(),
-      totalSoftCostPerSF,
-      `${totalSoftPercentage}%`,
-      '', '', '', '', '', '', '', ''
-    ]);
-  }
   
   const csiWs = XLSX.utils.aoa_to_sheet(csiData);
   
@@ -818,7 +789,64 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
   }
   
   XLSX.utils.book_append_sheet(wb, csiWs, 'CSI Analysis');
-  
+
+  // Soft Costs Sheet
+  if (analysis.softCosts && analysis.softCosts.length > 0) {
+    const softCostsData = [
+      ['Description', 'Cost', 'Cost/SF', '% of Total']
+    ];
+
+    analysis.softCosts.forEach(cost => {
+      const percentage = ((cost.cost / analysis.total_amount) * 100).toFixed(1);
+      const costPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? (cost.cost / analysis.gross_sqft).toFixed(2) : '—';
+      softCostsData.push([
+        cost.description,
+        cost.cost.toString(),
+        costPerSF,
+        `${percentage}%`
+      ]);
+    });
+
+    // Add total soft costs row
+    const totalSoftPercentage = (((analysis.softCostsTotal || 0) / analysis.total_amount) * 100).toFixed(1);
+    const totalSoftCostPerSF = analysis.gross_sqft && analysis.gross_sqft > 0 ? ((analysis.softCostsTotal || 0) / analysis.gross_sqft).toFixed(2) : '—';
+    softCostsData.push([
+      'TOTAL SOFT COSTS',
+      (analysis.softCostsTotal || 0).toString(),
+      totalSoftCostPerSF,
+      `${totalSoftPercentage}%`
+    ]);
+
+    const softCostsWs = XLSX.utils.aoa_to_sheet(softCostsData);
+
+    // Calculate optimal column widths based on content
+    const softCostsMaxLengths: number[] = [];
+    softCostsData.forEach(row => {
+      row.forEach((cell, colIndex) => {
+        const cellLength = String(cell).length;
+        softCostsMaxLengths[colIndex] = Math.max(softCostsMaxLengths[colIndex] || 0, cellLength);
+      });
+    });
+
+    // Set auto-fit column widths with minimum and maximum constraints
+    softCostsWs['!cols'] = softCostsMaxLengths.map((length) => ({
+      wch: Math.min(Math.max(length + 2, 10), 50) // Min 10, Max 50 characters
+    }));
+
+    // Format currency columns
+    const softCostsRange = XLSX.utils.decode_range(softCostsWs['!ref'] || 'A1');
+    for (let row = 1; row <= softCostsRange.e.r; row++) {
+      const costCell = `B${row + 1}`;
+
+      if (softCostsWs[costCell] && !isNaN(Number(softCostsWs[costCell].v))) {
+        softCostsWs[costCell].t = 'n';
+        softCostsWs[costCell].z = '$#,##0';
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, softCostsWs, 'Soft Costs');
+  }
+
   // Risk Assessment Sheet
   const risk = calculateProjectRisk(
     Object.fromEntries(Object.entries(analysis.csi_divisions).map(([code, data]) => [code, data.cost])),

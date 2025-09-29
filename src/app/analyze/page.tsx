@@ -3,20 +3,29 @@
 import { useState } from 'react';
 import DocumentUpload from '@/components/analysis/DocumentUpload';
 import AnalysisResults from '@/components/analysis/AnalysisResults';
+import MultiDisciplineAnalysisResults from '@/components/analysis/MultiDisciplineAnalysisResults';
 import ExportTools from '@/components/analysis/ExportTools';
 import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
+import RFPBuilder from '@/components/rfp/RFPBuilder';
+import ProjectEcosystem from '@/components/ecosystem/ProjectEcosystem';
 import { analyzeDocument } from '@/lib/claude-client';
-import { AnalysisResult } from '@/types/analysis';
+import { MultiDisciplineAnalyzer, MultiDisciplineMarketAnalyzer } from '@/lib/analysis/multi-discipline-analyzer';
+import { AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
 import { saveAnalysis } from '@/lib/storage';
 import { ProcessedDocument } from '@/lib/document-processor';
+import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 
 export default function AnalyzePage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'leveling'>('upload');
+  const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'leveling' | 'rfp' | 'ecosystem'>('upload');
   const [lastProcessedDoc, setLastProcessedDoc] = useState<{file: File, processedDoc: ProcessedDocument} | null>(null);
+  const [selectedDiscipline, setSelectedDiscipline] = useState<'construction' | 'design' | 'trade'>('construction');
+  const [marketVariance, setMarketVariance] = useState<MarketVariance | null>(null);
+  const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null);
+  const [useMultiDisciplineAnalysis, setUseMultiDisciplineAnalysis] = useState(false);
 
   const handleFileSelect = async (file: File, processedDoc: ProcessedDocument) => {
     setIsProcessing(true);
@@ -26,13 +35,65 @@ export default function AnalyzePage() {
     setLastProcessedDoc({ file, processedDoc });
     
     try {
-      console.log('Starting analysis for:', file.name, 'Type:', processedDoc.fileType);
+      console.log('Starting analysis for:', file.name, 'Type:', processedDoc.fileType, 'Discipline:', selectedDiscipline);
       
-      const result = await analyzeDocument(processedDoc);
+      let result: AnalysisResult;
+      
+      if (useMultiDisciplineAnalysis) {
+        // Use new multi-discipline analyzer or existing construction system
+        if (selectedDiscipline === 'construction') {
+          // Use existing proven construction analysis
+          result = await analyzeDocument(processedDoc);
+          result.discipline = 'construction';
+        } else {
+          // Use new AI-powered design/trade analyzers
+          result = await MultiDisciplineAnalyzer.analyzeProposal(
+            processedDoc,
+            selectedDiscipline,
+            {
+              projectType: 'general',
+              estimatedValue: 0 // Will be extracted from document
+            }
+          );
+        }
+        
+        // Generate market analysis
+        if (selectedDiscipline === 'design' && result.aia_phases) {
+          setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeDesignMarketRates(
+            result.aia_phases,
+            result.total_amount,
+            'general'
+          ));
+        } else if (selectedDiscipline === 'trade' && result.technical_systems) {
+          setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeTradeMarketRates(
+            result.technical_systems,
+            result.total_amount,
+            'general'
+          ));
+        }
+        
+        // Generate basic risk assessment
+        setRiskAssessment({
+          score: result.categorizationPercentage || 0,
+          level: (result.categorizationPercentage || 0) > 80 ? 'LOW' : 
+                 (result.categorizationPercentage || 0) > 60 ? 'MEDIUM' : 'HIGH',
+          factors: [
+            ...(result.exclusions || []),
+            ...(result.assumptions || [])
+          ]
+        });
+        
+      } else {
+        // Use legacy construction analyzer
+        result = await analyzeDocument(processedDoc);
+        setMarketVariance(null);
+        setRiskAssessment(null);
+      }
+      
       setAnalysisResult(result);
       
-      // Save analysis to localStorage for leveling database
-      const analysisId = saveAnalysis(result);
+      // Save analysis to localStorage for leveling database with market analysis
+      const analysisId = saveAnalysis(result, marketVariance || undefined, riskAssessment || undefined);
       console.log('Analysis saved with ID:', analysisId);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Analysis failed');
@@ -80,6 +141,8 @@ export default function AnalyzePage() {
     setAnalysisResult(null);
     setError(null);
     setLastProcessedDoc(null);
+    setMarketVariance(null);
+    setRiskAssessment(null);
   };
 
   return (
@@ -94,11 +157,11 @@ export default function AnalyzePage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <a 
-                href="/docs" 
+              <a
+                href="/docs"
                 className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
               >
-                Documentation
+                How To Guide
               </a>
               {/* Pricing disabled for now */}
             </div>
@@ -119,6 +182,26 @@ export default function AnalyzePage() {
               }`}
             >
               New Analysis
+            </button>
+            <button
+              onClick={() => setActiveTab('rfp')}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'rfp' 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Generate RFP
+            </button>
+            <button
+              onClick={() => setActiveTab('ecosystem')}
+              className={`px-6 py-2 rounded-md text-sm font-medium transition-colors ${
+                activeTab === 'ecosystem' 
+                  ? 'bg-white text-gray-900 shadow-sm' 
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Project Ecosystem
             </button>
             <button
               onClick={() => setActiveTab('history')}
@@ -147,17 +230,120 @@ export default function AnalyzePage() {
           <AnalysisHistory />
         ) : activeTab === 'leveling' ? (
           <BidLeveling />
+        ) : activeTab === 'rfp' ? (
+          <RFPBuilder onCancel={() => setActiveTab('upload')} />
+        ) : activeTab === 'ecosystem' ? (
+          <ProjectEcosystem 
+            onCreateRFP={() => setActiveTab('rfp')}
+            onAnalyzeProposal={() => setActiveTab('upload')}
+          />
         ) : !analysisResult ? (
           <div className="space-y-8">
             {/* Title */}
             <div className="text-center">
               <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                Construction Bid Analysis
+                Multi-Discipline Proposal Analysis
               </h1>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                Upload your bid document for instant AI-powered analysis. 
-                We'll identify cost variances, risk factors, and provide expert recommendations.
+                Upload your proposal document for instant AI-powered analysis. 
+                Support for construction, design services, and trade proposals with expert recommendations.
               </p>
+            </div>
+
+            {/* Discipline Selector */}
+            <div className="max-w-4xl mx-auto">
+              <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Analysis Type</h3>
+                  <p className="text-gray-600">Select the type of analysis for your proposal document.</p>
+                </div>
+                
+                <div className="space-y-4">
+                  <div className="flex items-center space-x-4 mb-4">
+                    <label className="flex items-center">
+                      <input
+                        type="checkbox"
+                        checked={useMultiDisciplineAnalysis}
+                        onChange={(e) => setUseMultiDisciplineAnalysis(e.target.checked)}
+                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="ml-2 text-sm font-medium text-gray-700">
+                        Use Enhanced Multi-Discipline Analysis (Beta)
+                      </span>
+                    </label>
+                  </div>
+
+                  {useMultiDisciplineAnalysis && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        selectedDiscipline === 'construction' 
+                          ? 'border-blue-500 bg-blue-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="discipline"
+                          value="construction"
+                          checked={selectedDiscipline === 'construction'}
+                          onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
+                          className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
+                        />
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-2xl">🏗️</span>
+                            <h4 className="font-semibold text-gray-900">Construction</h4>
+                          </div>
+                          <p className="text-sm text-gray-600">General contracting and construction projects</p>
+                        </div>
+                      </label>
+
+                      <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        selectedDiscipline === 'design' 
+                          ? 'border-purple-500 bg-purple-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="discipline"
+                          value="design"
+                          checked={selectedDiscipline === 'design'}
+                          onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
+                          className="h-4 w-4 text-purple-600 border-gray-300 focus:ring-purple-500"
+                        />
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-2xl">📐</span>
+                            <h4 className="font-semibold text-gray-900">Design Services</h4>
+                          </div>
+                          <p className="text-sm text-gray-600">Architecture and engineering services</p>
+                        </div>
+                      </label>
+
+                      <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
+                        selectedDiscipline === 'trade' 
+                          ? 'border-green-500 bg-green-50' 
+                          : 'border-gray-200 hover:border-gray-300'
+                      }`}>
+                        <input
+                          type="radio"
+                          name="discipline"
+                          value="trade"
+                          checked={selectedDiscipline === 'trade'}
+                          onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
+                          className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
+                        />
+                        <div>
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-2xl">⚡</span>
+                            <h4 className="font-semibold text-gray-900">Trade Services</h4>
+                          </div>
+                          <p className="text-sm text-gray-600">MEP and specialty trade services</p>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
 
             {/* Upload Component */}
@@ -254,13 +440,34 @@ export default function AnalyzePage() {
             </div>
 
             {/* Analysis Results */}
-            <AnalysisResults 
-              analysis={analysisResult} 
-              onExport={handleExport}
-            />
-
-            {/* Export Tools */}
-            <ExportTools analysis={analysisResult} />
+            {useMultiDisciplineAnalysis && analysisResult?.discipline ? (
+              <MultiDisciplineAnalysisResults
+                analysis={analysisResult}
+                marketVariance={marketVariance || undefined}
+                riskAssessment={riskAssessment || undefined}
+                onExport={(format) => {
+                  if (!analysisResult) return;
+                  try {
+                    if (format === 'pdf') {
+                      exportAnalysisToPDF(analysisResult);
+                    } else if (format === 'excel') {
+                      exportAnalysisToExcel(analysisResult);
+                    }
+                  } catch (error) {
+                    console.error(`Error exporting ${format}:`, error);
+                    alert(`Error exporting ${format}. Please try again.`);
+                  }
+                }}
+              />
+            ) : (
+              <>
+                <AnalysisResults 
+                  analysis={analysisResult} 
+                  onExport={handleExport}
+                />
+                <ExportTools analysis={analysisResult} />
+              </>
+            )}
           </div>
         )}
       </div>

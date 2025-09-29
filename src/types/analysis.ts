@@ -17,6 +17,7 @@ export interface CSIDivision {
   sub_items?: LineItem[];
   subcontractor?: string;
   scope_notes?: string;
+  estimatedPercentage?: number; // Add this for compatibility
 }
 
 export interface UncategorizedCost {
@@ -60,6 +61,57 @@ export interface Subcontractor {
   contact_info?: string;
 }
 
+// Design services analysis interfaces
+export interface AIAPhaseAnalysis {
+  phase_name: string;
+  fee_amount: number;
+  percentage_of_total: number;
+  deliverables: DesignDeliverable[];
+  timeline?: string;
+  scope_notes?: string;
+  assumptions?: string[];
+  exclusions?: string[];
+}
+
+export interface DesignDeliverable {
+  description: string;
+  quantity?: number;
+  unit?: string;
+  cost_allocation?: number;
+  completion_date?: string;
+  responsible_discipline?: string;
+  notes?: string;
+}
+
+// Trade services analysis interfaces  
+export interface TechnicalSystemAnalysis {
+  system_name: string;
+  category: 'electrical' | 'mechanical' | 'plumbing' | 'structural' | 'civil' | 'environmental';
+  total_cost: number;
+  equipment_cost?: number;
+  labor_cost?: number;
+  installation_cost?: number;
+  commissioning_cost?: number;
+  specifications: EquipmentSpec[];
+  testing_requirements?: string[];
+  warranty_terms?: string;
+  maintenance_requirements?: string[];
+  scope_notes?: string;
+}
+
+export interface EquipmentSpec {
+  description: string;
+  manufacturer?: string;
+  model?: string;
+  quantity: number;
+  unit_cost: number;
+  total_cost: number;
+  specifications?: string[];
+  certifications?: string[];
+  warranty_period?: string;
+  installation_notes?: string;
+}
+
 export interface AnalysisResult {
   contractor_name: string;
   total_amount: number;
@@ -67,7 +119,21 @@ export interface AnalysisResult {
   bid_date?: string;
   gross_sqft?: number;
   proposal_date?: string;
+  
+  // Multi-discipline support
+  discipline: 'construction' | 'design' | 'trade';
+  
+  // Construction analysis (legacy CSI support)
   csi_divisions: Record<string, CSIDivision>;
+  
+  // Design services analysis  
+  aia_phases?: Record<string, AIAPhaseAnalysis>;
+  design_deliverables?: DesignDeliverable[];
+  
+  // Trade services analysis
+  technical_systems?: Record<string, TechnicalSystemAnalysis>;
+  equipment_specifications?: EquipmentSpec[];
+  
   uncategorizedCosts?: UncategorizedCost[];
   uncategorizedTotal?: number;
   softCosts?: SoftCost[];

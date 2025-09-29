@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { AnalysisResult } from '@/types/analysis';
-import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/export-generator';
+import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import { Download, FileText, Sheet } from 'lucide-react';
 
 interface ExportToolsProps {

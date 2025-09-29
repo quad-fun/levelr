@@ -41,16 +41,35 @@ npm run lint
 
 ## Core Business Logic
 
-The platform specializes in **CSI (Construction Specifications Institute) division analysis** with proprietary market benchmarking:
+The platform provides **multi-discipline analysis** for construction, design, and trade proposals with proprietary analysis frameworks:
 
-### Key Files:
+### Enhanced Multi-Discipline Analysis System:
+
+**Construction Analysis** - CSI (Construction Specifications Institute) division analysis:
+- Maps costs to 50-division MasterFormat 2018 system
+- Market variance analysis and ROI calculations
+- Project risk assessment with proprietary scoring
+- Files: `csi-analyzer.ts`, `market-analyzer.ts`, `risk-analyzer.ts`
+
+**Design Analysis** - AIA (American Institute of Architects) phase analysis:
+- Breaks down design fees by standard AIA phases (SD, DD, CD, BN, CA)
+- Tracks design deliverables and responsible disciplines
+- Analyzes project overhead and administrative costs
+- Files: `aia-analyzer.ts`, routes through `/api/claude/design`
+
+**Trade Analysis** - Technical systems and equipment analysis:
+- Categorizes by system type (electrical, mechanical, plumbing, specialty)
+- Detailed equipment specifications with model numbers and quantities
+- Installation, testing, and commissioning requirements
+- Files: `trade-analyzer.ts`, routes through `/api/claude/trade`
+
+### Key Analysis Files:
+- `src/lib/analysis/multi-discipline-analyzer.ts` - Intelligent routing to discipline-specific analyzers
 - `src/lib/analysis/csi-analyzer.ts` - CSI division mapping and classification
+- `src/lib/analysis/aia-analyzer.ts` - AIA phase analysis for design services
+- `src/lib/analysis/trade-analyzer.ts` - Technical systems analysis for trade services
 - `src/lib/analysis/market-analyzer.ts` - Market variance analysis and ROI calculations
 - `src/lib/analysis/risk-analyzer.ts` - Project risk assessment logic
-- `src/lib/claude.ts` - Claude API integration for document analysis
-
-### Critical CSI Logic:
-The system maps construction costs to 11 CSI divisions (01-General, 02-Demo, 03-Concrete, 04-Masonry, 05-Metals, 06-Wood, 07-Thermal, 08-Openings, 09-Finishes, 15-Mechanical, 16-Electrical) with typical percentage ranges for market benchmarking.
 
 ## File Structure
 
@@ -73,7 +92,18 @@ src/
 │   │   ├── csi-analyzer.ts         # CSI division classification
 │   │   ├── market-analyzer.ts      # Market benchmarking
 │   │   ├── risk-analyzer.ts        # Risk assessment
-│   │   └── export-generator.ts     # PDF/Excel generation
+│   │   ├── aia-analyzer.ts         # AIA phase analysis for design
+│   │   ├── trade-analyzer.ts       # Technical systems analysis for trade
+│   │   ├── multi-discipline-analyzer.ts # Enhanced multi-discipline routing
+│   │   ├── export-generator.ts     # Legacy export functions (bid leveling)
+│   │   └── exports/                # Modular export system
+│   │       ├── construction-exports.ts  # CSI division exports
+│   │       ├── design-exports.ts        # AIA phase exports
+│   │       ├── trade-exports.ts         # Technical systems exports
+│   │       ├── index.ts                 # Smart export router
+│   │       └── shared/                  # Common export utilities
+│   │           ├── pdf-helpers.ts       # PDF formatting helpers
+│   │           └── excel-helpers.ts     # Excel formatting helpers
 │   ├── claude.ts                   # Claude API integration
 │   ├── storage.ts                  # Browser localStorage utilities
 │   └── pricing.ts                  # MVP pricing and feature flags
@@ -86,10 +116,42 @@ src/
 
 **Data Flow**:
 1. User uploads document (stays in browser)
-2. Convert to base64, send to `/api/claude`
-3. Claude analyzes, returns JSON
-4. Client-side CSI analysis and market benchmarking
-5. Results displayed, exported, then cleared
+2. Convert to base64, send to discipline-specific Claude API endpoint
+3. Claude analyzes with discipline-specific prompts, returns JSON
+4. Client-side analysis and market benchmarking
+5. Results displayed with discipline-appropriate formatting
+6. Export system automatically detects discipline and routes to appropriate exporter
+7. Results exported, then cleared
+
+## Export System Architecture
+
+**Modular Export System**: Discipline-specific PDF and Excel exports with shared utilities:
+
+### Export Structure:
+```
+src/lib/analysis/exports/
+├── index.ts                    # Smart export router with auto-detection
+├── construction-exports.ts     # CSI divisions, market analysis, risk assessment
+├── design-exports.ts          # AIA phases, design deliverables, project overhead
+├── trade-exports.ts           # Technical systems, equipment specs, testing
+└── shared/
+    ├── pdf-helpers.ts         # Common PDF formatting (headers, footers, tables)
+    └── excel-helpers.ts       # Common Excel utilities (currency, auto-sizing)
+```
+
+### Export Features:
+- **Auto-Detection**: Intelligently determines discipline from analysis content
+- **Consistent Branding**: All exports maintain professional Levelr styling
+- **Discipline-Specific Content**: Each export optimized for its industry standards
+- **Backward Compatibility**: Existing construction exports preserved exactly
+- **Shared Utilities**: Common formatting functions prevent code duplication
+
+### Export Logic:
+1. `ExportTools` component calls main export functions
+2. Export router detects discipline from analysis structure
+3. Routes to appropriate discipline-specific exporter
+4. Discipline exporter uses shared helpers for consistent formatting
+5. Professional PDF/Excel generated and downloaded locally
 
 ## Feature Flags & Growth Rails
 
@@ -136,7 +198,20 @@ Deploy command: `vercel --prod`
 
 ## Common Tasks
 
+### Analysis System:
 **Add new CSI division**: Update `CSI_DIVISIONS` in `csi-analyzer.ts`
 **Modify risk scoring**: Edit `calculateProjectRisk` in `risk-analyzer.ts`
+**Add new AIA phase**: Update prompts in `/api/claude/design/route.ts`
+**Add new technical system**: Update prompts in `/api/claude/trade/route.ts`
+**Modify discipline detection**: Edit `detectAnalysisDiscipline` in `exports/index.ts`
+
+### Export System:
+**Add new discipline**: Create new exporter in `exports/` and update router
+**Modify export formatting**: Edit shared helpers in `exports/shared/`
+**Add new export feature**: Update discipline-specific exporter files
+**Debug export issues**: Check discipline detection and routing logic
+
+### Configuration:
 **Change pricing**: Update `MVP_PRICING` in `pricing.ts`
 **Enable feature**: Set environment variable and update components
+**Add new API endpoint**: Create route and update middleware matcher

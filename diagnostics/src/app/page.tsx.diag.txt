@@ -1,0 +1,37 @@
+==============================
+ DIAGNOSTICS FILE
+ Generated: 2025-08-28T14:13:50Z
+==============================
+
+ORIGINAL PATH: src/app/page.tsx
+
+================================================================
+BEGIN CONTENT: src/app/page.tsx
+================================================================
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+
+export default function HomePage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    // Redirect directly to analysis page
+    router.replace('/analyze');
+  }, [router]);
+
+  // Show minimal loading state while redirecting
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+        <p className="text-gray-600">Loading Levelr Analysis...</p>
+      </div>
+    </div>
+  );
+}
+
+================================================================
+END CONTENT: src/app/page.tsx
+================================================================
