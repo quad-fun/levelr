@@ -407,6 +407,35 @@ function ScopeTab({
             </div>
           ))}
         </div>
+
+        {/* Uncategorized Costs Section */}
+        {analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-4">Uncategorized Construction Items</h3>
+            <div className="border border-orange-200 rounded-lg p-4 bg-orange-50">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="font-medium text-orange-800">Items Not Mapped to CSI Divisions</h4>
+                  <p className="text-sm text-orange-700">Construction work that couldn't be categorized into standard divisions</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-orange-800">{formatCurrency(analysis.uncategorizedTotal || 0)}</p>
+                  <p className="text-sm text-orange-600">
+                    {((analysis.uncategorizedTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of total
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {analysis.uncategorizedCosts.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
+                    <span className="text-sm text-gray-900">{item.description}</span>
+                    <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -438,6 +467,35 @@ function ScopeTab({
             </div>
           ))}
         </div>
+
+        {/* Uncategorized Costs Section */}
+        {analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-4">Uncategorized Design Items</h3>
+            <div className="border border-orange-200 rounded-lg p-4 bg-orange-50">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="font-medium text-orange-800">Items Not Mapped to AIA Phases</h4>
+                  <p className="text-sm text-orange-700">Design services that couldn't be categorized into standard phases</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-orange-800">{formatCurrency(analysis.uncategorizedTotal || 0)}</p>
+                  <p className="text-sm text-orange-600">
+                    {((analysis.uncategorizedTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of total
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {analysis.uncategorizedCosts.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
+                    <span className="text-sm text-gray-900">{item.description}</span>
+                    <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -483,6 +541,35 @@ function ScopeTab({
             </div>
           ))}
         </div>
+
+        {/* Uncategorized Costs Section */}
+        {analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0 && (
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold mb-4">Uncategorized Trade Items</h3>
+            <div className="border border-orange-200 rounded-lg p-4 bg-orange-50">
+              <div className="flex justify-between items-start mb-3">
+                <div>
+                  <h4 className="font-medium text-orange-800">Items Not Mapped to Technical Systems</h4>
+                  <p className="text-sm text-orange-700">Trade services that couldn't be categorized into standard systems</p>
+                </div>
+                <div className="text-right">
+                  <p className="font-bold text-orange-800">{formatCurrency(analysis.uncategorizedTotal || 0)}</p>
+                  <p className="text-sm text-orange-600">
+                    {((analysis.uncategorizedTotal || 0) / analysis.total_amount * 100).toFixed(1)}% of total
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {analysis.uncategorizedCosts.map((item, index) => (
+                  <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
+                    <span className="text-sm text-gray-900">{item.description}</span>
+                    <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
