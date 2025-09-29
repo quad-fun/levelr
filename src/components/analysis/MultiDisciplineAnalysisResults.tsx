@@ -420,7 +420,13 @@ function ScopeTab({
         </div>
 
         {/* Uncategorized Costs Section */}
-        {analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0 && (
+        {console.log('🔍 Construction uncategorized debug:', {
+          uncategorizedCosts: analysis.uncategorizedCosts,
+          isArray: Array.isArray(analysis.uncategorizedCosts),
+          length: analysis.uncategorizedCosts?.length,
+          uncategorizedTotal: analysis.uncategorizedTotal
+        }) || null}
+        {((analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0) || (analysis.uncategorizedTotal && analysis.uncategorizedTotal > 0)) && (
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-4">Uncategorized Construction Items</h3>
             <div className="border border-orange-200 rounded-lg p-4 bg-orange-50">
