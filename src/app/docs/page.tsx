@@ -673,7 +673,7 @@ export default function HowToGuidePage() {
                 <li className="flex items-start">
                   <div className="w-2 h-2 bg-green-600 rounded-full mr-2 mt-1.5"></div>
                   <div>
-                    <span className="font-medium">Conditional Formatting:</span> Highlight variances >10% from benchmarks with red/yellow/green colors
+                    <span className="font-medium">Conditional Formatting:</span> Highlight variances &gt;10% from benchmarks with red/yellow/green colors
                   </div>
                 </li>
                 <li className="flex items-start">
