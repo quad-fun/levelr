@@ -157,11 +157,11 @@ export default function AnalyzePage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <a 
-                href="/docs" 
+              <a
+                href="/docs"
                 className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
               >
-                Documentation
+                How To Guide
               </a>
               {/* Pricing disabled for now */}
             </div>
