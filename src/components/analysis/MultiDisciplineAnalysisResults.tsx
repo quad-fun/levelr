@@ -2,12 +2,14 @@
 
 import React, { useState } from 'react';
 import { AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
-import { 
-  FileText, DollarSign, AlertTriangle, CheckCircle, 
-  Building, Palette, Zap, TrendingUp, TrendingDown, 
+import {
+  FileText, DollarSign, AlertTriangle, CheckCircle,
+  Building, Palette, Zap, TrendingUp, TrendingDown,
   Calendar, User, Layers, Target,
-  BarChart3, Shield
+  BarChart3, Shield, ChevronDown, ChevronUp, Eye
 } from 'lucide-react';
+import { analyzeMarketVariance } from '@/lib/analysis/market-analyzer';
+import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
 
 interface MultiDisciplineAnalysisResultsProps {
   analysis: AnalysisResult;
@@ -16,11 +18,11 @@ interface MultiDisciplineAnalysisResultsProps {
   onExport?: (format: 'pdf' | 'excel') => void;
 }
 
-export default function MultiDisciplineAnalysisResults({ 
-  analysis, 
-  marketVariance, 
+export default function MultiDisciplineAnalysisResults({
+  analysis,
+  marketVariance,
   riskAssessment,
-  onExport 
+  onExport
 }: MultiDisciplineAnalysisResultsProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'scope' | 'soft-costs' | 'commercial' | 'risk'>('overview');
 
@@ -368,15 +370,52 @@ function OverviewTab({
 }
 
 // Scope Tab Component
-function ScopeTab({ 
-  analysis, 
-  _disciplineConfig 
+function ScopeTab({
+  analysis,
+  _disciplineConfig
 }: {
   analysis: AnalysisResult;
   _disciplineConfig: { title: string; icon: React.ComponentType<{ className?: string }>; color: string; scopeLabel: string };
 }) {
-  const formatCurrency = (amount: number) => 
+  const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
+
+  // State for expandable sections
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+
+  const toggleSection = (section: string) => {
+    const newExpanded = new Set(expandedSections);
+    if (newExpanded.has(section)) {
+      newExpanded.delete(section);
+    } else {
+      newExpanded.add(section);
+    }
+    setExpandedSections(newExpanded);
+  };
+
+  const getVarianceColor = (status: string) => {
+    switch (status) {
+      case 'BELOW_MARKET': return 'border-green-200 bg-green-50';
+      case 'MARKET_RATE': return 'border-gray-200 bg-gray-50';
+      case 'ABOVE_MARKET': return 'border-yellow-200 bg-yellow-50';
+      default: return 'border-gray-200 bg-white';
+    }
+  };
+
+  const getVarianceIcon = (variance: { status: string } | undefined) => {
+    if (!variance) return <Target className="h-4 w-4 text-gray-500" />;
+
+    switch (variance.status) {
+      case 'BELOW_MARKET':
+        return <TrendingDown className="h-4 w-4 text-green-600" />;
+      case 'MARKET_RATE':
+        return <Target className="h-4 w-4 text-gray-600" />;
+      case 'ABOVE_MARKET':
+        return <TrendingUp className="h-4 w-4 text-red-600" />;
+      default:
+        return <Target className="h-4 w-4 text-gray-500" />;
+    }
+  };
 
   if (analysis.discipline === 'construction') {
     return (
@@ -385,47 +424,117 @@ function ScopeTab({
         <div className="space-y-4">
           {Object.entries(analysis.csi_divisions)
             .sort(([a], [b]) => parseInt(a) - parseInt(b))
-            .map(([divisionCode, division]) => (
-            <div key={divisionCode} className="border rounded-lg p-4">
-              <div className="flex justify-between items-start mb-2">
-                <div>
-                  <h4 className="font-medium">Division {divisionCode}</h4>
-                  <p className="text-sm text-gray-600 mb-2">
-                    {Array.isArray(division.items) ? division.items.length : 0} items
-                  </p>
-                  {Array.isArray(division.items) && division.items.length > 0 && (
-                    <div className="space-y-1 mt-2">
-                      {division.items.map((item, index) => (
-                        <div key={index} className="bg-white bg-opacity-60 rounded p-2 text-sm">
-                          <p className="font-medium text-gray-900">{item}</p>
-                        </div>
-                      ))}
+            .map(([divisionCode, division]) => {
+            const csiDivision = CSI_DIVISIONS[divisionCode as keyof typeof CSI_DIVISIONS];
+            const variance = analyzeMarketVariance(division.cost, analysis.total_amount, divisionCode);
+            const percentage = ((division.cost / analysis.total_amount) * 100).toFixed(1);
+
+            const isExpanded = expandedSections.has(`csi-${divisionCode}`);
+            const hasItems = Array.isArray(division.items) && division.items.length > 0;
+            const hasSubItems = division.sub_items && division.sub_items.length > 0;
+
+            return (
+              <div key={divisionCode} className={`border rounded-lg p-4 ${getVarianceColor(variance.status)}`}>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    <div className="flex items-center">
+                      <div className="flex items-center mr-2">
+                        {getVarianceIcon(variance)}
+                      </div>
+                      <h4 className="font-semibold">
+                        Division {divisionCode} - {csiDivision?.name || 'Unknown'}
+                      </h4>
+                      {(hasItems || hasSubItems) && (
+                        <button
+                          onClick={() => toggleSection(`csi-${divisionCode}`)}
+                          className="ml-2 p-1 rounded hover:bg-white hover:bg-opacity-50"
+                        >
+                          {isExpanded ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </button>
+                      )}
                     </div>
-                  )}
+                    <p className="text-sm opacity-75">{csiDivision?.description}</p>
+                    {division.subcontractor && (
+                      <p className="text-sm font-medium text-blue-600">
+                        Subcontractor: {division.subcontractor}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="font-bold">{formatCurrency(division.cost)}</p>
+                    <p className="text-sm text-gray-600">{percentage}%</p>
+                    {variance.message && (
+                      <p className="text-xs text-gray-500 mt-1">{variance.message}</p>
+                    )}
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold">{formatCurrency(division.cost)}</p>
-                  {division.estimatedPercentage && (
-                    <p className="text-sm text-gray-600">{division.estimatedPercentage.toFixed(1)}%</p>
-                  )}
-                </div>
+
+                {/* Expandable Items Section */}
+                {(hasItems || hasSubItems) && isExpanded && (
+                  <div className="mt-4 pl-4 border-l-2 border-gray-200">
+                    <h5 className="text-sm font-semibold text-gray-700 mb-2">
+                      {hasSubItems ? 'Detailed Line Items:' : 'Items:'}
+                    </h5>
+                    <div className="space-y-2">
+                      {hasSubItems ? (
+                        division.sub_items!.map((item, index) => (
+                          <div key={index} className="bg-white bg-opacity-60 rounded p-3 text-sm">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <p className="font-medium">{item.description}</p>
+                                {item.subcontractor && (
+                                  <p className="text-xs text-blue-600">Sub: {item.subcontractor}</p>
+                                )}
+                                {item.notes && (
+                                  <p className="text-xs text-gray-600 mt-1">{item.notes}</p>
+                                )}
+                              </div>
+                              <div className="text-right ml-4">
+                                <p className="font-semibold">{formatCurrency(item.cost)}</p>
+                                {item.unit && item.quantity && (
+                                  <p className="text-xs text-gray-600">
+                                    {item.quantity} {item.unit}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        division.items.map((item, index) => (
+                          <div key={index} className="bg-white bg-opacity-60 rounded p-2 text-sm">
+                            <p className="font-medium text-gray-900">{item}</p>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {division.scope_notes && (
+                  <p className="text-sm text-gray-700 mt-2 p-2 bg-gray-50 rounded">
+                    {division.scope_notes}
+                  </p>
+                )}
               </div>
-              {division.scope_notes && (
-                <p className="text-sm text-gray-700 mt-2 p-2 bg-gray-50 rounded">
-                  {division.scope_notes}
-                </p>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        {/* Uncategorized Costs Section */}
-        {console.log('🔍 Construction uncategorized debug:', {
-          uncategorizedCosts: analysis.uncategorizedCosts,
-          isArray: Array.isArray(analysis.uncategorizedCosts),
-          length: analysis.uncategorizedCosts?.length,
-          uncategorizedTotal: analysis.uncategorizedTotal
-        }) || null}
+        {/* Uncategorized Costs Section - Debug */}
+        {(() => {
+          console.log('🔍 Construction uncategorized debug:', {
+            uncategorizedCosts: analysis.uncategorizedCosts,
+            isArray: Array.isArray(analysis.uncategorizedCosts),
+            length: analysis.uncategorizedCosts?.length,
+            uncategorizedTotal: analysis.uncategorizedTotal
+          });
+          return null;
+        })()}
         {((analysis.uncategorizedCosts && analysis.uncategorizedCosts.length > 0) || (analysis.uncategorizedTotal && analysis.uncategorizedTotal > 0)) && (
           <div className="mt-6">
             <h3 className="text-lg font-semibold mb-4">Uncategorized Construction Items</h3>
@@ -442,14 +551,25 @@ function ScopeTab({
                   </p>
                 </div>
               </div>
-              <div className="space-y-2">
-                {analysis.uncategorizedCosts.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
-                    <span className="text-sm text-gray-900">{item.description}</span>
-                    <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
-                  </div>
-                ))}
-              </div>
+              {analysis.uncategorizedCosts && Array.isArray(analysis.uncategorizedCosts) && analysis.uncategorizedCosts.length > 0 ? (
+                <div className="space-y-2">
+                  {analysis.uncategorizedCosts.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
+                      <span className="text-sm text-gray-900">{item.description}</span>
+                      <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-orange-600 py-4">
+                  <p className="text-sm">
+                    Individual uncategorized items are not available, but total uncategorized amount is calculated above.
+                  </p>
+                  <p className="text-xs text-orange-500 mt-1">
+                    This may indicate uncategorized costs were calculated through validation rather than direct parsing
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -514,14 +634,25 @@ function ScopeTab({
                   </p>
                 </div>
               </div>
-              <div className="space-y-2">
-                {analysis.uncategorizedCosts.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
-                    <span className="text-sm text-gray-900">{item.description}</span>
-                    <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
-                  </div>
-                ))}
-              </div>
+              {analysis.uncategorizedCosts && Array.isArray(analysis.uncategorizedCosts) && analysis.uncategorizedCosts.length > 0 ? (
+                <div className="space-y-2">
+                  {analysis.uncategorizedCosts.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
+                      <span className="text-sm text-gray-900">{item.description}</span>
+                      <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-orange-600 py-4">
+                  <p className="text-sm">
+                    Individual uncategorized items are not available, but total uncategorized amount is calculated above.
+                  </p>
+                  <p className="text-xs text-orange-500 mt-1">
+                    This may indicate uncategorized costs were calculated through validation rather than direct parsing
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -593,14 +724,25 @@ function ScopeTab({
                   </p>
                 </div>
               </div>
-              <div className="space-y-2">
-                {analysis.uncategorizedCosts.map((item, index) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
-                    <span className="text-sm text-gray-900">{item.description}</span>
-                    <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
-                  </div>
-                ))}
-              </div>
+              {analysis.uncategorizedCosts && Array.isArray(analysis.uncategorizedCosts) && analysis.uncategorizedCosts.length > 0 ? (
+                <div className="space-y-2">
+                  {analysis.uncategorizedCosts.map((item, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 bg-white rounded border border-orange-100">
+                      <span className="text-sm text-gray-900">{item.description}</span>
+                      <span className="text-sm font-medium text-orange-800">{formatCurrency(item.cost)}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center text-orange-600 py-4">
+                  <p className="text-sm">
+                    Individual uncategorized items are not available, but total uncategorized amount is calculated above.
+                  </p>
+                  <p className="text-xs text-orange-500 mt-1">
+                    This may indicate uncategorized costs were calculated through validation rather than direct parsing
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         )}
