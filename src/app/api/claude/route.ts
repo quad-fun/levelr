@@ -483,11 +483,161 @@ File Type: ${processedDoc.fileType}
     throw new Error('Missing required fields in analysis result');
   }
 
+  // Enhanced data validation and integrity checks
+  const validatedAnalysis = validateMultiDisciplineAnalysis(analysisResult);
+
   safeLog("Analysis result parsed successfully:", {
-    contractor: analysisResult.contractor_name,
-    total: analysisResult.total_amount,
-    divisions: Object.keys(analysisResult.csi_divisions || {}).length
+    contractor: validatedAnalysis.contractor_name,
+    total: validatedAnalysis.total_amount,
+    divisions: Object.keys(validatedAnalysis.csi_divisions || {}).length,
+    softCosts: (validatedAnalysis.softCosts as Array<Record<string, unknown>>)?.length || 0,
+    softCostsTotal: Number(validatedAnalysis.softCostsTotal) || 0,
+    uncategorizedCosts: (validatedAnalysis.uncategorizedCosts as Array<Record<string, unknown>>)?.length || 0,
+    uncategorizedTotal: validatedAnalysis.uncategorizedTotal || 0,
+    discipline: validatedAnalysis.discipline
   });
 
-  return analysisResult;
+  return validatedAnalysis;
+}
+
+// Multi-discipline analysis validation and enhancement
+function validateMultiDisciplineAnalysis(analysis: Record<string, unknown>): Record<string, unknown> {
+  safeLog('🔍 Starting multi-discipline analysis validation...');
+
+  const enhancedAnalysis = { ...analysis };
+  const issues: string[] = [];
+  const fixes: string[] = [];
+
+  // 1. Validate and fix soft costs totals
+  if (enhancedAnalysis.softCosts && Array.isArray(enhancedAnalysis.softCosts)) {
+    const softCosts = enhancedAnalysis.softCosts as Array<Record<string, unknown>>;
+    const calculatedSoftTotal = softCosts.reduce((sum: number, item: Record<string, unknown>) => sum + (Number(item.cost) || 0), 0);
+    const declaredSoftTotal = Number(enhancedAnalysis.softCostsTotal) || 0;
+
+    if (Math.abs(calculatedSoftTotal - declaredSoftTotal) > 1) {
+      issues.push(`Soft costs total mismatch: declared $${declaredSoftTotal.toLocaleString()} vs calculated $${calculatedSoftTotal.toLocaleString()}`);
+      enhancedAnalysis.softCostsTotal = calculatedSoftTotal;
+      fixes.push(`Fixed soft costs total: $${calculatedSoftTotal.toLocaleString()}`);
+    }
+
+    // Remove soft costs with $0 values
+    const originalLength = softCosts.length;
+    const filteredSoftCosts = softCosts.filter((item: Record<string, unknown>) => Number(item.cost) > 0);
+    enhancedAnalysis.softCosts = filteredSoftCosts;
+    if (filteredSoftCosts.length < originalLength) {
+      fixes.push(`Removed ${originalLength - filteredSoftCosts.length} soft cost items with $0 values`);
+    }
+
+    // Recalculate total after filtering
+    enhancedAnalysis.softCostsTotal = filteredSoftCosts.reduce((sum: number, item: Record<string, unknown>) => sum + (Number(item.cost) || 0), 0);
+  } else {
+    enhancedAnalysis.softCosts = [];
+    enhancedAnalysis.softCostsTotal = 0;
+  }
+
+  // 2. Validate and fix uncategorized costs totals
+  if (enhancedAnalysis.uncategorizedCosts && Array.isArray(enhancedAnalysis.uncategorizedCosts)) {
+    const uncategorizedCosts = enhancedAnalysis.uncategorizedCosts as Array<Record<string, unknown>>;
+    const calculatedUncatTotal = uncategorizedCosts.reduce((sum: number, item: Record<string, unknown>) => sum + (Number(item.cost) || 0), 0);
+    const declaredUncatTotal = Number(enhancedAnalysis.uncategorizedTotal) || 0;
+
+    if (Math.abs(calculatedUncatTotal - declaredUncatTotal) > 1) {
+      issues.push(`Uncategorized total mismatch: declared $${declaredUncatTotal.toLocaleString()} vs calculated $${calculatedUncatTotal.toLocaleString()}`);
+      enhancedAnalysis.uncategorizedTotal = calculatedUncatTotal;
+      fixes.push(`Fixed uncategorized total: $${calculatedUncatTotal.toLocaleString()}`);
+    }
+
+    // Remove uncategorized costs with $0 values
+    const originalLength = uncategorizedCosts.length;
+    const filteredUncategorizedCosts = uncategorizedCosts.filter((item: Record<string, unknown>) => Number(item.cost) > 0);
+    enhancedAnalysis.uncategorizedCosts = filteredUncategorizedCosts;
+    if (filteredUncategorizedCosts.length < originalLength) {
+      fixes.push(`Removed ${originalLength - filteredUncategorizedCosts.length} uncategorized items with $0 values`);
+    }
+
+    // Recalculate total after filtering
+    enhancedAnalysis.uncategorizedTotal = filteredUncategorizedCosts.reduce((sum: number, item: Record<string, unknown>) => sum + (Number(item.cost) || 0), 0);
+  } else {
+    enhancedAnalysis.uncategorizedCosts = [];
+    enhancedAnalysis.uncategorizedTotal = 0;
+  }
+
+  // 3. Calculate coverage and validate totals
+  let mappedTotal = 0;
+
+  if (enhancedAnalysis.discipline === 'construction' && enhancedAnalysis.csi_divisions) {
+    const csiDivisions = enhancedAnalysis.csi_divisions as Record<string, Record<string, unknown>>;
+    mappedTotal = Object.values(csiDivisions).reduce((sum: number, div: Record<string, unknown>) => sum + (Number(div.cost) || 0), 0);
+  } else if (enhancedAnalysis.discipline === 'design' && enhancedAnalysis.aia_phases) {
+    const aiaPhases = enhancedAnalysis.aia_phases as Record<string, Record<string, unknown>>;
+    mappedTotal = Object.values(aiaPhases).reduce((sum: number, phase: Record<string, unknown>) => sum + (Number(phase.fee_amount) || 0), 0);
+  } else if (enhancedAnalysis.discipline === 'trade' && enhancedAnalysis.technical_systems) {
+    const technicalSystems = enhancedAnalysis.technical_systems as Record<string, Record<string, unknown>>;
+    mappedTotal = Object.values(technicalSystems).reduce((sum: number, system: Record<string, unknown>) => sum + (Number(system.total_cost) || 0), 0);
+  }
+
+  const totalAccountedFor = mappedTotal + (Number(enhancedAnalysis.softCostsTotal) || 0) + (Number(enhancedAnalysis.uncategorizedTotal) || 0);
+  const totalAmount = Number(enhancedAnalysis.total_amount) || 1; // Avoid division by zero
+  const accountedPercentage = (totalAccountedFor / totalAmount) * 100;
+
+  // 4. Smart soft cost detection from uncategorized items
+  if (enhancedAnalysis.uncategorizedCosts && (enhancedAnalysis.uncategorizedCosts as Array<Record<string, unknown>>).length > 0) {
+    const softCostKeywords = [
+      'design', 'engineering', 'architect', 'permit', 'bond', 'insurance',
+      'legal', 'finance', 'consultant', 'survey', 'management', 'administration',
+      'professional', 'loan', 'interest', 'fee', 'contingency', 'allowance'
+    ];
+
+    const reclassifiedItems: Array<Record<string, unknown>> = [];
+    enhancedAnalysis.uncategorizedCosts = (enhancedAnalysis.uncategorizedCosts as Array<Record<string, unknown>>).filter((item: Record<string, unknown>) => {
+      const hasKeyword = softCostKeywords.some(keyword =>
+        String(item.description || '').toLowerCase().includes(keyword)
+      );
+
+      if (hasKeyword && Number(item.cost) > 0) {
+        reclassifiedItems.push(item);
+        return false; // Remove from uncategorized
+      }
+      return true; // Keep in uncategorized
+    });
+
+    if (reclassifiedItems.length > 0) {
+      enhancedAnalysis.softCosts = (enhancedAnalysis.softCosts as Array<Record<string, unknown>>) || [];
+      (enhancedAnalysis.softCosts as Array<Record<string, unknown>>).push(...reclassifiedItems);
+
+      const reclassifiedTotal = reclassifiedItems.reduce((sum: number, item: Record<string, unknown>) => sum + Number(item.cost), 0);
+      enhancedAnalysis.softCostsTotal = (Number(enhancedAnalysis.softCostsTotal) || 0) + reclassifiedTotal;
+      enhancedAnalysis.uncategorizedTotal = (Number(enhancedAnalysis.uncategorizedTotal) || 0) - reclassifiedTotal;
+
+      fixes.push(`Reclassified ${reclassifiedItems.length} items from uncategorized to soft costs ($${reclassifiedTotal.toLocaleString()})`);
+    }
+  }
+
+  // 5. Update categorization percentage
+  const finalMappedTotal = mappedTotal;
+  const finalCoveragePercentage = (finalMappedTotal / Number(enhancedAnalysis.total_amount)) * 100;
+  enhancedAnalysis.categorizationPercentage = finalCoveragePercentage;
+
+  // 6. Log results
+  safeLog('📊 Multi-discipline validation results:');
+  safeLog(`  Discipline: ${enhancedAnalysis.discipline}`);
+  safeLog(`  Mapped Total: $${finalMappedTotal.toLocaleString()} (${finalCoveragePercentage.toFixed(1)}%)`);
+  safeLog(`  Soft Costs: $${(Number(enhancedAnalysis.softCostsTotal) || 0).toLocaleString()} (${(enhancedAnalysis.softCosts as Array<Record<string, unknown>>)?.length || 0} items)`);
+  safeLog(`  Uncategorized: $${(Number(enhancedAnalysis.uncategorizedTotal) || 0).toLocaleString()} (${(enhancedAnalysis.uncategorizedCosts as Array<Record<string, unknown>>)?.length || 0} items)`);
+  safeLog(`  Total Coverage: ${accountedPercentage.toFixed(1)}%`);
+
+  if (fixes.length > 0) {
+    safeLog('✅ Applied automatic fixes:');
+    fixes.forEach(fix => safeLog(`  • ${fix}`));
+  }
+
+  if (issues.length > 0) {
+    safeLog('⚠️ Issues detected and resolved:');
+    issues.forEach(issue => safeLog(`  • ${issue}`));
+  } else {
+    safeLog('✅ No major data integrity issues detected');
+  }
+
+  safeLog('🎯 Multi-discipline validation complete');
+  return enhancedAnalysis;
 }
