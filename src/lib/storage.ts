@@ -672,3 +672,363 @@ export function clearAllRFPs(): void {
   rfps.forEach(id => localStorage.removeItem(`rfp_${id}`));
   localStorage.removeItem('rfp_index');
 }
+
+// PROJECT MANAGEMENT ENHANCEMENT: Project-level organization
+export interface SavedProject {
+  id: string;
+  name: string;
+  description: string;
+  client?: string;
+  projectType: 'construction' | 'design' | 'trade' | 'mixed';
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+  };
+  budget: {
+    totalBudget: number;
+    allocatedBudget: number; // Sum of all RFP budgets
+    awardedAmount: number; // Sum of all awarded bids
+    remainingBudget: number; // Calculated: totalBudget - awardedAmount
+  };
+  phase: 'planning' | 'design' | 'procurement' | 'construction' | 'closeout';
+  priority: 'low' | 'medium' | 'high' | 'critical';
+  timeline: {
+    startDate: string;
+    targetCompletion: string;
+    milestones: ProjectMilestone[];
+  };
+  rfpIds: string[]; // Links to RFPs within this project
+  createdAt: string;
+  updatedAt: string;
+  status: 'active' | 'on_hold' | 'completed' | 'cancelled';
+}
+
+export interface ProjectMilestone {
+  id: string;
+  name: string;
+  targetDate: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'delayed';
+  description?: string;
+}
+
+// BID AWARD ENHANCEMENT: Bid status tracking
+export interface BidAward {
+  analysisId: string;
+  rfpId: string;
+  projectId: string;
+  awardedAmount: number;
+  awardDate: string;
+  contractType: 'lump_sum' | 'unit_price' | 'cost_plus' | 'time_material';
+  notes?: string;
+}
+
+// Extend SavedAnalysis to include bid status
+export interface EnhancedSavedAnalysis extends SavedAnalysis {
+  bidStatus: 'pending' | 'under_review' | 'awarded' | 'rejected';
+  awardInfo?: BidAward;
+}
+
+// Project Storage Functions
+export function saveProject(project: Omit<SavedProject, 'id' | 'createdAt' | 'updatedAt'>): string {
+  const id = `project_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+  const savedProject: SavedProject = {
+    ...project,
+    id,
+    budget: {
+      ...project.budget,
+      allocatedBudget: 0,
+      awardedAmount: 0,
+      remainingBudget: project.budget.totalBudget
+    },
+    rfpIds: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    status: 'active'
+  };
+
+  // Save individual project
+  secureStore(`project_${id}`, savedProject);
+
+  // Update project index
+  const projects = getSavedProjects();
+  const updatedIndex = [...projects, id];
+
+  // Keep only last 50 projects for performance
+  if (updatedIndex.length > 50) {
+    const oldProjectId = updatedIndex.shift();
+    if (oldProjectId) {
+      localStorage.removeItem(`project_${oldProjectId}`);
+    }
+  }
+
+  secureStore('project_index', updatedIndex);
+
+  return id;
+}
+
+export function getSavedProjects(): string[] {
+  const index = secureRetrieve('project_index');
+  return Array.isArray(index) ? index : [];
+}
+
+export function getProject(id: string): SavedProject | null {
+  const project = secureRetrieve(`project_${id}`);
+  return project as SavedProject | null;
+}
+
+export function getAllProjects(): SavedProject[] {
+  const ids = getSavedProjects();
+  return ids
+    .map(id => getProject(id))
+    .filter((project): project is SavedProject => project !== null)
+    .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+}
+
+export function updateProject(id: string, updates: Partial<Omit<SavedProject, 'id' | 'createdAt'>>): void {
+  const existingProject = getProject(id);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const updatedProject: SavedProject = {
+    ...existingProject,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+
+  secureStore(`project_${id}`, updatedProject);
+}
+
+export function deleteProject(id: string): void {
+  localStorage.removeItem(`project_${id}`);
+  const projects = getSavedProjects().filter(projectId => projectId !== id);
+  secureStore('project_index', projects);
+}
+
+// Link RFP to Project
+export function linkRFPToProject(projectId: string, rfpId: string): void {
+  const project = getProject(projectId);
+  if (!project) {
+    throw new Error('Project not found');
+  }
+
+  if (!project.rfpIds.includes(rfpId)) {
+    project.rfpIds.push(rfpId);
+    updateProject(projectId, { rfpIds: project.rfpIds });
+  }
+
+  // Update RFP with project reference
+  const rfp = getRFP(rfpId);
+  if (rfp) {
+    updateRFP(rfpId, {
+      // Add project reference to RFP metadata
+      projectId: projectId
+    } as any);
+  }
+}
+
+// Award Bid Functions
+export function awardBid(analysisId: string, rfpId: string, projectId: string, awardedAmount: number, contractType: BidAward['contractType'], notes?: string): void {
+  const analysis = getAnalysis(analysisId);
+  const rfp = getRFP(rfpId);
+  const project = getProject(projectId);
+
+  if (!analysis || !rfp || !project) {
+    throw new Error('Analysis, RFP, or Project not found');
+  }
+
+  const awardInfo: BidAward = {
+    analysisId,
+    rfpId,
+    projectId,
+    awardedAmount,
+    contractType,
+    awardDate: new Date().toISOString(),
+    notes
+  };
+
+  // Update analysis with award status
+  const enhancedAnalysis: EnhancedSavedAnalysis = {
+    ...analysis,
+    bidStatus: 'awarded',
+    awardInfo
+  };
+
+  secureStore(`analysis_${analysisId}`, enhancedAnalysis);
+
+  // Update project budget calculations
+  const newAwardedAmount = project.budget.awardedAmount + awardedAmount;
+  const newRemainingBudget = project.budget.totalBudget - newAwardedAmount;
+
+  updateProject(projectId, {
+    budget: {
+      ...project.budget,
+      awardedAmount: newAwardedAmount,
+      remainingBudget: newRemainingBudget
+    }
+  });
+
+  // Update RFP status to awarded
+  updateRFPStatus(rfpId, 'closed');
+}
+
+export function updateBidStatus(analysisId: string, status: EnhancedSavedAnalysis['bidStatus']): void {
+  const analysis = getAnalysis(analysisId);
+  if (!analysis) {
+    throw new Error('Analysis not found');
+  }
+
+  const enhancedAnalysis: EnhancedSavedAnalysis = {
+    ...analysis,
+    bidStatus: status
+  };
+
+  secureStore(`analysis_${analysisId}`, enhancedAnalysis);
+}
+
+// Project Analytics Functions
+export function getProjectBudgetSummary(projectId: string): {
+  totalBudget: number;
+  allocatedBudget: number;
+  awardedAmount: number;
+  remainingBudget: number;
+  budgetUtilization: number;
+  rfpCount: number;
+  awardedBids: number;
+  pendingBids: number;
+} {
+  const project = getProject(projectId);
+  if (!project) {
+    throw new Error('Project not found');
+  }
+
+  // Get all RFPs for this project
+  const projectRFPs = project.rfpIds.map(id => getRFP(id)).filter(Boolean) as SavedRFP[];
+
+  // Calculate allocated budget (sum of all RFP estimated values)
+  const allocatedBudget = projectRFPs.reduce((sum, rfp) => sum + rfp.project.estimatedValue, 0);
+
+  // Get all analyses linked to project RFPs
+  const allAnalyses = getAllAnalyses();
+  const projectAnalyses = allAnalyses.filter(analysis =>
+    projectRFPs.some(rfp => rfp.receivedBids?.includes(analysis.id))
+  );
+
+  // Count awarded and pending bids
+  const awardedBids = projectAnalyses.filter(analysis =>
+    (analysis as EnhancedSavedAnalysis).bidStatus === 'awarded'
+  ).length;
+
+  const pendingBids = projectAnalyses.filter(analysis =>
+    (analysis as EnhancedSavedAnalysis).bidStatus === 'pending' ||
+    (analysis as EnhancedSavedAnalysis).bidStatus === 'under_review'
+  ).length;
+
+  const budgetUtilization = project.budget.totalBudget > 0
+    ? (project.budget.awardedAmount / project.budget.totalBudget) * 100
+    : 0;
+
+  return {
+    ...project.budget,
+    allocatedBudget,
+    budgetUtilization,
+    rfpCount: projectRFPs.length,
+    awardedBids,
+    pendingBids
+  };
+}
+
+export function getProjectRiskAssessment(projectId: string): {
+  overallRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  budgetRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  scheduleRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  qualityRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  factors: string[];
+} {
+  const project = getProject(projectId);
+  if (!project) {
+    throw new Error('Project not found');
+  }
+
+  const budgetSummary = getProjectBudgetSummary(projectId);
+  const factors: string[] = [];
+
+  // Budget risk assessment
+  let budgetRisk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  if (budgetSummary.budgetUtilization > 90) {
+    budgetRisk = 'HIGH';
+    factors.push('Budget utilization above 90%');
+  } else if (budgetSummary.budgetUtilization > 75) {
+    budgetRisk = 'MEDIUM';
+    factors.push('Budget utilization above 75%');
+  }
+
+  if (budgetSummary.remainingBudget < 0) {
+    budgetRisk = 'HIGH';
+    factors.push('Budget overrun detected');
+  }
+
+  // Schedule risk assessment
+  let scheduleRisk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  const now = new Date();
+  const targetCompletion = new Date(project.timeline.targetCompletion);
+  const timeRemaining = targetCompletion.getTime() - now.getTime();
+  const daysRemaining = timeRemaining / (1000 * 60 * 60 * 24);
+
+  if (daysRemaining < 30) {
+    scheduleRisk = 'HIGH';
+    factors.push('Less than 30 days to completion');
+  } else if (daysRemaining < 90) {
+    scheduleRisk = 'MEDIUM';
+    factors.push('Less than 90 days to completion');
+  }
+
+  // Quality risk based on bid analysis
+  let qualityRisk: 'LOW' | 'MEDIUM' | 'HIGH' = 'LOW';
+  const projectRFPs = project.rfpIds.map(id => getRFP(id)).filter(Boolean) as SavedRFP[];
+  const allAnalyses = getAllAnalyses();
+  const projectAnalyses = allAnalyses.filter(analysis =>
+    projectRFPs.some(rfp => rfp.receivedBids?.includes(analysis.id))
+  );
+
+  const highRiskAnalyses = projectAnalyses.filter(analysis =>
+    analysis.riskAssessment?.level === 'HIGH'
+  );
+
+  if (highRiskAnalyses.length > projectAnalyses.length * 0.3) {
+    qualityRisk = 'HIGH';
+    factors.push('High percentage of high-risk bids');
+  } else if (highRiskAnalyses.length > 0) {
+    qualityRisk = 'MEDIUM';
+    factors.push('Some high-risk bids identified');
+  }
+
+  // Overall risk calculation
+  const riskScores = { 'LOW': 1, 'MEDIUM': 2, 'HIGH': 3 };
+  const avgRiskScore = (riskScores[budgetRisk] + riskScores[scheduleRisk] + riskScores[qualityRisk]) / 3;
+
+  let overallRisk: 'LOW' | 'MEDIUM' | 'HIGH';
+  if (avgRiskScore >= 2.5) {
+    overallRisk = 'HIGH';
+  } else if (avgRiskScore >= 1.5) {
+    overallRisk = 'MEDIUM';
+  } else {
+    overallRisk = 'LOW';
+  }
+
+  return {
+    overallRisk,
+    budgetRisk,
+    scheduleRisk,
+    qualityRisk,
+    factors
+  };
+}
+
+export function clearAllProjects(): void {
+  const projects = getSavedProjects();
+  projects.forEach(id => localStorage.removeItem(`project_${id}`));
+  localStorage.removeItem('project_index');
+}

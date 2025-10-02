@@ -1,19 +1,32 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { 
-  getAllRFPs, 
-  getAllAnalyses, 
+import {
+  getAllRFPs,
+  getAllAnalyses,
   linkBidToRFP,
-  getMarketIntelligence
+  getMarketIntelligence,
+  getAllProjects,
+  saveProject,
+  linkRFPToProject,
+  getProjectBudgetSummary,
+  getProjectRiskAssessment,
+  awardBid,
+  updateBidStatus,
+  SavedProject,
+  EnhancedSavedAnalysis,
+  BidAward,
+  getAnalysis,
+  getRFP
 } from '@/lib/storage';
 import { SavedRFP } from '@/types/rfp';
 import { SavedAnalysis } from '@/lib/storage';
-import { 
-  Building2, FileText, Users, TrendingUp, 
+import {
+  Building2, FileText, Users, TrendingUp,
   DollarSign, CheckCircle,
   Palette, Zap, BarChart3, Search,
-  Eye, Download, Link, Plus
+  Eye, Download, Link, Plus, Settings,
+  Award
 } from 'lucide-react';
 
 interface ProjectEcosystemProps {
@@ -22,22 +35,27 @@ interface ProjectEcosystemProps {
 }
 
 export default function ProjectEcosystem({ onCreateRFP, onAnalyzeProposal }: ProjectEcosystemProps) {
+  const [projects, setProjects] = useState<SavedProject[]>([]);
   const [rfps, setRfps] = useState<SavedRFP[]>([]);
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [marketIntel, setMarketIntel] = useState<{ averageProjectValue: number; disciplineBreakdown: Record<string, number> } | null>(null);
-  const [activeView, setActiveView] = useState<'overview' | 'rfps' | 'analyses' | 'matching'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'projects' | 'rfps' | 'analyses' | 'matching'>('overview');
   const [filterDiscipline, setFilterDiscipline] = useState<'all' | 'construction' | 'design' | 'trade'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [showAwardModal, setShowAwardModal] = useState<{ analysisId: string; rfpId: string; projectId: string } | null>(null);
 
   useEffect(() => {
     loadData();
   }, []);
 
   const loadData = () => {
+    const savedProjects = getAllProjects();
     const savedRfps = getAllRFPs();
     const savedAnalyses = getAllAnalyses();
     const intelligence = getMarketIntelligence();
-    
+
+    setProjects(savedProjects);
     setRfps(savedRfps);
     setAnalyses(savedAnalyses);
     setMarketIntel(intelligence);
@@ -100,6 +118,7 @@ export default function ProjectEcosystem({ onCreateRFP, onAnalyzeProposal }: Pro
 
   const tabs = [
     { id: 'overview', name: 'Overview', icon: BarChart3 },
+    { id: 'projects', name: 'Projects', icon: Building2 },
     { id: 'rfps', name: 'RFPs', icon: FileText },
     { id: 'analyses', name: 'Analyses', icon: TrendingUp },
     { id: 'matching', name: 'RFP Matching', icon: Link }
@@ -227,7 +246,7 @@ export default function ProjectEcosystem({ onCreateRFP, onAnalyzeProposal }: Pro
                 <div>
                   <p className="text-sm font-medium text-gray-600">Active Projects</p>
                   <p className="text-2xl font-bold text-gray-900">
-                    {rfps.filter(rfp => rfp.status === 'issued').length}
+                    {projects.filter(project => project.status === 'active').length}
                   </p>
                 </div>
                 <Users className="h-8 w-8 text-orange-600" />
@@ -478,12 +497,178 @@ export default function ProjectEcosystem({ onCreateRFP, onAnalyzeProposal }: Pro
         </div>
       )}
 
+      {/* Projects Tab */}
+      {activeView === 'projects' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-gray-900">Projects</h3>
+            <button
+              onClick={() => setShowCreateProject(true)}
+              className="flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Create Project
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {projects.map((project) => {
+              const budgetSummary = getProjectBudgetSummary(project.id);
+              const riskAssessment = getProjectRiskAssessment(project.id);
+
+              return (
+                <div key={project.id} className="bg-white rounded-lg shadow-sm border p-6 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div>
+                      <h4 className="text-lg font-semibold text-gray-900">{project.name}</h4>
+                      <p className="text-sm text-gray-600 mt-1">{project.description}</p>
+                      {project.client && (
+                        <p className="text-sm text-gray-500 mt-1">Client: {project.client}</p>
+                      )}
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      project.status === 'active' ? 'bg-green-100 text-green-800' :
+                      project.status === 'on_hold' ? 'bg-yellow-100 text-yellow-800' :
+                      project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {project.status.replace('_', ' ')}
+                    </span>
+                  </div>
+
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Total Budget:</span>
+                      <span className="font-medium">{formatCurrency(project.budget.totalBudget)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Awarded:</span>
+                      <span className="font-medium">{formatCurrency(budgetSummary.awardedAmount)}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-600">Remaining:</span>
+                      <span className={`font-medium ${budgetSummary.remainingBudget < 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {formatCurrency(budgetSummary.remainingBudget)}
+                      </span>
+                    </div>
+
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          budgetSummary.budgetUtilization > 90 ? 'bg-red-500' :
+                          budgetSummary.budgetUtilization > 75 ? 'bg-yellow-500' :
+                          'bg-green-500'
+                        }`}
+                        style={{ width: `${Math.min(budgetSummary.budgetUtilization, 100)}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      {budgetSummary.budgetUtilization.toFixed(1)}% budget utilized
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getDisciplineColor(project.projectType)}`}>
+                        {getDisciplineIcon(project.projectType)}
+                        <span className="ml-1 capitalize">{project.projectType}</span>
+                      </span>
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        riskAssessment.overallRisk === 'HIGH' ? 'bg-red-100 text-red-800' :
+                        riskAssessment.overallRisk === 'MEDIUM' ? 'bg-yellow-100 text-yellow-800' :
+                        'bg-green-100 text-green-800'
+                      }`}>
+                        {riskAssessment.overallRisk} Risk
+                      </span>
+                    </div>
+                    <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                      project.priority === 'critical' ? 'bg-red-100 text-red-800' :
+                      project.priority === 'high' ? 'bg-orange-100 text-orange-800' :
+                      project.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {project.priority}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4 text-sm text-gray-600 mb-4">
+                    <div>
+                      <p className="font-medium">RFPs: {budgetSummary.rfpCount}</p>
+                      <p className="font-medium">Awarded: {budgetSummary.awardedBids}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Phase: {project.phase}</p>
+                      <p className="font-medium">Pending: {budgetSummary.pendingBids}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex space-x-2">
+                    <button
+                      className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded font-medium transition-colors"
+                    >
+                      <Eye className="h-4 w-4 mr-1 inline" />
+                      View Details
+                    </button>
+                    <button
+                      className="px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded font-medium transition-colors"
+                    >
+                      <Settings className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {projects.length === 0 && (
+            <div className="text-center py-12">
+              <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Projects Yet</h3>
+              <p className="text-gray-600 mb-4">Create your first project to start organizing your RFPs and analyses.</p>
+              <button
+                onClick={() => setShowCreateProject(true)}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Create First Project
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* RFP Matching Tab */}
       {activeView === 'matching' && (
-        <RFPMatchingInterface 
-          rfps={filteredRfps} 
-          analyses={filteredAnalyses} 
+        <RFPMatchingInterface
+          rfps={filteredRfps}
+          analyses={filteredAnalyses}
           onLinkAnalysisToRFP={handleLinkAnalysisToRFP}
+        />
+      )}
+
+      {/* Create Project Modal */}
+      {showCreateProject && (
+        <CreateProjectModal
+          onClose={() => setShowCreateProject(false)}
+          onSave={(projectData) => {
+            saveProject(projectData);
+            setShowCreateProject(false);
+            loadData();
+          }}
+        />
+      )}
+
+      {/* Award Bid Modal */}
+      {showAwardModal && (
+        <AwardBidModal
+          analysisId={showAwardModal.analysisId}
+          rfpId={showAwardModal.rfpId}
+          projectId={showAwardModal.projectId}
+          onClose={() => setShowAwardModal(null)}
+          onAward={() => {
+            setShowAwardModal(null);
+            loadData();
+          }}
         />
       )}
     </div>
@@ -664,6 +849,438 @@ function RFPMatchingInterface({
               </div>
             ))
           }
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Create Project Modal Component
+function CreateProjectModal({
+  onClose,
+  onSave
+}: {
+  onClose: () => void;
+  onSave: (projectData: Omit<SavedProject, 'id' | 'createdAt' | 'updatedAt'>) => void;
+}) {
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    client: '',
+    projectType: 'construction' as SavedProject['projectType'],
+    address: {
+      street: '',
+      city: '',
+      state: '',
+      zipCode: ''
+    },
+    budget: {
+      totalBudget: 0,
+      allocatedBudget: 0,
+      awardedAmount: 0,
+      remainingBudget: 0
+    },
+    phase: 'planning' as SavedProject['phase'],
+    priority: 'medium' as SavedProject['priority'],
+    timeline: {
+      startDate: new Date().toISOString().split('T')[0],
+      targetCompletion: '',
+      milestones: []
+    },
+    rfpIds: [],
+    status: 'active' as SavedProject['status']
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (formData.name && formData.description && formData.budget.totalBudget > 0) {
+      onSave(formData);
+    }
+  };
+
+  const updateFormData = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const updateNestedFormData = (parent: string, field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      [parent]: {
+        ...(prev[parent as keyof typeof prev] as Record<string, any>),
+        [field]: value
+      }
+    }));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-screen overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">Create New Project</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-6 space-y-6">
+          {/* Basic Information */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">Project Information</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Project Name *
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={(e) => updateFormData('name', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter project name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Client
+                </label>
+                <input
+                  type="text"
+                  value={formData.client}
+                  onChange={(e) => updateFormData('client', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="Client name"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Description *
+              </label>
+              <textarea
+                required
+                value={formData.description}
+                onChange={(e) => updateFormData('description', e.target.value)}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Brief project description"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Project Type
+                </label>
+                <select
+                  value={formData.projectType}
+                  onChange={(e) => updateFormData('projectType', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="construction">Construction</option>
+                  <option value="design">Design Services</option>
+                  <option value="trade">Trade Services</option>
+                  <option value="mixed">Mixed</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phase
+                </label>
+                <select
+                  value={formData.phase}
+                  onChange={(e) => updateFormData('phase', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="planning">Planning</option>
+                  <option value="design">Design</option>
+                  <option value="procurement">Procurement</option>
+                  <option value="construction">Construction</option>
+                  <option value="closeout">Closeout</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Priority
+                </label>
+                <select
+                  value={formData.priority}
+                  onChange={(e) => updateFormData('priority', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="critical">Critical</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Address */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">Project Address</h3>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Street Address
+              </label>
+              <input
+                type="text"
+                value={formData.address.street}
+                onChange={(e) => updateNestedFormData('address', 'street', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Street address"
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  City
+                </label>
+                <input
+                  type="text"
+                  value={formData.address.city}
+                  onChange={(e) => updateNestedFormData('address', 'city', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="City"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  State
+                </label>
+                <input
+                  type="text"
+                  value={formData.address.state}
+                  onChange={(e) => updateNestedFormData('address', 'state', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="State"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  ZIP Code
+                </label>
+                <input
+                  type="text"
+                  value={formData.address.zipCode}
+                  onChange={(e) => updateNestedFormData('address', 'zipCode', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ZIP Code"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Budget & Timeline */}
+          <div className="space-y-4">
+            <h3 className="text-lg font-medium text-gray-900">Budget & Timeline</h3>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Total Budget *
+                </label>
+                <input
+                  type="number"
+                  required
+                  min="0"
+                  step="1000"
+                  value={formData.budget.totalBudget}
+                  onChange={(e) => updateNestedFormData('budget', 'totalBudget', parseFloat(e.target.value) || 0)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="0"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Target Completion
+                </label>
+                <input
+                  type="date"
+                  value={formData.timeline.targetCompletion}
+                  onChange={(e) => updateNestedFormData('timeline', 'targetCompletion', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={formData.timeline.startDate}
+                onChange={(e) => updateNestedFormData('timeline', 'startDate', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Form Actions */}
+          <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+            >
+              Create Project
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// Award Bid Modal Component
+function AwardBidModal({
+  analysisId,
+  rfpId,
+  projectId,
+  onClose,
+  onAward
+}: {
+  analysisId: string;
+  rfpId: string;
+  projectId: string;
+  onClose: () => void;
+  onAward: () => void;
+}) {
+  const [awardData, setAwardData] = useState({
+    awardedAmount: 0,
+    contractType: 'lump_sum' as BidAward['contractType'],
+    notes: ''
+  });
+
+  const analysis = getAnalysis(analysisId);
+  const rfp = getRFP(rfpId);
+
+  if (!analysis || !rfp) {
+    return null;
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (awardData.awardedAmount > 0) {
+      awardBid(analysisId, rfpId, projectId, awardData.awardedAmount, awardData.contractType, awardData.notes);
+      onAward();
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+        <div className="flex items-center justify-between p-6 border-b border-gray-200">
+          <h2 className="text-xl font-semibold text-gray-900">Award Bid</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            ✕
+          </button>
+        </div>
+
+        <div className="p-6">
+          <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+            <h3 className="font-medium text-gray-900 mb-2">Bid Details</h3>
+            <p className="text-sm text-gray-600">
+              <strong>Contractor:</strong> {analysis.result.contractor_name}
+            </p>
+            <p className="text-sm text-gray-600">
+              <strong>Original Amount:</strong> ${analysis.result.total_amount.toLocaleString()}
+            </p>
+            <p className="text-sm text-gray-600">
+              <strong>RFP:</strong> {rfp.project.projectName}
+            </p>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Award Amount *
+              </label>
+              <input
+                type="number"
+                required
+                min="0"
+                step="0.01"
+                value={awardData.awardedAmount}
+                onChange={(e) => setAwardData(prev => ({ ...prev, awardedAmount: parseFloat(e.target.value) || 0 }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Enter award amount"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Contract Type
+              </label>
+              <select
+                value={awardData.contractType}
+                onChange={(e) => setAwardData(prev => ({ ...prev, contractType: e.target.value as BidAward['contractType'] }))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="lump_sum">Lump Sum</option>
+                <option value="unit_price">Unit Price</option>
+                <option value="cost_plus">Cost Plus</option>
+                <option value="time_material">Time & Material</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Notes
+              </label>
+              <textarea
+                value={awardData.notes}
+                onChange={(e) => setAwardData(prev => ({ ...prev, notes: e.target.value }))}
+                rows={3}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="Award notes or conditions..."
+              />
+            </div>
+
+            <div className="flex justify-end space-x-4 pt-4">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors flex items-center"
+              >
+                <Award className="h-4 w-4 mr-2" />
+                Award Bid
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
