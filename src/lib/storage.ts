@@ -825,7 +825,7 @@ export function linkRFPToProject(projectId: string, rfpId: string): void {
     updateRFP(rfpId, {
       // Add project reference to RFP metadata
       projectId: projectId
-    } as any);
+    } as Partial<RFPProject>);
   }
 }
 

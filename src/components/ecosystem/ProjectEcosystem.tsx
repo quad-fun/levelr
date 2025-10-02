@@ -8,13 +8,10 @@ import {
   getMarketIntelligence,
   getAllProjects,
   saveProject,
-  linkRFPToProject,
   getProjectBudgetSummary,
   getProjectRiskAssessment,
   awardBid,
-  updateBidStatus,
   SavedProject,
-  EnhancedSavedAnalysis,
   BidAward,
   getAnalysis,
   getRFP
@@ -898,18 +895,18 @@ function CreateProjectModal({
     }
   };
 
-  const updateFormData = (field: string, value: any) => {
+  const updateFormData = (field: string, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
     }));
   };
 
-  const updateNestedFormData = (parent: string, field: string, value: any) => {
+  const updateNestedFormData = (parent: string, field: string, value: string | number) => {
     setFormData(prev => ({
       ...prev,
       [parent]: {
-        ...(prev[parent as keyof typeof prev] as Record<string, any>),
+        ...(prev[parent as keyof typeof prev] as Record<string, string | number>),
         [field]: value
       }
     }));
