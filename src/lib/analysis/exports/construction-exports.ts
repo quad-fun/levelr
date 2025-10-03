@@ -1510,8 +1510,8 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
       // COST column
       row.push(cost);
 
-      // COST/SF column
-      const costPerSF = grossSqft && grossSqft > 0 ? cost / grossSqft : null;
+      // COST/SF column (rounded to 2 decimal places)
+      const costPerSF = grossSqft && grossSqft > 0 ? Math.round((cost / grossSqft) * 100) / 100 : null;
       row.push(costPerSF ?? '—');
 
       // COMMENTS column
@@ -1531,7 +1531,7 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
     const grossSqft = bid.result.gross_sqft;
 
     softCostsRow.push(softCostAmount);
-    softCostsRow.push(grossSqft && grossSqft > 0 ? softCostAmount / grossSqft : '—');
+    softCostsRow.push(grossSqft && grossSqft > 0 ? Math.round((softCostAmount / grossSqft) * 100) / 100 : '—');
 
     // Generate intelligent comment based on soft costs data
     let comment = 'No soft costs identified';
@@ -1556,7 +1556,7 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
     const grossSqft = bid.result.gross_sqft;
 
     uncategorizedRow.push(uncategorizedAmount);
-    uncategorizedRow.push(grossSqft && grossSqft > 0 ? uncategorizedAmount / grossSqft : '—');
+    uncategorizedRow.push(grossSqft && grossSqft > 0 ? Math.round((uncategorizedAmount / grossSqft) * 100) / 100 : '—');
     uncategorizedRow.push(uncategorizedAmount > 0 ? 'Items not categorized to CSI divisions' : 'All costs categorized');
 
     if (index < bids.length - 1) uncategorizedRow.push('');
@@ -1574,7 +1574,7 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
     const grossSqft = bid.result.gross_sqft;
 
     tradesSubtotalRow.push(tradesSubtotal);
-    tradesSubtotalRow.push(grossSqft && grossSqft > 0 ? tradesSubtotal / grossSqft : '—');
+    tradesSubtotalRow.push(grossSqft && grossSqft > 0 ? Math.round((tradesSubtotal / grossSqft) * 100) / 100 : '—');
     tradesSubtotalRow.push('Sum of trade divisions only (excludes soft costs)');
 
     if (index < bids.length - 1) tradesSubtotalRow.push('');
@@ -1588,7 +1588,7 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
     const grossSqft = bid.result.gross_sqft;
 
     totalProjectRow.push(totalAmount);
-    totalProjectRow.push(grossSqft && grossSqft > 0 ? totalAmount / grossSqft : '—');
+    totalProjectRow.push(grossSqft && grossSqft > 0 ? Math.round((totalAmount / grossSqft) * 100) / 100 : '—');
     totalProjectRow.push('Complete bid amount including all costs');
 
     if (index < bids.length - 1) totalProjectRow.push('');
@@ -1630,6 +1630,31 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   });
 
   ws['!merges'] = merges;
+
+  // Format currency columns (COST and COST/SF columns)
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  let currentCol = 1; // Start after SCOPE column
+  bids.forEach((_, index) => {
+    // Format COST column (whole dollars, no decimals)
+    for (let row = 2; row <= range.e.r; row++) {
+      const costCellAddr = XLSX.utils.encode_cell({ r: row, c: currentCol });
+      if (ws[costCellAddr] && typeof ws[costCellAddr].v === 'number') {
+        ws[costCellAddr].z = '$#,##0';
+      }
+    }
+
+    // Format COST/SF column (2 decimal places)
+    const costPerSFCol = currentCol + 1;
+    for (let row = 2; row <= range.e.r; row++) {
+      const costPerSFCellAddr = XLSX.utils.encode_cell({ r: row, c: costPerSFCol });
+      if (ws[costPerSFCellAddr] && typeof ws[costPerSFCellAddr].v === 'number') {
+        ws[costPerSFCellAddr].z = '$#,##0.00';
+      }
+    }
+
+    currentCol += 3; // Move to next bidder block (COST, COST/SF, COMMENTS)
+    if (index < bids.length - 1) currentCol++; // Skip spacer column
+  });
 
   XLSX.utils.book_append_sheet(wb, ws, 'Leveled Comparison');
 }
