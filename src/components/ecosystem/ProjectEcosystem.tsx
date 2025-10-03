@@ -14,7 +14,8 @@ import {
   SavedProject,
   BidAward,
   getAnalysis,
-  getRFP
+  getRFP,
+  getProject
 } from '@/lib/storage';
 import { SavedRFP } from '@/types/rfp';
 import { SavedAnalysis } from '@/lib/storage';
@@ -23,7 +24,8 @@ import {
   DollarSign, CheckCircle,
   Palette, Zap, BarChart3, Search,
   Eye, Download, Link, Plus, Settings,
-  Award
+  Award, ArrowLeft, Calendar, MapPin,
+  AlertCircle, Clock, Target
 } from 'lucide-react';
 
 interface ProjectEcosystemProps {
@@ -41,6 +43,7 @@ export default function ProjectEcosystem({ onCreateRFP, onAnalyzeProposal }: Pro
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateProject, setShowCreateProject] = useState(false);
   const [showAwardModal, setShowAwardModal] = useState<{ analysisId: string; rfpId: string; projectId: string } | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -601,6 +604,7 @@ export default function ProjectEcosystem({ onCreateRFP, onAnalyzeProposal }: Pro
 
                   <div className="flex space-x-2">
                     <button
+                      onClick={() => setSelectedProjectId(project.id)}
                       className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded font-medium transition-colors"
                     >
                       <Eye className="h-4 w-4 mr-1 inline" />
@@ -640,6 +644,17 @@ export default function ProjectEcosystem({ onCreateRFP, onAnalyzeProposal }: Pro
           rfps={filteredRfps}
           analyses={filteredAnalyses}
           onLinkAnalysisToRFP={handleLinkAnalysisToRFP}
+        />
+      )}
+
+      {/* Project Detail Modal */}
+      {selectedProjectId && (
+        <ProjectDetailModal
+          projectId={selectedProjectId}
+          onClose={() => setSelectedProjectId(null)}
+          onCreateRFP={onCreateRFP}
+          onAnalyzeProposal={onAnalyzeProposal}
+          onRefresh={loadData}
         />
       )}
 
