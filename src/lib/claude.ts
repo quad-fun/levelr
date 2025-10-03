@@ -339,6 +339,15 @@ The detailed_summary must capture EVERY significant detail from the bid document
 
 Make the summary comprehensive but well-organized with clear headers and bullet points. Include specific dollar amounts, percentages, quantities, and technical details wherever available.
 
+**CRITICAL JSON FORMATTING REQUIREMENTS:**
+- The detailed_summary field MUST be valid JSON string content
+- Escape all quotes within the summary using \\"
+- Replace all newlines with \\n
+- Replace all tabs with \\t
+- Do not include unescaped quotes, line breaks, or control characters
+- Keep the summary under 15KB to prevent parsing issues
+- If the content is too large, prioritize the most important sections
+
 Document: ${processedDoc.fileName}
 File Type: ${processedDoc.fileType}
 
@@ -445,7 +454,10 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
 
     // Pre-process JSON to auto-correct legacy divisions before parsing
     const correctedJsonString = autoCorrectLegacyDivisions(jsonMatch[0]);
-    const analysisResult: AnalysisResult = JSON.parse(correctedJsonString);
+
+    // Clean and validate JSON before parsing
+    const cleanedJsonString = sanitizeJsonString(correctedJsonString);
+    const analysisResult: AnalysisResult = JSON.parse(cleanedJsonString);
     
     // Validate required fields
     if (!analysisResult.contractor_name || !analysisResult.total_amount) {
@@ -465,6 +477,95 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
   } catch (error) {
     console.error('Error analyzing document with Claude:', error);
     throw error instanceof Error ? error : new Error('Failed to analyze document. Please try again.');
+  }
+}
+
+function sanitizeJsonString(jsonString: string): string {
+  console.log('🧹 Sanitizing JSON string of length:', jsonString.length);
+
+  try {
+    // First, try to parse as-is in case it's already valid
+    JSON.parse(jsonString);
+    console.log('✅ JSON is already valid, no sanitization needed');
+    return jsonString;
+  } catch {
+    console.log('⚠️ JSON needs sanitization, attempting to fix...');
+  }
+
+  // Better approach: Extract and handle detailed_summary separately
+  let sanitized = jsonString;
+
+  // Find the detailed_summary field and extract it safely
+  const detailedSummaryMatch = sanitized.match(/"detailed_summary"\s*:\s*"([\s\S]*?)"\s*[,}]/);
+
+  if (detailedSummaryMatch) {
+    const [fullMatch, summaryContent] = detailedSummaryMatch;
+
+    // Properly escape the summary content
+    const escapedSummary = summaryContent
+      .replace(/\\/g, '\\\\')      // Escape backslashes first
+      .replace(/"/g, '\\"')        // Escape quotes
+      .replace(/\n/g, '\\n')       // Escape newlines
+      .replace(/\r/g, '\\r')       // Escape carriage returns
+      .replace(/\t/g, '\\t')       // Escape tabs
+      .replace(/\f/g, '\\f')       // Escape form feeds
+      .replace(/\b/g, '\\b');      // Escape backspaces
+
+    // Replace the original with the escaped version
+    const newSummaryField = `"detailed_summary": "${escapedSummary}"`;
+    const endChar = fullMatch.endsWith(',') ? ',' : '';
+
+    sanitized = sanitized.replace(fullMatch, newSummaryField + endChar);
+  }
+
+  // Fix any trailing commas before closing braces/brackets
+  sanitized = sanitized.replace(/,(\s*[}\]])/g, '$1');
+
+  // Remove any remaining unescaped control characters
+  sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+
+  // Try parsing the cleaned JSON
+  try {
+    JSON.parse(sanitized);
+    console.log('✅ JSON sanitization successful');
+    return sanitized;
+  } catch (error) {
+    console.error('❌ JSON sanitization failed, attempting robust fallback');
+
+    // Robust fallback: Parse without detailed_summary, then add it back safely
+    try {
+      // Remove the problematic detailed_summary field entirely
+      const withoutSummary = sanitized.replace(
+        /"detailed_summary"\s*:\s*"[\s\S]*?"\s*,?/g,
+        ''
+      );
+
+      // Clean up any double commas or trailing commas that might result
+      const cleanedWithoutSummary = withoutSummary
+        .replace(/,\s*,/g, ',')
+        .replace(/,(\s*[}\]])/g, '$1')
+        .replace(/{\s*,/g, '{')
+        .replace(/,\s*}/g, '}');
+
+      // Test if the base JSON parses
+      const baseResult = JSON.parse(cleanedWithoutSummary);
+
+      // Add back a safe detailed_summary
+      baseResult.detailed_summary = "Summary was sanitized due to special characters - basic analysis completed successfully";
+
+      console.log('⚡ Robust fallback successful - detailed_summary removed and re-added safely');
+      return JSON.stringify(baseResult);
+
+    } catch (fallbackError) {
+      console.error('💥 All sanitization attempts failed');
+      console.error('Original error:', error);
+      console.error('Fallback error:', fallbackError);
+
+      throw new Error(
+        `JSON parsing failed even after sanitization. This may be due to malformed data in the response. ` +
+        `Original error: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
   }
 }
 
