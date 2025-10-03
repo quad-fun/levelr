@@ -178,6 +178,40 @@ export interface UsageData {
   resetDate: string;
 }
 
+// Comparative Analysis interfaces for Phase 2
+export interface ComparativeAnalysis {
+  summary: string; // Executive summary of key differences
+  division_comparisons: {
+    [division: string]: {
+      variance_explanation: string;
+      scope_differences: string[];
+      missing_in_bids: string[]; // Which bids are missing this scope
+      pricing_outliers: string[];
+    };
+  };
+  major_differences: string[]; // Top 5-10 key differences
+  scope_gaps: {
+    description: string;
+    affected_bids: string[]; // contractor names
+    estimated_impact: string;
+  }[];
+  pricing_explanations: string[]; // Why certain bids are higher/lower
+  bid_comparison_matrix: {
+    [contractor_name: string]: {
+      total_amount: number;
+      divisions_included: string[];
+      missing_divisions: string[];
+      unique_scope_items: string[];
+      risk_factors: string[];
+    };
+  };
+}
+
+export interface BidComparisonRequest {
+  bid_ids: string[]; // Analysis result IDs to compare
+  comparison_focus?: 'scope' | 'pricing' | 'risk' | 'comprehensive'; // Analysis focus
+}
+
 export const CONSTRUCTION_UNITS = {
   SF: "Square Foot",
   LF: "Linear Foot", 

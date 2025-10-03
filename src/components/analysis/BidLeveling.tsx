@@ -5,7 +5,8 @@ import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
-import { BarChart3, Download, DollarSign } from 'lucide-react';
+import { ComparativeAnalysis } from '@/types/analysis';
+import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle } from 'lucide-react';
 
 interface BidComparison {
   analysis: SavedAnalysis;
@@ -25,6 +26,9 @@ export default function BidLeveling() {
   const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf'>('excel');
   const [activeDiscipline, setActiveDiscipline] = useState<'all' | 'construction' | 'design' | 'trade'>('all');
+  const [comparativeAnalysis, setComparativeAnalysis] = useState<ComparativeAnalysis | null>(null);
+  const [isLoadingComparison, setIsLoadingComparison] = useState(false);
+  const [comparisonError, setComparisonError] = useState<string | null>(null);
 
   const loadAnalyses = () => {
     const savedAnalyses = getAllAnalyses();
@@ -112,14 +116,73 @@ export default function BidLeveling() {
 
   const handleExportLeveling = () => {
     if (bidComparisons.length === 0) return;
-    
+
     // Convert bidComparisons back to SavedAnalysis array for the export functions
     const selectedAnalyses = bidComparisons.map(comp => comp.analysis);
-    
+
     if (exportFormat === 'pdf') {
       exportBidLevelingToPDF(selectedAnalyses);
     } else {
       exportBidLevelingToExcel(selectedAnalyses);
+    }
+  };
+
+  const performComparativeAnalysis = async () => {
+    if (selectedBids.length < 2) return;
+
+    setIsLoadingComparison(true);
+    setComparisonError(null);
+
+    try {
+      // Get the selected analyses
+      const selectedAnalyses = analyses
+        .filter(a => selectedBids.includes(a.id))
+        .map(a => a.result);
+
+      // Check if at least 2 bids have detailed summaries
+      const bidsWithSummaries = selectedAnalyses.filter(bid =>
+        bid.detailed_summary && bid.detailed_summary.length > 1000
+      );
+
+      if (bidsWithSummaries.length < 2) {
+        setComparisonError(
+          `Only ${bidsWithSummaries.length} of ${selectedAnalyses.length} selected bids have detailed summaries. ` +
+          'Please re-analyze older bids to generate summaries, or select different bids.'
+        );
+        setIsLoadingComparison(false);
+        return;
+      }
+
+      // Call the comparative analysis API
+      const response = await fetch('/api/leveling/compare', {
+        method: 'PUT', // Use PUT endpoint that accepts full analysis data
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          analyses: selectedAnalyses,
+          comparison_focus: 'comprehensive'
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Comparative analysis failed');
+      }
+
+      const result = await response.json();
+      setComparativeAnalysis(result.analysis);
+      console.log('✅ Comparative analysis completed:', result.metadata);
+
+    } catch (error) {
+      console.error('Comparative analysis error:', error);
+      setComparisonError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to perform comparative analysis. Please try again.'
+      );
+    } finally {
+      setIsLoadingComparison(false);
     }
   };
 
@@ -161,6 +224,25 @@ export default function BidLeveling() {
           </h3>
           {bidComparisons.length > 0 && (
             <div className="flex items-center space-x-3">
+              {bidComparisons.length >= 2 && (
+                <button
+                  onClick={performComparativeAnalysis}
+                  disabled={isLoadingComparison}
+                  className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-4 py-2 rounded-lg flex items-center"
+                >
+                  {isLoadingComparison ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Analyzing...
+                    </>
+                  ) : (
+                    <>
+                      <Search className="h-4 w-4 mr-2" />
+                      Explain Variances
+                    </>
+                  )}
+                </button>
+              )}
               <select
                 value={exportFormat}
                 onChange={(e) => setExportFormat(e.target.value as 'excel' | 'pdf')}
@@ -415,6 +497,256 @@ export default function BidLeveling() {
               </table>
             </div>
           </div>
+
+          {/* Comparative Analysis Results */}
+          {comparisonError && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 text-red-600 mr-3 mt-0.5 flex-shrink-0" />
+                <div>
+                  <h5 className="text-sm font-medium text-red-800 mb-1">
+                    Comparative Analysis Error
+                  </h5>
+                  <p className="text-sm text-red-700">{comparisonError}</p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {comparativeAnalysis && (
+            <>
+              {/* Executive Summary */}
+              <div className="bg-gradient-to-r from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-6">
+                <div className="flex items-center mb-4">
+                  <CheckCircle className="h-6 w-6 text-purple-600 mr-3" />
+                  <h4 className="text-lg font-semibold text-gray-900">
+                    Comparative Analysis Results
+                  </h4>
+                </div>
+                <div className="prose max-w-none">
+                  <p className="text-gray-700 whitespace-pre-line">
+                    {comparativeAnalysis.summary}
+                  </p>
+                </div>
+              </div>
+
+              {/* Major Differences */}
+              <div className="bg-white rounded-lg shadow-md p-6">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                  Key Differences Between Bids
+                </h4>
+                <div className="grid gap-3">
+                  {comparativeAnalysis.major_differences.map((difference, index) => (
+                    <div
+                      key={index}
+                      className="flex items-start p-4 bg-gray-50 rounded-lg"
+                    >
+                      <div className="flex-shrink-0 w-6 h-6 bg-blue-100 text-blue-800 rounded-full flex items-center justify-center text-sm font-medium mr-3">
+                        {index + 1}
+                      </div>
+                      <p className="text-gray-700">{difference}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Scope Gaps */}
+              {comparativeAnalysis.scope_gaps && comparativeAnalysis.scope_gaps.length > 0 && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Scope Gaps & Missing Items
+                  </h4>
+                  <div className="grid gap-4">
+                    {comparativeAnalysis.scope_gaps.map((gap, index) => (
+                      <div
+                        key={index}
+                        className="border border-yellow-200 bg-yellow-50 rounded-lg p-4"
+                      >
+                        <div className="flex items-start">
+                          <AlertTriangle className="h-5 w-5 text-yellow-600 mr-3 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1">
+                            <h5 className="font-medium text-gray-900 mb-2">
+                              {gap.description}
+                            </h5>
+                            <div className="text-sm text-gray-600 mb-2">
+                              <strong>Affected Bids:</strong> {gap.affected_bids.join(', ')}
+                            </div>
+                            <div className="text-sm text-gray-700">
+                              <strong>Estimated Impact:</strong> {gap.estimated_impact}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pricing Explanations */}
+              {comparativeAnalysis.pricing_explanations && comparativeAnalysis.pricing_explanations.length > 0 && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Pricing Variance Explanations
+                  </h4>
+                  <div className="grid gap-3">
+                    {comparativeAnalysis.pricing_explanations.map((explanation, index) => (
+                      <div
+                        key={index}
+                        className="flex items-start p-4 bg-green-50 rounded-lg"
+                      >
+                        <DollarSign className="h-5 w-5 text-green-600 mr-3 mt-0.5 flex-shrink-0" />
+                        <p className="text-gray-700">{explanation}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Division-by-Division Analysis */}
+              {comparativeAnalysis.division_comparisons && Object.keys(comparativeAnalysis.division_comparisons).length > 0 && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Division-by-Division Variance Analysis
+                  </h4>
+                  <div className="space-y-6">
+                    {Object.entries(comparativeAnalysis.division_comparisons).map(([division, analysis]) => (
+                      <div
+                        key={division}
+                        className="border border-gray-200 rounded-lg p-4"
+                      >
+                        <h5 className="font-semibold text-gray-900 mb-3">
+                          Division {division} - {CSI_DIVISIONS[division as keyof typeof CSI_DIVISIONS]?.name || 'Unknown Division'}
+                        </h5>
+
+                        <div className="grid md:grid-cols-2 gap-4">
+                          <div>
+                            <h6 className="text-sm font-medium text-gray-700 mb-2">
+                              Variance Explanation
+                            </h6>
+                            <p className="text-sm text-gray-600 mb-4">
+                              {analysis.variance_explanation}
+                            </p>
+
+                            {analysis.scope_differences && analysis.scope_differences.length > 0 && (
+                              <>
+                                <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                  Scope Differences
+                                </h6>
+                                <ul className="text-sm text-gray-600 list-disc list-inside mb-4">
+                                  {analysis.scope_differences.map((diff, index) => (
+                                    <li key={index}>{diff}</li>
+                                  ))}
+                                </ul>
+                              </>
+                            )}
+                          </div>
+
+                          <div>
+                            {analysis.missing_in_bids && analysis.missing_in_bids.length > 0 && (
+                              <>
+                                <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                  Missing in Bids
+                                </h6>
+                                <div className="flex flex-wrap gap-2 mb-4">
+                                  {analysis.missing_in_bids.map((contractor, index) => (
+                                    <span
+                                      key={index}
+                                      className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded"
+                                    >
+                                      {contractor}
+                                    </span>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+
+                            {analysis.pricing_outliers && analysis.pricing_outliers.length > 0 && (
+                              <>
+                                <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                  Pricing Outliers
+                                </h6>
+                                <div className="flex flex-wrap gap-2">
+                                  {analysis.pricing_outliers.map((contractor, index) => (
+                                    <span
+                                      key={index}
+                                      className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded"
+                                    >
+                                      {contractor}
+                                    </span>
+                                  ))}
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Bid Comparison Matrix */}
+              {comparativeAnalysis.bid_comparison_matrix && Object.keys(comparativeAnalysis.bid_comparison_matrix).length > 0 && (
+                <div className="bg-white rounded-lg shadow-md p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                    Bid Comparison Matrix
+                  </h4>
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Contractor</th>
+                          <th className="text-left py-2">Total Amount</th>
+                          <th className="text-left py-2">Divisions Included</th>
+                          <th className="text-left py-2">Missing Divisions</th>
+                          <th className="text-left py-2">Risk Factors</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(comparativeAnalysis.bid_comparison_matrix).map(([contractor, data]) => (
+                          <tr key={contractor} className="border-b">
+                            <td className="py-2 font-medium">{contractor}</td>
+                            <td className="py-2">${data.total_amount.toLocaleString()}</td>
+                            <td className="py-2">
+                              <span className="text-sm text-gray-600">
+                                {data.divisions_included.length} divisions
+                              </span>
+                            </td>
+                            <td className="py-2">
+                              {data.missing_divisions.length > 0 ? (
+                                <div className="flex flex-wrap gap-1">
+                                  {data.missing_divisions.slice(0, 3).map((div, index) => (
+                                    <span
+                                      key={index}
+                                      className="px-1 py-0.5 bg-red-100 text-red-600 text-xs rounded"
+                                    >
+                                      {div}
+                                    </span>
+                                  ))}
+                                  {data.missing_divisions.length > 3 && (
+                                    <span className="text-xs text-gray-500">
+                                      +{data.missing_divisions.length - 3} more
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <span className="text-sm text-green-600">Complete</span>
+                              )}
+                            </td>
+                            <td className="py-2">
+                              <span className="text-sm text-gray-600">
+                                {data.risk_factors.length} factors
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </>
       )}
     </div>
