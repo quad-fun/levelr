@@ -1631,5 +1631,30 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
 
   ws['!merges'] = merges;
 
+  // Format currency and Cost/SF columns
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  let currentCol = 1; // Start after SCOPE column
+  bids.forEach((_, index) => {
+    // Format COST column (whole dollars, no decimals)
+    for (let row = 2; row <= range.e.r; row++) {
+      const costCellAddr = XLSX.utils.encode_cell({ r: row, c: currentCol });
+      if (ws[costCellAddr] && typeof ws[costCellAddr].v === 'number') {
+        ws[costCellAddr].z = '$#,##0';
+      }
+    }
+
+    // Format COST/SF column (2 decimal places)
+    const costPerSFCol = currentCol + 1;
+    for (let row = 2; row <= range.e.r; row++) {
+      const costPerSFCellAddr = XLSX.utils.encode_cell({ r: row, c: costPerSFCol });
+      if (ws[costPerSFCellAddr] && typeof ws[costPerSFCellAddr].v === 'number') {
+        ws[costPerSFCellAddr].z = '$#,##0.00';
+      }
+    }
+
+    currentCol += 3; // Move to next bidder block (COST, COST/SF, COMMENTS)
+    if (index < bids.length - 1) currentCol++; // Skip spacer column
+  });
+
   XLSX.utils.book_append_sheet(wb, ws, 'Leveled Comparison');
 }
