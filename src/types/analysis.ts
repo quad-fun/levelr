@@ -153,6 +153,9 @@ export interface AnalysisResult {
   markup_percentage?: number;
   base_bid_amount?: number;
   alternate_pricing?: Record<string, number>;
+
+  // Comprehensive summary for LLM consumption and comparative analysis
+  detailed_summary?: string;
 }
 
 export interface MarketVariance {
