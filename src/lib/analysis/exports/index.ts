@@ -1,5 +1,6 @@
 // Export router for discipline-specific analysis exports
 import { AnalysisResult } from '@/types/analysis';
+import { SavedAnalysis } from '@/lib/storage';
 import { exportConstructionAnalysisToPDF, exportConstructionAnalysisToExcel } from './construction-exports';
 import { exportDesignAnalysisToPDF, exportDesignAnalysisToExcel } from './design-exports';
 import { exportTradeAnalysisToPDF, exportTradeAnalysisToExcel } from './trade-exports';
@@ -45,6 +46,31 @@ export function exportAnalysisToExcel(analysis: AnalysisResult): void {
 }
 
 /**
+ * Detects the discipline type for bid leveling based on multiple analyses
+ * Uses majority rule or first analysis if mixed disciplines
+ */
+function detectBidLevelingDiscipline(selectedAnalyses: SavedAnalysis[]): 'construction' | 'design' | 'trade' {
+  if (selectedAnalyses.length === 0) return 'construction';
+
+  // Count disciplines from selected analyses
+  const disciplineCounts = { construction: 0, design: 0, trade: 0 };
+
+  selectedAnalyses.forEach(savedAnalysis => {
+    const discipline = detectAnalysisDiscipline(savedAnalysis.result);
+    disciplineCounts[discipline]++;
+  });
+
+  // Return majority discipline
+  if (disciplineCounts.design > disciplineCounts.construction && disciplineCounts.design > disciplineCounts.trade) {
+    return 'design';
+  }
+  if (disciplineCounts.trade > disciplineCounts.construction && disciplineCounts.trade > disciplineCounts.design) {
+    return 'trade';
+  }
+  return 'construction'; // Default/majority
+}
+
+/**
  * Detects the discipline type based on analysis content
  * Priority: explicit discipline field > content analysis > fallback to construction
  */
@@ -87,13 +113,49 @@ function detectAnalysisDiscipline(analysis: AnalysisResult): 'construction' | 'd
   return 'construction';
 }
 
+/**
+ * Smart bid leveling export functions that route to appropriate discipline
+ */
+export async function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]): Promise<void> {
+  const discipline = detectBidLevelingDiscipline(selectedAnalyses);
+
+  switch (discipline) {
+    case 'design':
+      const { exportDesignBidLevelingToExcel } = await import('./design-exports');
+      return exportDesignBidLevelingToExcel(selectedAnalyses);
+    case 'trade':
+      // Future: implement trade-specific bid leveling
+      const { exportBidLevelingToExcel: tradeExcel } = await import('./construction-exports');
+      return tradeExcel(selectedAnalyses);
+    case 'construction':
+    default:
+      const { exportBidLevelingToExcel: constructionExcel } = await import('./construction-exports');
+      return constructionExcel(selectedAnalyses);
+  }
+}
+
+export async function exportBidLevelingToPDF(selectedAnalyses: SavedAnalysis[]): Promise<void> {
+  const discipline = detectBidLevelingDiscipline(selectedAnalyses);
+
+  switch (discipline) {
+    case 'design':
+      const { exportDesignBidLevelingToPDF } = await import('./design-exports');
+      return exportDesignBidLevelingToPDF(selectedAnalyses);
+    case 'trade':
+      // Future: implement trade-specific bid leveling
+      const { exportBidLevelingToPDF: tradePDF } = await import('./construction-exports');
+      return tradePDF(selectedAnalyses);
+    case 'construction':
+    default:
+      const { exportBidLevelingToPDF: constructionPDF } = await import('./construction-exports');
+      return constructionPDF(selectedAnalyses);
+  }
+}
+
 // Re-export discipline-specific functions for direct use
 export {
   exportConstructionAnalysisToPDF,
-  exportConstructionAnalysisToExcel,
-  // Bid leveling functions (construction-focused for now)
-  exportBidLevelingToExcel,
-  exportBidLevelingToPDF
+  exportConstructionAnalysisToExcel
 } from './construction-exports';
 
 export {

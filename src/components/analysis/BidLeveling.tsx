@@ -110,16 +110,16 @@ export default function BidLeveling() {
     }
   };
 
-  const handleExportLeveling = () => {
+  const handleExportLeveling = async () => {
     if (bidComparisons.length === 0) return;
-    
+
     // Convert bidComparisons back to SavedAnalysis array for the export functions
     const selectedAnalyses = bidComparisons.map(comp => comp.analysis);
-    
+
     if (exportFormat === 'pdf') {
-      exportBidLevelingToPDF(selectedAnalyses);
+      await exportBidLevelingToPDF(selectedAnalyses);
     } else {
-      exportBidLevelingToExcel(selectedAnalyses);
+      await exportBidLevelingToExcel(selectedAnalyses);
     }
   };
 
