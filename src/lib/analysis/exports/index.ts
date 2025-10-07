@@ -147,6 +147,140 @@ export {
   exportDesignAnalysisToExcel
 } from './design-exports';
 
+/**
+ * Enhanced bid variance analysis using detailed summaries
+ */
+export function exportBidVarianceAnalysisToPDF(selectedAnalyses: SavedAnalysis[]): void {
+  if (selectedAnalyses.length < 2) {
+    console.warn('Need at least 2 analyses for variance analysis');
+    return;
+  }
+
+  const doc = new jsPDF() as JsPDFWithAutoTable;
+  const pageWidth = doc.internal.pageSize.width;
+
+  // Title
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('BID VARIANCE ANALYSIS REPORT', pageWidth / 2, 20, { align: 'center' });
+
+  // Subtitle with analysis count and date
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Comparing ${selectedAnalyses.length} Bids • Generated ${new Date().toLocaleDateString()}`, pageWidth / 2, 30, { align: 'center' });
+
+  let yPosition = 45;
+
+  // Executive Summary of Variance
+  const varianceAnalysis = calculateBidVariances(selectedAnalyses);
+
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('EXECUTIVE VARIANCE SUMMARY', 20, yPosition);
+  yPosition += 10;
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`• Price Range: $${varianceAnalysis.minBid.toLocaleString()} - $${varianceAnalysis.maxBid.toLocaleString()}`, 25, yPosition);
+  yPosition += 6;
+  doc.text(`• Total Spread: $${varianceAnalysis.spread.toLocaleString()} (${varianceAnalysis.spreadPercentage.toFixed(1)}%)`, 25, yPosition);
+  yPosition += 6;
+  doc.text(`• Average Bid: $${varianceAnalysis.avgBid.toLocaleString()}`, 25, yPosition);
+  yPosition += 6;
+  doc.text(`• Standard Deviation: $${varianceAnalysis.stdDev.toLocaleString()}`, 25, yPosition);
+  yPosition += 15;
+
+  // Detailed summaries analysis
+  if (selectedAnalyses.some(analysis => analysis.result.detailed_summary)) {
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('KEY VARIANCE FACTORS', 20, yPosition);
+    yPosition += 10;
+
+    selectedAnalyses.forEach((analysis, index) => {
+      if (analysis.result.detailed_summary) {
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${analysis.result.contractor_name}`, 25, yPosition);
+        yPosition += 8;
+
+        // Extract risk factors and assumptions from detailed summary
+        const riskFactors = extractRiskFactors(analysis.result.detailed_summary);
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        riskFactors.forEach(factor => {
+          if (yPosition > 270) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          const lines = doc.splitTextToSize(`• ${factor}`, pageWidth - 50);
+          doc.text(lines, 30, yPosition);
+          yPosition += lines.length * 5;
+        });
+        yPosition += 5;
+      }
+    });
+  }
+
+  // Download the PDF
+  doc.save(`bid-variance-analysis-${Date.now()}.pdf`);
+}
+
+/**
+ * Extract risk factors and variance-causing elements from detailed summaries
+ */
+function extractRiskFactors(detailedSummary: string): string[] {
+  const factors: string[] = [];
+
+  // Extract high-risk items section
+  const riskMatch = detailedSummary.match(/## High-Risk Items[\s\S]*?\n([\s\S]*?)(?=\n##|\n\n|$)/);
+  if (riskMatch) {
+    const riskContent = riskMatch[1];
+    const bulletPoints = riskContent.match(/[•\-\*]\s+(.+)/g);
+    if (bulletPoints) {
+      factors.push(...bulletPoints.map(point => point.replace(/[•\-\*]\s+/, '')));
+    }
+  }
+
+  // Extract bid variance analysis factors
+  const varianceMatch = detailedSummary.match(/## Bid Variance Analysis[\s\S]*?\n([\s\S]*?)(?=\n##|\n\n|$)/);
+  if (varianceMatch) {
+    const varianceContent = varianceMatch[1];
+    const bulletPoints = varianceContent.match(/[•\-\*]\s+(.+)/g);
+    if (bulletPoints) {
+      factors.push(...bulletPoints.map(point => point.replace(/[•\-\*]\s+/, '')));
+    }
+  }
+
+  return factors.slice(0, 10); // Limit to top 10 factors
+}
+
+/**
+ * Calculate statistical variance metrics across bids
+ */
+function calculateBidVariances(analyses: SavedAnalysis[]) {
+  const amounts = analyses.map(a => a.result.total_amount);
+  const minBid = Math.min(...amounts);
+  const maxBid = Math.max(...amounts);
+  const avgBid = amounts.reduce((sum, amt) => sum + amt, 0) / amounts.length;
+  const spread = maxBid - minBid;
+  const spreadPercentage = (spread / avgBid) * 100;
+
+  // Standard deviation
+  const variance = amounts.reduce((sum, amt) => sum + Math.pow(amt - avgBid, 2), 0) / amounts.length;
+  const stdDev = Math.sqrt(variance);
+
+  return {
+    minBid,
+    maxBid,
+    avgBid,
+    spread,
+    spreadPercentage,
+    stdDev
+  };
+}
+
 // Design bid leveling exports
 export function exportDesignBidLevelingToPDF(selectedAnalyses: SavedAnalysis[]): void {
   const doc = new jsPDF();

@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
-import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
+import { exportBidLevelingToExcel, exportBidLevelingToPDF, exportBidVarianceAnalysisToPDF } from '@/lib/analysis/exports';
 import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
 import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle } from 'lucide-react';
 
@@ -123,6 +123,14 @@ export default function BidLeveling() {
     } else {
       exportBidLevelingToExcel(selectedAnalyses, activeDiscipline);
     }
+  };
+
+  const handleExportVarianceAnalysis = () => {
+    if (bidComparisons.length < 2) return;
+
+    // Convert bidComparisons back to SavedAnalysis array for the export function
+    const selectedAnalyses = bidComparisons.map(comp => comp.analysis);
+    exportBidVarianceAnalysisToPDF(selectedAnalyses);
   };
 
   const performComparativeAnalysis = async () => {
@@ -716,6 +724,15 @@ export default function BidLeveling() {
                 <Download className="h-4 w-4 mr-2" />
                 Export {exportFormat.toUpperCase()}
               </button>
+              {bidComparisons.length >= 2 && (
+                <button
+                  onClick={handleExportVarianceAnalysis}
+                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"
+                >
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Variance Analysis
+                </button>
+              )}
             </div>
           )}
         </div>

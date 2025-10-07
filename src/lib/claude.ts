@@ -337,7 +337,16 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     // Final completeness validation on enhanced data
     validateAnalysisCompleteness(validatedAnalysis);
 
-    return validatedAnalysis;
+    // Generate detailed summary via two-pass pipeline (feature flagged)
+    const enableDetailedSummary = process.env.ENABLE_DETAILED_SUMMARY !== 'false'; // Default enabled
+
+    if (enableDetailedSummary) {
+      const enhancedAnalysis = await generateDetailedSummary(validatedAnalysis);
+      return enhancedAnalysis;
+    } else {
+      console.log('📝 Detailed summary generation disabled via feature flag');
+      return validatedAnalysis;
+    }
   } catch (error) {
     console.error('Error analyzing document with Claude:', error);
     throw error instanceof Error ? error : new Error('Failed to analyze document. Please try again.');
@@ -721,6 +730,55 @@ function migrateMasterFormat2018Compliance(analysis: AnalysisResult): AnalysisRe
   }
   
   return migratedAnalysis;
+}
+
+async function generateDetailedSummary(analysis: AnalysisResult): Promise<AnalysisResult> {
+  console.log('📝 Generating detailed summary via two-pass pipeline...');
+
+  try {
+    // Call our new summarize endpoint
+    const response = await fetch(`${process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : 'http://localhost:3000'}/api/claude/summarize`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        analysis,
+        sections: [
+          'ExecutiveSummary',
+          'CostSnapshot',
+          'ScopeByDivision',
+          'HighRiskItems',
+          'BidVarianceAnalysis',
+          'ChatFoundationData'
+        ],
+        max_chars: 15000 // Generous limit for comprehensive summaries
+      })
+    });
+
+    if (!response.ok) {
+      console.warn(`⚠️ Summary generation failed (${response.status}), continuing without detailed_summary`);
+      return analysis; // Return original analysis without summary
+    }
+
+    const summaryResult = await response.json();
+
+    if (summaryResult.markdown && summaryResult.markdown.trim()) {
+      console.log(`✅ Detailed summary generated: ${summaryResult.stats.chars} chars in ${summaryResult.stats.processing_time_ms}ms`);
+
+      return {
+        ...analysis,
+        detailed_summary: summaryResult.markdown
+      };
+    } else {
+      console.warn('⚠️ Empty summary generated, continuing without detailed_summary');
+      return analysis;
+    }
+
+  } catch (error) {
+    console.warn('⚠️ Summary generation error, continuing without detailed_summary:', error instanceof Error ? error.message : 'Unknown error');
+    return analysis; // Graceful degradation - don't fail main analysis
+  }
 }
 
 // Server-side only - DO NOT IMPORT IN CLIENT CODE
