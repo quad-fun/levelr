@@ -341,7 +341,7 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     const enableDetailedSummary = process.env.ENABLE_DETAILED_SUMMARY !== 'false'; // Default enabled
 
     if (enableDetailedSummary) {
-      const enhancedAnalysis = await generateDetailedSummary(validatedAnalysis);
+      const enhancedAnalysis = await generateDetailedSummaryInProcess(validatedAnalysis);
       return enhancedAnalysis;
     } else {
       console.log('📝 Detailed summary generation disabled via feature flag');
@@ -354,31 +354,37 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
 }
 
 function validateAnalysisCompleteness(analysis: AnalysisResult): void {
-  const mappedTotal = Object.values(analysis.csi_divisions)
-    .reduce((sum, div) => sum + div.cost, 0);
-  
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const clamp0to100 = (n: number) => Math.min(100, Math.max(0, n));
+
+  const csiTotal = Object.values(analysis.csi_divisions).reduce((sum, div) => sum + div.cost, 0);
+  const overheadTotal = analysis.project_overhead?.total_overhead || 0;
+  const allowancesTotal = analysis.allowances_total || 0;
   const uncategorizedTotal = analysis.uncategorizedTotal || 0;
-  const totalAccountedFor = mappedTotal + uncategorizedTotal;
-  const coveragePercentage = (mappedTotal / analysis.total_amount) * 100;
-  const accountedPercentage = (totalAccountedFor / analysis.total_amount) * 100;
-  
+
+  const totalAccountedFor = csiTotal + overheadTotal + allowancesTotal + uncategorizedTotal;
+
+  const csiCoverage = round2((csiTotal / analysis.total_amount) * 100);
+  const totalCoverage = clamp0to100(round2((totalAccountedFor / analysis.total_amount) * 100));
+
   console.log(`Cost coverage analysis:`, {
     totalAmount: analysis.total_amount,
-    mappedTotal,
+    mappedTotal: csiTotal,
+    overheadTotal,
+    allowancesTotal,
     uncategorizedTotal,
     totalAccountedFor,
-    coveragePercentage: coveragePercentage.toFixed(1) + '%',
-    accountedPercentage: accountedPercentage.toFixed(1) + '%',
+    csiCoverage: csiCoverage + '%',
+    totalCoverage: totalCoverage + '%',
     divisions: Object.keys(analysis.csi_divisions),
     uncategorizedItems: analysis.uncategorizedCosts?.length || 0
   });
-  
-  if (coveragePercentage < 80) {
-    console.warn(`⚠️ Low CSI coverage: ${coveragePercentage.toFixed(1)}% - may have missed major items`);
-  }
-  
-  if (accountedPercentage < 90) {
-    console.warn(`⚠️ Low total coverage: ${accountedPercentage.toFixed(1)}% - significant costs unaccounted for`);
+
+  // Smart warnings based on actual metrics
+  if (totalCoverage < 99.0) {
+    console.warn(`⚠️ Low total coverage: ${totalCoverage}% - significant costs unaccounted for`);
+  } else if (csiCoverage < 85.0) {
+    console.warn(`⚠️ Low CSI coverage: ${csiCoverage}% - check for misclassified soft costs or missing divisions`);
   }
   
   // Check for high uncategorized percentages
@@ -518,10 +524,18 @@ function validateDataIntegrity(analysis: AnalysisResult): AnalysisResult {
     issues.push(`High uncategorized costs: ${((uncategorizedTotal / analysis.total_amount) * 100).toFixed(1)}% may indicate incomplete data extraction`);
   }
   
-  // 8. Log results
+  // 8. Calculate precise coverage metrics
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const clamp0to100 = (n: number) => Math.min(100, Math.max(0, n));
+
+  const csiCoverage = round2((csiDivisionsTotal / analysis.total_amount) * 100);
+  const overheadCoverage = round2((projectOverheadTotal / analysis.total_amount) * 100);
+  const totalCoverage = clamp0to100(round2(csiCoverage + overheadCoverage + ((allowancesTotal + uncategorizedTotal) / analysis.total_amount) * 100));
+
+  // 9. Log results with clear metrics
   console.log('📊 Data integrity validation results:');
-  console.log(`  Enhanced CSI Divisions Coverage: ${((Object.values(enhancedAnalysis.csi_divisions).reduce((sum, div) => sum + div.cost, 0) / analysis.total_amount) * 100).toFixed(1)}%`);
-  console.log(`  Total Project Coverage: ${((totalIdentifiedCost / analysis.total_amount) * 100).toFixed(1)}%`);
+  console.log(`  Enhanced CSI Divisions Coverage: ${csiCoverage}%`);
+  console.log(`  Total (CSI + Overhead + Other) Coverage: ${totalCoverage}%`);
   
   if (fixes.length > 0) {
     console.log('✅ Applied automatic fixes:');
@@ -533,6 +547,13 @@ function validateDataIntegrity(analysis: AnalysisResult): AnalysisResult {
     issues.forEach(issue => console.log(`  • ${issue}`));
   } else {
     console.log('✅ No major data integrity issues detected');
+  }
+
+  // Smart warnings based on precise metrics
+  if (totalCoverage < 99.0) {
+    console.warn(`⚠️ Total coverage warning: ${totalCoverage}% - check for missing cost categories`);
+  } else if (csiCoverage < 85.0) {
+    console.warn(`⚠️ CSI coverage warning: ${csiCoverage}% - may indicate misclassified overhead or missing divisions`);
   }
   
   // 9. Update category coverage percentage for better reporting
@@ -732,43 +753,35 @@ function migrateMasterFormat2018Compliance(analysis: AnalysisResult): AnalysisRe
   return migratedAnalysis;
 }
 
-async function generateDetailedSummary(analysis: AnalysisResult): Promise<AnalysisResult> {
-  console.log('📝 Generating detailed summary via two-pass pipeline...');
+async function generateDetailedSummaryInProcess(analysis: AnalysisResult): Promise<AnalysisResult> {
+  console.log('📝 Generating detailed summary via in-process pipeline...');
 
   try {
-    // Call our new summarize endpoint
-    const response = await fetch(`${process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : 'http://localhost:3000'}/api/claude/summarize`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        analysis,
-        sections: [
-          'ExecutiveSummary',
-          'CostSnapshot',
-          'ScopeByDivision',
-          'HighRiskItems',
-          'BidVarianceAnalysis',
-          'ChatFoundationData'
-        ],
-        max_chars: 15000 // Generous limit for comprehensive summaries
-      })
+    // Import the summarizer function dynamically to avoid circular imports
+    const { generateDetailedSummary } = await import('./summarize');
+
+    const startTime = Date.now();
+    const markdown = await generateDetailedSummary({
+      analysis,
+      maxChars: 15000,
+      sections: [
+        'ExecutiveSummary',
+        'CostSnapshot',
+        'ScopeByDivision',
+        'HighRiskItems',
+        'BidVarianceAnalysis',
+        'ChatFoundationData'
+      ]
     });
 
-    if (!response.ok) {
-      console.warn(`⚠️ Summary generation failed (${response.status}), continuing without detailed_summary`);
-      return analysis; // Return original analysis without summary
-    }
+    const processingTime = Date.now() - startTime;
 
-    const summaryResult = await response.json();
-
-    if (summaryResult.markdown && summaryResult.markdown.trim()) {
-      console.log(`✅ Detailed summary generated: ${summaryResult.stats.chars} chars in ${summaryResult.stats.processing_time_ms}ms`);
+    if (markdown && markdown.trim()) {
+      console.log(`✅ Detailed summary generated: ${markdown.length} chars in ${processingTime}ms`);
 
       return {
         ...analysis,
-        detailed_summary: summaryResult.markdown
+        detailed_summary: markdown
       };
     } else {
       console.warn('⚠️ Empty summary generated, continuing without detailed_summary');
