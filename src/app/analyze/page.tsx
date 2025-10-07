@@ -27,7 +27,7 @@ export default function AnalyzePage() {
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null);
   const [useMultiDisciplineAnalysis, setUseMultiDisciplineAnalysis] = useState(false);
 
-  const handleFileSelect = async (file: File, processedDoc: ProcessedDocument) => {
+  const handleFileSelect = async (file: File, processedDoc: ProcessedDocument, discipline: 'construction' | 'design' | 'trade') => {
     setIsProcessing(true);
     setError(null);
     
@@ -35,13 +35,15 @@ export default function AnalyzePage() {
     setLastProcessedDoc({ file, processedDoc });
     
     try {
-      console.log('Starting analysis for:', file.name, 'Type:', processedDoc.fileType, 'Discipline:', selectedDiscipline);
+      // Update selected discipline from user selection
+      setSelectedDiscipline(discipline);
+      console.log('Starting analysis for:', file.name, 'Type:', processedDoc.fileType, 'Discipline:', discipline);
       
       let result: AnalysisResult;
       
       if (useMultiDisciplineAnalysis) {
         // Use new multi-discipline analyzer or existing construction system
-        if (selectedDiscipline === 'construction') {
+        if (discipline === 'construction') {
           // Use existing proven construction analysis
           result = await analyzeDocument(processedDoc);
           result.discipline = 'construction';
@@ -49,7 +51,7 @@ export default function AnalyzePage() {
           // Use new AI-powered design/trade analyzers
           result = await MultiDisciplineAnalyzer.analyzeProposal(
             processedDoc,
-            selectedDiscipline,
+            discipline,
             {
               projectType: 'general',
               estimatedValue: 0 // Will be extracted from document
@@ -58,13 +60,13 @@ export default function AnalyzePage() {
         }
         
         // Generate market analysis
-        if (selectedDiscipline === 'design' && result.aia_phases) {
+        if (discipline === 'design' && result.aia_phases) {
           setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeDesignMarketRates(
             result.aia_phases,
             result.total_amount,
             'general'
           ));
-        } else if (selectedDiscipline === 'trade' && result.technical_systems) {
+        } else if (discipline === 'trade' && result.technical_systems) {
           setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeTradeMarketRates(
             result.technical_systems,
             result.total_amount,
@@ -84,8 +86,31 @@ export default function AnalyzePage() {
         });
         
       } else {
-        // Use legacy construction analyzer
-        result = await analyzeDocument(processedDoc);
+        // Route to appropriate analyzer based on discipline
+        if (discipline === 'construction') {
+          result = await analyzeDocument(processedDoc);
+          result.discipline = 'construction';
+        } else if (discipline === 'design') {
+          // Route to design analyzer
+          const response = await fetch('/api/claude/design', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ processedDoc })
+          });
+          if (!response.ok) throw new Error(`Design analysis failed: ${response.statusText}`);
+          const data = await response.json();
+          result = data.result;
+        } else {
+          // Route to trade analyzer
+          const response = await fetch('/api/claude/trade', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ processedDoc })
+          });
+          if (!response.ok) throw new Error(`Trade analysis failed: ${response.statusText}`);
+          const data = await response.json();
+          result = data.result;
+        }
         setMarketVariance(null);
         setRiskAssessment(null);
       }

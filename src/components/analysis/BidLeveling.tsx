@@ -25,7 +25,7 @@ export default function BidLeveling() {
   const [sortBy, setSortBy] = useState<'price' | 'risk' | 'date'>('price');
   const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf'>('excel');
-  const [activeDiscipline, setActiveDiscipline] = useState<'all' | 'construction' | 'design' | 'trade'>('all');
+  const [activeDiscipline, setActiveDiscipline] = useState<'construction' | 'design' | 'trade'>('construction');
   const [comparativeAnalysis, setComparativeAnalysis] = useState<ComparativeAnalysis | null>(null);
   const [isLoadingComparison, setIsLoadingComparison] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
@@ -37,8 +37,6 @@ export default function BidLeveling() {
 
   // Filter analyses by discipline
   const getFilteredAnalyses = () => {
-    if (activeDiscipline === 'all') return analyses;
-
     return analyses.filter(analysis => {
       const discipline = analysis.result.discipline || 'construction';
       return discipline === activeDiscipline;
@@ -46,7 +44,7 @@ export default function BidLeveling() {
   };
 
   // Clear selected bids when switching disciplines
-  const handleDisciplineChange = (discipline: 'all' | 'construction' | 'design' | 'trade') => {
+  const handleDisciplineChange = (discipline: 'construction' | 'design' | 'trade') => {
     setActiveDiscipline(discipline);
     setSelectedBids([]); // Reset selection when changing disciplines
   };
@@ -201,6 +199,239 @@ export default function BidLeveling() {
     return 'text-red-600 bg-red-50';
   };
 
+  // Render discipline-specific comparison views
+  const renderDisciplineSpecificComparison = () => {
+    if (bidComparisons.length === 0) return null;
+
+    switch (activeDiscipline) {
+      case 'construction':
+        return renderConstructionComparison();
+      case 'design':
+        return renderDesignComparison();
+      case 'trade':
+        return renderTradeComparison();
+      default:
+        return renderConstructionComparison();
+    }
+  };
+
+  // Construction: CSI Division Comparison
+  const renderConstructionComparison = () => (
+    <div className="bg-white rounded-lg shadow-md p-6">
+      <h4 className="text-lg font-semibold text-gray-900 mb-4">CSI Division Comparison</h4>
+
+      <div className="overflow-x-auto">
+        <table className="min-w-full">
+          <thead>
+            <tr className="border-b">
+              <th className="text-left py-2">Division</th>
+              {bidComparisons.map((comp) => (
+                <th key={comp.analysis.id} className="text-left py-2">
+                  {comp.analysis.result.contractor_name}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Object.entries(CSI_DIVISIONS)
+              .sort(([a], [b]) => parseInt(a) - parseInt(b))
+              .map(([code, division]) => {
+                // Check if any bid has this division
+                const hasData = bidComparisons.some(comp =>
+                  comp.analysis.result.csi_divisions && comp.analysis.result.csi_divisions[code]
+                );
+
+                if (!hasData) return null;
+
+                return (
+                  <tr key={code} className="border-b">
+                    <td className="py-2 font-medium">
+                      {code} - {division.name}
+                    </td>
+                    {bidComparisons.map((comp) => {
+                      const divisionData = comp.analysis.result.csi_divisions && comp.analysis.result.csi_divisions[code];
+                      const percentage = divisionData
+                        ? ((divisionData.cost / comp.analysis.result.total_amount) * 100).toFixed(1)
+                        : '0.0';
+                      const cost = divisionData?.cost || 0;
+
+                      return (
+                        <td key={comp.analysis.id} className="py-2">
+                          {cost > 0 ? (
+                            <div>
+                              <div className="font-medium">${cost.toLocaleString()}</div>
+                              <div className="text-sm text-gray-600">{percentage}%</div>
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Not included</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  // Design: AIA Phase Comparison
+  const renderDesignComparison = () => {
+    const aiaPhases = [
+      { code: 'schematic_design', name: 'Schematic Design (SD)', typical: '15%' },
+      { code: 'design_development', name: 'Design Development (DD)', typical: '20%' },
+      { code: 'construction_documents', name: 'Construction Documents (CD)', typical: '40%' },
+      { code: 'bidding_negotiation', name: 'Bidding/Negotiation (BN)', typical: '5%' },
+      { code: 'construction_administration', name: 'Construction Administration (CA)', typical: '20%' }
+    ];
+
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">AIA Phase Comparison</h4>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2">AIA Phase</th>
+                <th className="text-left py-2">Typical %</th>
+                {bidComparisons.map((comp) => (
+                  <th key={comp.analysis.id} className="text-left py-2">
+                    {comp.analysis.result.contractor_name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {aiaPhases.map((phase) => {
+                // Check if any bid has this phase
+                const hasData = bidComparisons.some(comp =>
+                  comp.analysis.result.aia_phases && comp.analysis.result.aia_phases[phase.code]
+                );
+
+                if (!hasData) return null;
+
+                return (
+                  <tr key={phase.code} className="border-b">
+                    <td className="py-2 font-medium">{phase.name}</td>
+                    <td className="py-2 text-sm text-gray-600">{phase.typical}</td>
+                    {bidComparisons.map((comp) => {
+                      const phaseData = comp.analysis.result.aia_phases && comp.analysis.result.aia_phases[phase.code];
+                      const percentage = phaseData
+                        ? ((phaseData.fee_amount / comp.analysis.result.total_amount) * 100).toFixed(1)
+                        : '0.0';
+                      const cost = phaseData?.fee_amount || 0;
+
+                      return (
+                        <td key={comp.analysis.id} className="py-2">
+                          {cost > 0 ? (
+                            <div>
+                              <div className="font-medium">${cost.toLocaleString()}</div>
+                              <div className="text-sm text-gray-600">{percentage}%</div>
+                              {phaseData && phaseData.deliverables && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {phaseData.deliverables.length} deliverables
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Not included</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
+  // Trade: Technical Systems Comparison
+  const renderTradeComparison = () => {
+    const technicalSystems = [
+      { code: 'electrical_power', name: 'Electrical Power Distribution', icon: '⚡' },
+      { code: 'lighting_systems', name: 'Lighting Systems', icon: '💡' },
+      { code: 'mechanical_hvac', name: 'HVAC Systems', icon: '🌡️' },
+      { code: 'plumbing_systems', name: 'Plumbing Systems', icon: '🚰' },
+      { code: 'fire_protection', name: 'Fire Protection', icon: '🔥' },
+      { code: 'technology_systems', name: 'Technology Systems', icon: '📱' },
+      { code: 'specialty_systems', name: 'Specialty Systems', icon: '⚙️' }
+    ];
+
+    return (
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">Technical Systems Comparison</h4>
+
+        <div className="overflow-x-auto">
+          <table className="min-w-full">
+            <thead>
+              <tr className="border-b">
+                <th className="text-left py-2">Technical System</th>
+                {bidComparisons.map((comp) => (
+                  <th key={comp.analysis.id} className="text-left py-2">
+                    {comp.analysis.result.contractor_name}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {technicalSystems.map((system) => {
+                // Check if any bid has this system
+                const hasData = bidComparisons.some(comp =>
+                  comp.analysis.result.technical_systems && comp.analysis.result.technical_systems[system.code]
+                );
+
+                if (!hasData) return null;
+
+                return (
+                  <tr key={system.code} className="border-b">
+                    <td className="py-2 font-medium">
+                      <div className="flex items-center">
+                        <span className="mr-2">{system.icon}</span>
+                        {system.name}
+                      </div>
+                    </td>
+                    {bidComparisons.map((comp) => {
+                      const systemData = comp.analysis.result.technical_systems && comp.analysis.result.technical_systems[system.code];
+                      const percentage = systemData
+                        ? ((systemData.total_cost / comp.analysis.result.total_amount) * 100).toFixed(1)
+                        : '0.0';
+                      const cost = systemData?.total_cost || 0;
+
+                      return (
+                        <td key={comp.analysis.id} className="py-2">
+                          {cost > 0 ? (
+                            <div>
+                              <div className="font-medium">${cost.toLocaleString()}</div>
+                              <div className="text-sm text-gray-600">{percentage}%</div>
+                              {systemData && systemData.specifications && (
+                                <div className="text-xs text-gray-500 mt-1">
+                                  {systemData.specifications.length} equipment items
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-gray-400">Not included</span>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   if (analyses.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 text-center">
@@ -287,22 +518,25 @@ export default function BidLeveling() {
         <h4 className="text-lg font-semibold text-gray-900 mb-4">Filter by Discipline</h4>
         <div className="flex space-x-1 bg-gray-100 rounded-lg p-1">
           {[
-            { key: 'all', label: 'All Disciplines', icon: '📊' },
-            { key: 'construction', label: 'Construction', icon: '🏗️' },
-            { key: 'design', label: 'Design Services', icon: '📐' },
-            { key: 'trade', label: 'Trade Services', icon: '⚡' }
+            { key: 'construction', label: 'Construction', icon: '🏗️', desc: 'CSI Division Analysis' },
+            { key: 'design', label: 'Design Services', icon: '📐', desc: 'AIA Phase Analysis' },
+            { key: 'trade', label: 'Trade Services', icon: '⚡', desc: 'Technical Systems Analysis' }
           ].map((discipline) => (
             <button
               key={discipline.key}
-              onClick={() => handleDisciplineChange(discipline.key as 'all' | 'construction' | 'design' | 'trade')}
-              className={`flex-1 flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              onClick={() => handleDisciplineChange(discipline.key as 'construction' | 'design' | 'trade')}
+              className={`flex-1 flex flex-col items-center justify-center px-4 py-3 rounded-md text-sm font-medium transition-colors ${
                 activeDiscipline === discipline.key
                   ? 'bg-white text-gray-900 shadow-sm'
                   : 'text-gray-600 hover:text-gray-900'
               }`}
+              title={discipline.desc}
             >
-              <span className="mr-2">{discipline.icon}</span>
-              {discipline.label}
+              <div className="flex items-center mb-1">
+                <span className="mr-2">{discipline.icon}</span>
+                {discipline.label}
+              </div>
+              <div className="text-xs text-gray-500">{discipline.desc}</div>
             </button>
           ))}
         </div>
@@ -311,7 +545,7 @@ export default function BidLeveling() {
       {/* Bid Selection */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h4 className="text-lg font-semibold text-gray-900 mb-4">
-          Select {activeDiscipline === 'all' ? 'Bids' : `${activeDiscipline.charAt(0).toUpperCase() + activeDiscipline.slice(1)} Proposals`} to Compare (up to 5)
+          Select {activeDiscipline.charAt(0).toUpperCase() + activeDiscipline.slice(1)} Proposals to Compare (up to 5)
         </h4>
         
         {getFilteredAnalyses().length === 0 ? (
@@ -322,13 +556,10 @@ export default function BidLeveling() {
                activeDiscipline === 'trade' ? '⚡' : '📊'}
             </div>
             <h5 className="text-lg font-semibold text-gray-900 mb-2">
-              No {activeDiscipline === 'all' ? 'analyses' : `${activeDiscipline} proposals`} available
+              No {activeDiscipline} proposals available
             </h5>
             <p className="text-gray-600">
-              {activeDiscipline === 'all'
-                ? 'Analyze some documents first to start comparing bids.'
-                : `Upload and analyze ${activeDiscipline} proposals to compare them here.`
-              }
+              Upload and analyze {activeDiscipline} proposals to compare them here.
             </p>
           </div>
         ) : (
@@ -438,65 +669,8 @@ export default function BidLeveling() {
             </div>
           </div>
 
-          {/* CSI Division Comparison */}
-          <div className="bg-white rounded-lg shadow-md p-6">
-            <h4 className="text-lg font-semibold text-gray-900 mb-4">CSI Division Comparison</h4>
-            
-            <div className="overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="border-b">
-                    <th className="text-left py-2">Division</th>
-                    {bidComparisons.map((comp) => (
-                      <th key={comp.analysis.id} className="text-left py-2">
-                        {comp.analysis.result.contractor_name}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {Object.entries(CSI_DIVISIONS)
-                    .sort(([a], [b]) => parseInt(a) - parseInt(b))
-                    .map(([code, division]) => {
-                    // Check if any bid has this division
-                    const hasData = bidComparisons.some(comp => 
-                      comp.analysis.result.csi_divisions[code]
-                    );
-                    
-                    if (!hasData) return null;
-                    
-                    return (
-                      <tr key={code} className="border-b">
-                        <td className="py-2 font-medium">
-                          {code} - {division.name}
-                        </td>
-                        {bidComparisons.map((comp) => {
-                          const divisionData = comp.analysis.result.csi_divisions[code];
-                          const percentage = divisionData 
-                            ? ((divisionData.cost / comp.analysis.result.total_amount) * 100).toFixed(1)
-                            : '0.0';
-                          const cost = divisionData?.cost || 0;
-                          
-                          return (
-                            <td key={comp.analysis.id} className="py-2">
-                              {cost > 0 ? (
-                                <div>
-                                  <div className="font-medium">${cost.toLocaleString()}</div>
-                                  <div className="text-sm text-gray-600">{percentage}%</div>
-                                </div>
-                              ) : (
-                                <span className="text-gray-400">Not included</span>
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          {/* Discipline-Specific Comparison */}
+          {renderDisciplineSpecificComparison()}
 
           {/* Comparative Analysis Results */}
           {comparisonError && (
