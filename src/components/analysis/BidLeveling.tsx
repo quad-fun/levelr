@@ -230,6 +230,79 @@ export default function BidLeveling() {
     }
   };
 
+  // Calculate design phase variance analysis
+  const calculateDesignPhaseVariance = () => {
+    if (bidComparisons.length < 2 || activeDiscipline !== 'design') return null;
+
+    const allPhases = new Set<string>();
+    const phaseVariances: { [phase: string]: {
+      phase_name: string;
+      percentages: number[];
+      contractors: string[];
+      average: number;
+      min: number;
+      max: number;
+      variance: number;
+      assessment: string;
+    } } = {};
+
+    // Collect all AIA phases across all bids
+    bidComparisons.forEach(comp => {
+      if (comp.analysis.result.aia_phases) {
+        Object.keys(comp.analysis.result.aia_phases).forEach(phase => allPhases.add(phase));
+      }
+    });
+
+    // Calculate variance for each phase
+    allPhases.forEach(phaseKey => {
+      const phaseData: { percentage: number; contractor: string; phaseName: string }[] = [];
+
+      bidComparisons.forEach(comp => {
+        const phaseInfo = comp.analysis.result.aia_phases?.[phaseKey];
+        if (phaseInfo) {
+          phaseData.push({
+            percentage: phaseInfo.percentage_of_total,
+            contractor: comp.analysis.result.contractor_name,
+            phaseName: phaseInfo.phase_name
+          });
+        } else {
+          phaseData.push({
+            percentage: 0,
+            contractor: comp.analysis.result.contractor_name,
+            phaseName: phaseKey
+          });
+        }
+      });
+
+      const percentages = phaseData.map(d => d.percentage);
+      const validPercentages = percentages.filter(p => p > 0);
+      const average = validPercentages.length > 0 ? validPercentages.reduce((sum, p) => sum + p, 0) / validPercentages.length : 0;
+      const min = validPercentages.length > 0 ? Math.min(...validPercentages) : 0;
+      const max = validPercentages.length > 0 ? Math.max(...validPercentages) : 0;
+      const variance = max - min;
+
+      // Generate assessment
+      let assessment = '';
+      if (variance > 15) assessment = 'HIGH VARIANCE - Significant differences in phase scope or fee allocation';
+      else if (variance > 8) assessment = 'MODERATE VARIANCE - Some differences in phase approach';
+      else if (validPercentages.length === bidComparisons.length) assessment = 'CONSISTENT - All proposals include this phase with similar allocations';
+      else assessment = 'PARTIAL COVERAGE - Not all proposals include this phase';
+
+      phaseVariances[phaseKey] = {
+        phase_name: phaseData[0]?.phaseName || phaseKey,
+        percentages,
+        contractors: phaseData.map(d => d.contractor),
+        average,
+        min,
+        max,
+        variance,
+        assessment
+      };
+    });
+
+    return phaseVariances;
+  };
+
   // Get discipline-specific comparison matrix headers
   const getDisciplineIncludedHeader = () => {
     switch (activeDiscipline) {
@@ -931,86 +1004,165 @@ export default function BidLeveling() {
               )}
 
               {/* Discipline-Specific Variance Analysis */}
-              {comparativeAnalysis.division_comparisons && Object.keys(comparativeAnalysis.division_comparisons).length > 0 && (
-                <div className="bg-white rounded-lg shadow-md p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                    {getDisciplineVarianceTitle()}
-                  </h4>
-                  <div className="space-y-6">
-                    {Object.entries(comparativeAnalysis.division_comparisons).map(([division, analysis]) => (
-                      <div
-                        key={division}
-                        className="border border-gray-200 rounded-lg p-4"
-                      >
-                        <h5 className="font-semibold text-gray-900 mb-3">
-                          Division {division} - {CSI_DIVISIONS[division as keyof typeof CSI_DIVISIONS]?.name || 'Unknown Division'}
-                        </h5>
+              {activeDiscipline === 'design' ? (
+                (() => {
+                  const designPhaseVariance = calculateDesignPhaseVariance();
+                  return designPhaseVariance && Object.keys(designPhaseVariance).length > 0 ? (
+                    <div className="bg-white rounded-lg shadow-md p-6">
+                      <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                        {getDisciplineVarianceTitle()}
+                      </h4>
+                      <div className="space-y-6">
+                        {Object.entries(designPhaseVariance)
+                          .sort(([a], [b]) => {
+                            // Standard AIA phase order
+                            const phaseOrder = ['SD', 'DD', 'CD', 'BN', 'CA'];
+                            const aIndex = phaseOrder.indexOf(a);
+                            const bIndex = phaseOrder.indexOf(b);
+                            if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+                            if (aIndex !== -1) return -1;
+                            if (bIndex !== -1) return 1;
+                            return a.localeCompare(b);
+                          })
+                          .map(([phaseKey, variance]) => (
+                          <div
+                            key={phaseKey}
+                            className="border border-gray-200 rounded-lg p-4"
+                          >
+                            <h5 className="font-semibold text-gray-900 mb-3">
+                              {phaseKey} - {variance.phase_name}
+                            </h5>
 
-                        <div className="grid md:grid-cols-2 gap-4">
-                          <div>
-                            <h6 className="text-sm font-medium text-gray-700 mb-2">
-                              Variance Explanation
-                            </h6>
-                            <p className="text-sm text-gray-600 mb-4">
-                              {analysis.variance_explanation}
-                            </p>
-
-                            {analysis.scope_differences && analysis.scope_differences.length > 0 && (
-                              <>
+                            <div className="grid md:grid-cols-3 gap-4">
+                              <div>
                                 <h6 className="text-sm font-medium text-gray-700 mb-2">
-                                  Scope Differences
+                                  Phase Statistics
                                 </h6>
-                                <ul className="text-sm text-gray-600 list-disc list-inside mb-4">
-                                  {analysis.scope_differences.map((diff, index) => (
-                                    <li key={index}>{diff}</li>
+                                <div className="space-y-1 text-sm text-gray-600">
+                                  <p>Average: {variance.average.toFixed(1)}%</p>
+                                  <p>Range: {variance.min.toFixed(1)}% - {variance.max.toFixed(1)}%</p>
+                                  <p>Variance: {variance.variance.toFixed(1)} percentage points</p>
+                                </div>
+                              </div>
+
+                              <div>
+                                <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                  Firm Allocations
+                                </h6>
+                                <div className="space-y-1 text-sm text-gray-600">
+                                  {variance.contractors.map((contractor, index) => (
+                                    <div key={index} className="flex justify-between">
+                                      <span className="truncate mr-2">{contractor}:</span>
+                                      <span className="font-medium">
+                                        {variance.percentages[index] > 0 ? `${variance.percentages[index].toFixed(1)}%` : 'Not included'}
+                                      </span>
+                                    </div>
                                   ))}
-                                </ul>
-                              </>
-                            )}
+                                </div>
+                              </div>
+
+                              <div>
+                                <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                  Assessment
+                                </h6>
+                                <div className={`p-3 rounded text-sm ${
+                                  variance.variance > 15 ? 'bg-red-50 text-red-700' :
+                                  variance.variance > 8 ? 'bg-yellow-50 text-yellow-700' :
+                                  'bg-green-50 text-green-700'
+                                }`}>
+                                  {variance.assessment}
+                                </div>
+                              </div>
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null;
+                })()
+              ) : (
+                // Construction and Trade variance analysis (existing logic)
+                comparativeAnalysis?.division_comparisons && Object.keys(comparativeAnalysis.division_comparisons).length > 0 && (
+                  <div className="bg-white rounded-lg shadow-md p-6">
+                    <h4 className="text-lg font-semibold text-gray-900 mb-4">
+                      {getDisciplineVarianceTitle()}
+                    </h4>
+                    <div className="space-y-6">
+                      {Object.entries(comparativeAnalysis.division_comparisons).map(([division, analysis]) => (
+                        <div
+                          key={division}
+                          className="border border-gray-200 rounded-lg p-4"
+                        >
+                          <h5 className="font-semibold text-gray-900 mb-3">
+                            Division {division} - {CSI_DIVISIONS[division as keyof typeof CSI_DIVISIONS]?.name || 'Unknown Division'}
+                          </h5>
 
-                          <div>
-                            {analysis.missing_in_bids && analysis.missing_in_bids.length > 0 && (
-                              <>
-                                <h6 className="text-sm font-medium text-gray-700 mb-2">
-                                  Missing in Bids
-                                </h6>
-                                <div className="flex flex-wrap gap-2 mb-4">
-                                  {analysis.missing_in_bids.map((contractor, index) => (
-                                    <span
-                                      key={index}
-                                      className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded"
-                                    >
-                                      {contractor}
-                                    </span>
-                                  ))}
-                                </div>
-                              </>
-                            )}
+                          <div className="grid md:grid-cols-2 gap-4">
+                            <div>
+                              <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                Variance Explanation
+                              </h6>
+                              <p className="text-sm text-gray-600 mb-4">
+                                {analysis.variance_explanation}
+                              </p>
 
-                            {analysis.pricing_outliers && analysis.pricing_outliers.length > 0 && (
-                              <>
-                                <h6 className="text-sm font-medium text-gray-700 mb-2">
-                                  Pricing Outliers
-                                </h6>
-                                <div className="flex flex-wrap gap-2">
-                                  {analysis.pricing_outliers.map((contractor, index) => (
-                                    <span
-                                      key={index}
-                                      className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded"
-                                    >
-                                      {contractor}
-                                    </span>
-                                  ))}
-                                </div>
-                              </>
-                            )}
+                              {analysis.scope_differences && analysis.scope_differences.length > 0 && (
+                                <>
+                                  <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                    Scope Differences
+                                  </h6>
+                                  <ul className="text-sm text-gray-600 list-disc list-inside mb-4">
+                                    {analysis.scope_differences.map((diff, index) => (
+                                      <li key={index}>{diff}</li>
+                                    ))}
+                                  </ul>
+                                </>
+                              )}
+                            </div>
+
+                            <div>
+                              {analysis.missing_in_bids && analysis.missing_in_bids.length > 0 && (
+                                <>
+                                  <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                    Missing in Bids
+                                  </h6>
+                                  <div className="flex flex-wrap gap-2 mb-4">
+                                    {analysis.missing_in_bids.map((contractor, index) => (
+                                      <span
+                                        key={index}
+                                        className="px-2 py-1 bg-red-100 text-red-700 text-xs rounded"
+                                      >
+                                        {contractor}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+
+                              {analysis.pricing_outliers && analysis.pricing_outliers.length > 0 && (
+                                <>
+                                  <h6 className="text-sm font-medium text-gray-700 mb-2">
+                                    Pricing Outliers
+                                  </h6>
+                                  <div className="flex flex-wrap gap-2">
+                                    {analysis.pricing_outliers.map((contractor, index) => (
+                                      <span
+                                        key={index}
+                                        className="px-2 py-1 bg-orange-100 text-orange-700 text-xs rounded"
+                                      >
+                                        {contractor}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )
               )}
 
               {/* Bid Comparison Matrix */}

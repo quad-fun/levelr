@@ -15,9 +15,33 @@ interface AnalysisResultsProps {
 export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
   const [showUncategorized, setShowUncategorized] = useState(false);
   const [expandedDivisions, setExpandedDivisions] = useState<Set<string>>(new Set());
+  const [expandedPhases, setExpandedPhases] = useState<Set<string>>(new Set());
   const [showOverhead, setShowOverhead] = useState(false);
   const [showAllowances, setShowAllowances] = useState(false);
   const [showSubcontractors, setShowSubcontractors] = useState(false);
+
+  // Detect analysis discipline
+  const detectDiscipline = (analysis: AnalysisResult): 'construction' | 'design' | 'trade' => {
+    // Check explicit discipline field first
+    if (analysis.discipline) return analysis.discipline;
+
+    // Analyze content structure to determine discipline
+    const hasAIAPhases = analysis.aia_phases && Object.keys(analysis.aia_phases).length > 0;
+    const hasTechnicalSystems = analysis.technical_systems && Object.keys(analysis.technical_systems).length > 0;
+    const hasDesignDeliverables = analysis.design_deliverables && analysis.design_deliverables.length > 0;
+    const hasEquipmentSpecs = analysis.equipment_specifications && analysis.equipment_specifications.length > 0;
+
+    // Design discipline indicators
+    if (hasAIAPhases || hasDesignDeliverables) return 'design';
+
+    // Trade discipline indicators
+    if (hasTechnicalSystems || hasEquipmentSpecs) return 'trade';
+
+    // Construction discipline indicators (or fallback)
+    return 'construction';
+  };
+
+  const discipline = detectDiscipline(analysis);
 
   const toggleDivision = (code: string) => {
     const newExpanded = new Set(expandedDivisions);
@@ -27,6 +51,16 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
       newExpanded.add(code);
     }
     setExpandedDivisions(newExpanded);
+  };
+
+  const togglePhase = (code: string) => {
+    const newExpanded = new Set(expandedPhases);
+    if (newExpanded.has(code)) {
+      newExpanded.delete(code);
+    } else {
+      newExpanded.add(code);
+    }
+    setExpandedPhases(newExpanded);
   };
   
   const projectRisk = calculateProjectRisk(
@@ -60,21 +94,27 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
     <div className="max-w-6xl mx-auto space-y-6">
       {/* Project Overview */}
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h2 className="text-2xl font-bold text-gray-900 mb-4">Bid Analysis Results</h2>
-        
+        <h2 className="text-2xl font-bold text-gray-900 mb-4">
+          {discipline === 'design' ? 'Design Proposal Analysis' : discipline === 'trade' ? 'Trade Proposal Analysis' : 'Bid Analysis Results'}
+        </h2>
+
         <div className="grid md:grid-cols-3 gap-4">
           <div className="flex items-center">
             <Building className="h-5 w-5 text-blue-600 mr-2" />
             <div>
-              <p className="text-sm text-gray-600">Contractor</p>
+              <p className="text-sm text-gray-600">
+                {discipline === 'design' ? 'Design Firm' : discipline === 'trade' ? 'Trade Contractor' : 'Contractor'}
+              </p>
               <p className="font-semibold">{analysis.contractor_name}</p>
             </div>
           </div>
-          
+
           <div className="flex items-center">
             <DollarSign className="h-5 w-5 text-green-600 mr-2" />
             <div>
-              <p className="text-sm text-gray-600">Total Amount</p>
+              <p className="text-sm text-gray-600">
+                {discipline === 'design' ? 'Total Fee' : 'Total Amount'}
+              </p>
               <p className="font-semibold">${analysis.total_amount.toLocaleString()}</p>
               {analysis.gross_sqft && (
                 <p className="text-xs text-gray-600">
@@ -277,132 +317,259 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
         )}
       </div>
 
-      {/* CSI Division Breakdown */}
-      <div className="bg-white rounded-lg shadow-md p-6">
-        <h3 className="text-xl font-bold text-gray-900 mb-4">CSI Division Analysis</h3>
-        
-        <div className="space-y-4">
-          {Object.entries(analysis.csi_divisions)
-            .sort(([a], [b]) => parseInt(a) - parseInt(b))
-            .map(([code, data]) => {
-            const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
-            const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
-            const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
-            
-            const isExpanded = expandedDivisions.has(code);
-            const hasSubItems = data.sub_items && data.sub_items.length > 0;
-            
-            return (
-              <div key={code} className={`border rounded-lg p-4 ${getVarianceColor(variance.status)}`}>
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex-1">
-                    <div className="flex items-center">
-                      <h4 className="font-semibold">
-                        Division {code} - {division?.name || 'Unknown'}
-                      </h4>
-                      {hasSubItems && (
-                        <button
-                          onClick={() => toggleDivision(code)}
-                          className="ml-2 p-1 rounded hover:bg-white hover:bg-opacity-50"
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="h-4 w-4" />
-                          ) : (
-                            <ChevronDown className="h-4 w-4" />
-                          )}
-                        </button>
+      {/* Discipline-Specific Breakdown */}
+      {discipline === 'design' && analysis.aia_phases && Object.keys(analysis.aia_phases).length > 0 ? (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">AIA Phase Analysis</h3>
+
+          <div className="space-y-4">
+            {Object.entries(analysis.aia_phases)
+              .sort(([a], [b]) => {
+                // Standard AIA phase order
+                const phaseOrder = ['SD', 'DD', 'CD', 'BN', 'CA'];
+                const aIndex = phaseOrder.indexOf(a);
+                const bIndex = phaseOrder.indexOf(b);
+                if (aIndex !== -1 && bIndex !== -1) return aIndex - bIndex;
+                if (aIndex !== -1) return -1;
+                if (bIndex !== -1) return 1;
+                return a.localeCompare(b);
+              })
+              .map(([code, data]) => {
+              const percentage = data.percentage_of_total.toFixed(1);
+              const isExpanded = expandedPhases.has(code);
+              const hasDeliverables = data.deliverables && data.deliverables.length > 0;
+
+              return (
+                <div key={code} className="border rounded-lg p-4 bg-blue-50 border-blue-200">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center">
+                        <h4 className="font-semibold">
+                          {code} - {data.phase_name}
+                        </h4>
+                        {hasDeliverables && (
+                          <button
+                            onClick={() => togglePhase(code)}
+                            className="ml-2 p-1 rounded hover:bg-white hover:bg-opacity-50"
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-sm text-blue-700 opacity-75">
+                        Standard AIA Design Phase
+                      </p>
+                      {data.timeline && (
+                        <p className="text-sm font-medium text-blue-600">
+                          Timeline: {data.timeline}
+                        </p>
                       )}
                     </div>
-                    <p className="text-sm opacity-75">{division?.description}</p>
-                    {data.subcontractor && (
-                      <p className="text-sm font-medium text-blue-600">
-                        Subcontractor: {data.subcontractor}
-                      </p>
-                    )}
-                  </div>
-                  <div className="text-right">
-                    <p className="font-bold text-lg">${data.cost.toLocaleString()}</p>
-                    {analysis.gross_sqft && (
-                      <p className="text-xs text-gray-600">
-                        ${(data.cost / analysis.gross_sqft).toFixed(2)}/SF
-                      </p>
-                    )}
-                    <p className="text-sm">{percentage}% of total</p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center">
-                    {variance.status === 'MARKET_RATE' ? (
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                    ) : (
-                      <TrendingUp className="h-4 w-4 mr-2" />
-                    )}
-                    <span className="text-sm font-medium">{variance.message}</span>
-                  </div>
-                  
-                  {data.unit_cost && data.quantity && data.unit && (
-                    <div className="text-sm">
-                      {data.quantity.toLocaleString()} {data.unit} @ ${data.unit_cost.toFixed(2)}
+                    <div className="text-right">
+                      <p className="font-bold text-lg">${data.fee_amount.toLocaleString()}</p>
+                      <p className="text-sm text-blue-600">{percentage}% of total fee</p>
                     </div>
-                  )}
-                </div>
-                
-                {variance.recommendation && (
-                  <div className="mt-2 text-sm">
-                    <strong>Recommendation:</strong> {variance.recommendation}
                   </div>
-                )}
 
-                {/* Expandable Sub-Items Section */}
-                {hasSubItems && isExpanded && (
-                  <div className="mt-4 pl-4 border-l-2 border-gray-200">
-                    <h5 className="text-sm font-semibold text-gray-700 mb-2">Detailed Line Items:</h5>
-                    <div className="space-y-2">
-                      {data.sub_items!.map((item, index) => (
-                        <div key={index} className="bg-white bg-opacity-60 rounded p-3 text-sm">
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <p className="font-medium">{item.description}</p>
-                              {item.subcontractor && (
-                                <p className="text-xs text-blue-600">Sub: {item.subcontractor}</p>
-                              )}
-                              {item.notes && (
-                                <p className="text-xs text-gray-600 mt-1">{item.notes}</p>
-                              )}
-                            </div>
-                            <div className="text-right ml-4">
-                              <p className="font-semibold">${item.cost.toLocaleString()}</p>
-                              {item.unit_cost && item.quantity && item.unit && (
-                                <p className="text-xs text-gray-600">
-                                  {item.quantity.toLocaleString()} {item.unit} @ ${item.unit_cost.toFixed(2)}
-                                </p>
+                  {/* Expandable Deliverables Section */}
+                  {hasDeliverables && isExpanded && (
+                    <div className="mt-4 pl-4 border-l-2 border-blue-300">
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2">
+                        Phase Deliverables:
+                        <span className="text-xs font-normal text-gray-600 ml-2">
+                          (Expected outputs and documents for this design phase)
+                        </span>
+                      </h5>
+                      <div className="space-y-2">
+                        {data.deliverables!.map((deliverable, index) => (
+                          <div key={index} className="bg-white bg-opacity-60 rounded p-3 text-sm">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <p className="font-medium">{deliverable.description}</p>
+                                {deliverable.responsible_discipline && (
+                                  <p className="text-xs text-blue-600">
+                                    Discipline: {deliverable.responsible_discipline}
+                                  </p>
+                                )}
+                                {deliverable.completion_date && (
+                                  <p className="text-xs text-gray-600">
+                                    Due: {deliverable.completion_date}
+                                  </p>
+                                )}
+                                {deliverable.notes && (
+                                  <p className="text-xs text-gray-600 mt-1">{deliverable.notes}</p>
+                                )}
+                              </div>
+                              {deliverable.cost_allocation && (
+                                <div className="text-right ml-4">
+                                  <p className="font-semibold">${deliverable.cost_allocation.toLocaleString()}</p>
+                                </div>
                               )}
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {data.scope_notes && (
+                    <div className="mt-2 text-sm">
+                      <strong>Phase Scope:</strong> {data.scope_notes}
+                    </div>
+                  )}
+
+                  {data.assumptions && data.assumptions.length > 0 && (
+                    <div className="mt-2 text-sm">
+                      <strong>Assumptions:</strong> {data.assumptions.join(', ')}
+                    </div>
+                  )}
+
+                  {data.exclusions && data.exclusions.length > 0 && (
+                    <div className="mt-2 text-sm">
+                      <strong>Exclusions:</strong> {data.exclusions.join(', ')}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ) : discipline === 'construction' && analysis.csi_divisions && Object.keys(analysis.csi_divisions).length > 0 ? (
+        <div className="bg-white rounded-lg shadow-md p-6">
+          <h3 className="text-xl font-bold text-gray-900 mb-4">CSI Division Analysis</h3>
+
+          <div className="space-y-4">
+            {Object.entries(analysis.csi_divisions)
+              .sort(([a], [b]) => parseInt(a) - parseInt(b))
+              .map(([code, data]) => {
+              const division = CSI_DIVISIONS[code as keyof typeof CSI_DIVISIONS];
+              const variance = analyzeMarketVariance(data.cost, analysis.total_amount, code);
+              const percentage = ((data.cost / analysis.total_amount) * 100).toFixed(1);
+
+              const isExpanded = expandedDivisions.has(code);
+              const hasSubItems = data.sub_items && data.sub_items.length > 0;
+
+              return (
+                <div key={code} className={`border rounded-lg p-4 ${getVarianceColor(variance.status)}`}>
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="flex-1">
+                      <div className="flex items-center">
+                        <h4 className="font-semibold">
+                          Division {code} - {division?.name || 'Unknown'}
+                        </h4>
+                        {hasSubItems && (
+                          <button
+                            onClick={() => toggleDivision(code)}
+                            className="ml-2 p-1 rounded hover:bg-white hover:bg-opacity-50"
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="h-4 w-4" />
+                            ) : (
+                              <ChevronDown className="h-4 w-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-sm opacity-75">{division?.description}</p>
+                      {data.subcontractor && (
+                        <p className="text-sm font-medium text-blue-600">
+                          Subcontractor: {data.subcontractor}
+                        </p>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-lg">${data.cost.toLocaleString()}</p>
+                      {analysis.gross_sqft && (
+                        <p className="text-xs text-gray-600">
+                          ${(data.cost / analysis.gross_sqft).toFixed(2)}/SF
+                        </p>
+                      )}
+                      <p className="text-sm">{percentage}% of total</p>
                     </div>
                   </div>
-                )}
-                
-                {data.items.length > 0 && !hasSubItems && (
-                  <div className="mt-2">
-                    <p className="text-sm font-medium">Items:</p>
-                    <p className="text-sm">{data.items.join(', ')}</p>
-                  </div>
-                )}
 
-                {data.scope_notes && (
-                  <div className="mt-2 text-sm">
-                    <strong>Scope Notes:</strong> {data.scope_notes}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center">
+                      {variance.status === 'MARKET_RATE' ? (
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                      ) : (
+                        <TrendingUp className="h-4 w-4 mr-2" />
+                      )}
+                      <span className="text-sm font-medium">{variance.message}</span>
+                    </div>
+
+                    {data.unit_cost && data.quantity && data.unit && (
+                      <div className="text-sm">
+                        {data.quantity.toLocaleString()} {data.unit} @ ${data.unit_cost.toFixed(2)}
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
-            );
-          })}
+
+                  {variance.recommendation && (
+                    <div className="mt-2 text-sm">
+                      <strong>Recommendation:</strong> {variance.recommendation}
+                    </div>
+                  )}
+
+                  {/* Expandable Sub-Items Section */}
+                  {hasSubItems && isExpanded && (
+                    <div className="mt-4 pl-4 border-l-2 border-gray-200">
+                      <h5 className="text-sm font-semibold text-gray-700 mb-2">
+                        Detailed Line Items:
+                        <span className="text-xs font-normal text-gray-600 ml-2">
+                          (Specific construction items and costs within this division)
+                        </span>
+                      </h5>
+                      <div className="space-y-2">
+                        {data.sub_items!.map((item, index) => (
+                          <div key={index} className="bg-white bg-opacity-60 rounded p-3 text-sm">
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <p className="font-medium">{item.description}</p>
+                                {item.subcontractor && (
+                                  <p className="text-xs text-blue-600">Sub: {item.subcontractor}</p>
+                                )}
+                                {item.notes && (
+                                  <p className="text-xs text-gray-600 mt-1">{item.notes}</p>
+                                )}
+                              </div>
+                              <div className="text-right ml-4">
+                                <p className="font-semibold">${item.cost.toLocaleString()}</p>
+                                {item.unit_cost && item.quantity && item.unit && (
+                                  <p className="text-xs text-gray-600">
+                                    {item.quantity.toLocaleString()} {item.unit} @ ${item.unit_cost.toFixed(2)}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {data.items.length > 0 && !hasSubItems && (
+                    <div className="mt-2">
+                      <p className="text-sm font-medium">Items:</p>
+                      <p className="text-sm">{data.items.join(', ')}</p>
+                    </div>
+                  )}
+
+                  {data.scope_notes && (
+                    <div className="mt-2 text-sm">
+                      <strong>Scope Notes:</strong> {data.scope_notes}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
 
       {/* Soft Costs Section */}
       {analysis.softCosts && analysis.softCosts.length > 0 && (
