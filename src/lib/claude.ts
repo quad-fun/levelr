@@ -473,6 +473,14 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     // Final completeness validation on enhanced data
     validateAnalysisCompleteness(validatedAnalysis);
 
+    // Log detailed summary status for construction analysis
+    if (validatedAnalysis.detailed_summary) {
+      const summaryLength = validatedAnalysis.detailed_summary.length;
+      console.log(`✅ Construction detailed summary generated: ${(summaryLength / 1024).toFixed(1)}KB`);
+    } else {
+      console.warn('⚠️ No detailed_summary field found in construction analysis result');
+    }
+
     return validatedAnalysis;
   } catch (error) {
     console.error('Error analyzing document with Claude:', error);
