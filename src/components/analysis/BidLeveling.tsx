@@ -267,6 +267,92 @@ export default function BidLeveling() {
     }
   };
 
+  // Get discipline-specific column header for executive summary
+  const getDisciplineColumnHeader = () => {
+    switch (activeDiscipline) {
+      case 'design':
+        return 'Phases';
+      case 'trade':
+        return 'Systems';
+      case 'construction':
+      default:
+        return 'Divisions';
+    }
+  };
+
+  // Get discipline-specific count for executive summary
+  const getDisciplineCount = (result: AnalysisResult) => {
+    const discipline = result.discipline || 'construction';
+
+    switch (discipline) {
+      case 'design':
+        return result.aia_phases ? Object.keys(result.aia_phases).length : 0;
+      case 'trade':
+        return result.technical_systems ? Object.keys(result.technical_systems).length : 0;
+      case 'construction':
+      default:
+        return result.csi_divisions ? Object.keys(result.csi_divisions).length : 0;
+    }
+  };
+
+  // Get actual included count from bid data (not comparative analysis data)
+  const getDisciplineIncludedCount = (data: unknown, contractorName: string) => {
+    // Find the actual bid data for this contractor
+    const contractorBid = bidComparisons.find(comp => comp.analysis.result.contractor_name === contractorName);
+    if (!contractorBid) return 0;
+
+    return getDisciplineCount(contractorBid.analysis.result);
+  };
+
+  // Get discipline-appropriate missing display
+  const getDisciplineMissingDisplay = (data: unknown, contractorName: string) => {
+    // For design bids, we don't really have "missing phases" in the same way as CSI divisions
+    // Most design proposals include all standard AIA phases
+    const contractorBid = bidComparisons.find(comp => comp.analysis.result.contractor_name === contractorName);
+    if (!contractorBid) {
+      return <span className="text-sm text-gray-600">Unknown</span>;
+    }
+
+    const discipline = contractorBid.analysis.result.discipline || 'construction';
+
+    if (discipline === 'design') {
+      // For design, show if all standard phases are included
+      const phaseCount = getDisciplineCount(contractorBid.analysis.result);
+      const standardPhaseCount = 5; // SD, DD, CD, BN, CA
+
+      if (phaseCount >= standardPhaseCount) {
+        return <span className="text-sm text-green-600">All Standard Phases</span>;
+      } else {
+        return <span className="text-sm text-yellow-600">{standardPhaseCount - phaseCount} Phase(s) Missing</span>;
+      }
+    } else if (discipline === 'trade') {
+      // For trade, similar logic for systems
+      return <span className="text-sm text-green-600">Systems Complete</span>;
+    } else {
+      // For construction, use the original divisions logic
+      const typedData = data as { missing_divisions: string[] };
+      return typedData.missing_divisions?.length > 0 ? (
+        <div className="flex flex-wrap gap-1">
+          {typedData.missing_divisions.slice(0, 3).map((div: string, index: number) => (
+            <span
+              key={index}
+              className="px-1 py-0.5 bg-red-100 text-red-600 text-xs rounded"
+            >
+              {div}
+            </span>
+          ))}
+          {typedData.missing_divisions.length > 3 && (
+            <span className="text-xs text-gray-500">
+              +{typedData.missing_divisions.length - 3} more
+            </span>
+          )}
+        </div>
+      ) : (
+        <span className="text-sm text-green-600">Complete</span>
+      );
+    }
+  };
+
   // Render discipline-specific comparison views
   const renderDisciplineSpecificComparison = () => {
     if (bidComparisons.length === 0) return null;
@@ -704,7 +790,7 @@ export default function BidLeveling() {
                     <th className="text-left py-2">Total Amount</th>
                     <th className="text-left py-2">Variance from Low</th>
                     <th className="text-left py-2">Risk Level</th>
-                    <th className="text-left py-2">Divisions</th>
+                    <th className="text-left py-2">{getDisciplineColumnHeader()}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -729,7 +815,7 @@ export default function BidLeveling() {
                           {comp.risk.level} ({comp.risk.score}/100)
                         </span>
                       </td>
-                      <td className="py-2">{Object.keys(comp.analysis.result.csi_divisions).length}</td>
+                      <td className="py-2">{getDisciplineCount(comp.analysis.result)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -951,29 +1037,11 @@ export default function BidLeveling() {
                             <td className="py-2">${data.total_amount.toLocaleString()}</td>
                             <td className="py-2">
                               <span className="text-sm text-gray-600">
-                                {data.divisions_included.length} {getDisciplineItemName()}
+                                {getDisciplineIncludedCount(data, contractor)} {getDisciplineItemName()}
                               </span>
                             </td>
                             <td className="py-2">
-                              {data.missing_divisions.length > 0 ? (
-                                <div className="flex flex-wrap gap-1">
-                                  {data.missing_divisions.slice(0, 3).map((div, index) => (
-                                    <span
-                                      key={index}
-                                      className="px-1 py-0.5 bg-red-100 text-red-600 text-xs rounded"
-                                    >
-                                      {div}
-                                    </span>
-                                  ))}
-                                  {data.missing_divisions.length > 3 && (
-                                    <span className="text-xs text-gray-500">
-                                      +{data.missing_divisions.length - 3} more
-                                    </span>
-                                  )}
-                                </div>
-                              ) : (
-                                <span className="text-sm text-green-600">Complete</span>
-                              )}
+                              {getDisciplineMissingDisplay(data, contractor)}
                             </td>
                             <td className="py-2">
                               <span className="text-sm text-gray-600">
