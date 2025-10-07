@@ -67,12 +67,6 @@ EXTRACT PROFESSIONAL ESTIMATOR-LEVEL DETAIL:
 - If multiple square footage values exist, prioritize gross building area over net/usable area
 - Look for context clues like "gross building area", "total building sf", "overall project size"
 
-🚨 CRITICAL JSON FORMAT REQUIREMENTS 🚨
-⚠️ EVERY OBJECT IN ARRAYS MUST END WITH A COMMA (except the last one)
-⚠️ CHECK ALL sub_items, allowances, subcontractors, softCosts arrays
-⚠️ CORRECT: [{"desc": "A", "cost": 100}, {"desc": "B", "cost": 200}]
-⚠️ WRONG: [{"desc": "A", "cost": 100} {"desc": "B", "cost": 200}] ← MISSING COMMA!
-
 Return ONLY valid JSON with COMPLETE granular breakdown:
 {
   "contractor_name": "ACTUAL_COMPANY_NAME_FROM_DOCUMENT",
@@ -85,7 +79,7 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
   "markup_percentage": 18.75,
   "csi_divisions": {
     "01": {
-      "cost": 125000,
+      "cost": 125000, 
       "items": ["general requirements", "supervision"],
       "subcontractor": "Self-performed",
       "sub_items": [
@@ -95,7 +89,7 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
       ]
     },
     "03": {
-      "cost": 450000,
+      "cost": 450000, 
       "items": ["foundations", "structural concrete"],
       "subcontractor": "ABC Concrete Co.",
       "sub_items": [
@@ -105,7 +99,7 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
       ]
     },
     "22": {
-      "cost": 200000,
+      "cost": 200000, 
       "items": ["plumbing fixtures", "water supply"],
       "subcontractor": "XYZ Plumbing Inc.",
       "sub_items": [
@@ -148,8 +142,7 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
   "timeline": "12 months",
   "exclusions": ["site utilities", "permits"],
   "assumptions": ["normal soil conditions"],
-  "document_quality": "professional_typed",
-  "detailed_summary": "# ABC Construction Company - Comprehensive Bid Analysis\n\n## Project Overview\n- Project: Downtown Office Building Renovation\n- Bid Date: March 15, 2024\n- Total Bid Amount: $2,850,000\n- Gross Square Footage: 25,000 SF\n- Cost per Square Foot: $114.00\n- Project Duration: 12 months\n\n## Scope of Work by CSI Division\n\n### Division 01 - General Requirements\n**Total Cost**: $125,000\n**Subcontractor**: Self-performed\n**Line Items**:\n- Project management and supervision: $45,000 (12 months @ $3,750/month)\n- Site supervision: $60,000 (12 months @ $5,000/month)\n- Temporary facilities and utilities: $20,000 (lump sum)\n**Scope Notes**: Includes project manager, superintendent, temporary power, water, sanitary facilities, site security\n**Exclusions**: Owner to provide permanent utilities connection\n**Timeline**: Full project duration\n\n### Division 03 - Concrete\n**Total Cost**: $450,000\n**Subcontractor**: ABC Concrete Co.\n**Line Items**:\n- Foundation excavation: $85,000 (340 CY @ $250/CY)\n- Concrete footings: $120,000 (150 CY @ $800/CY)\n- Slab on grade: $245,000 (24,500 SF @ $10/SF)\n**Scope Notes**: Includes formwork, reinforcement, concrete placement, finishing\n**Exclusions**: Soil testing, dewatering if required\n**Assumptions**: Normal soil conditions, no rock or contamination\n\n[Continue for all other divisions...]\n\n## Project Overhead & Management\n**Construction Management Fee**: $75,000 (2.6%)\n**General Conditions**: $85,000\n- Project supervision: $45,000\n- Temporary facilities: $25,000\n- Site utilities: $15,000\n**Insurance & Bonds**:\n- General Liability: $2 million occurrence\n- Performance Bond: 1% ($28,500)\n- Payment Bond: 1% ($28,500)\n**Total Overhead**: $235,000 (8.2% markup)\n\n[Continue with all other sections as specified...]\n\nThis comprehensive summary provides complete bid details for comparative analysis and future reference.\""
+  "document_quality": "professional_typed"
 }
 
 CRITICAL REQUIREMENTS FOR PROFESSIONAL ESTIMATOR-LEVEL EXTRACTION:
@@ -221,150 +214,6 @@ EXAMPLES OF CORRECT 2018 MAPPING:
 - Verify ALL electrical uses divisions 26-28 ONLY
 
 CRITICAL: Every cost must map to correct 2018 division numbers. Divisions 15 and 16 DO NOT EXIST!
-
-📝 ENHANCED ANALYSIS REQUIREMENT - DETAILED SUMMARY GENERATION:
-
-In addition to the structured JSON data above, you must also generate a comprehensive "detailed_summary" field in your JSON response. This summary must be a markdown-formatted text document (5-15KB) that provides ALL key information needed for future comparative analysis and chat capabilities.
-
-The detailed_summary should include:
-
-# [Contractor Name] - Comprehensive Bid Analysis
-
-## Project Overview
-- Project name, bid date, total bid amount
-- Overall timeline and key milestones
-- Gross square footage and cost per square foot
-- Project type and scope description
-
-## Scope of Work by CSI Division
-[For EACH division with actual work - extract ALL details]
-
-### Division XX - [Division Name]
-**Total Cost**: $XXX,XXX
-**Subcontractor**: [Name if applicable]
-**Line Items**:
-- [Detailed line item description with quantity, unit cost, total]
-- [Include all sub-items with specifications, model numbers, etc.]
-**Scope Notes**: [What's included, special conditions, methods]
-**Exclusions**: [What's specifically NOT included in this division]
-**Assumptions**: [Conditions assumed for pricing]
-**Timeline**: [Division-specific schedule notes]
-
-## Project Overhead & Management
-**Construction Management Fee**: $XXX (X.X%)
-**General Conditions**: $XXX
-- [Breakdown of GC items: supervision, temp facilities, utilities, etc.]
-**Insurance & Bonds**:
-- General Liability: $X million coverage
-- Workers Compensation: [Details]
-- Performance Bond: X% ($XXX)
-- Payment Bond: X% ($XXX)
-**Permits & Fees**: $XXX
-- [Specific permits and fee breakdown]
-**Total Overhead**: $XXX (X.X% markup)
-
-## Allowances & Contingencies
-[For each allowance/contingency - extract full details]
-- **[Description]**: $XXX (X.X% of total)
-  - Scope: [What this covers]
-  - Basis: [How allowance was determined]
-  - Conditions: [When allowance applies]
-
-## Subcontractors & Trade Partners
-[For each subcontractor - extract complete information]
-- **[Subcontractor Name]** - [Trade/Specialty]
-  - CSI Divisions: [XX, XX, XX]
-  - Total Amount: $XXX,XXX
-  - Scope: [Detailed scope description]
-  - Contact: [If provided]
-  - Special Conditions: [Any qualifications or requirements]
-
-## Project Timeline & Schedule
-- **Overall Duration**: X months
-- **Key Milestones**:
-  - [Milestone 1]: [Date/Duration]
-  - [Milestone 2]: [Date/Duration]
-- **Critical Path Items**: [Items that affect schedule]
-- **Phasing**: [If applicable]
-
-## Insurance & Bonding Requirements
-- **General Liability**: $X million occurrence / $X aggregate
-- **Professional Liability**: [If applicable]
-- **Workers Compensation**: [State requirements]
-- **Auto Liability**: [If applicable]
-- **Performance Bond**: X% of contract value
-- **Payment Bond**: X% of contract value
-- **Bond Cost**: $XXX
-
-## Payment Terms & Billing
-- **Payment Schedule**: [Monthly, milestone-based, etc.]
-- **Retainage**: X%
-- **Payment Terms**: Net XX days
-- **Billing Method**: [Cost-plus, lump sum, etc.]
-- **Change Order Process**: [If specified]
-
-## Global Exclusions & Assumptions
-**Major Exclusions** (What's NOT included in this bid):
-- [Exclusion 1 with impact]
-- [Exclusion 2 with impact]
-- [Site-specific exclusions]
-- [Owner-provided items]
-
-**Key Assumptions** (Conditions assumed for pricing):
-- [Assumption 1 with potential risk]
-- [Assumption 2 with potential risk]
-- [Site condition assumptions]
-- [Access and logistic assumptions]
-
-## Special Conditions & Risk Factors
-- **Qualifications**: [Any bid qualifications or exceptions]
-- **Special Requirements**: [Unique project requirements]
-- **Risk Factors**: [Identified risks and mitigation approaches]
-- **Value Engineering**: [Proposed alternatives or options]
-- **Warranty Terms**: [Warranty periods and coverage]
-
-## Unit Pricing & Alternatives
-[If applicable]
-- **Alternate 1**: [Description] - $XXX
-- **Alternate 2**: [Description] - $XXX
-- **Unit Prices**: [Key unit pricing for potential changes]
-
-## Technical Specifications & Standards
-[Key technical requirements and standards]
-- **Building Codes**: [Applicable codes and standards]
-- **Quality Standards**: [Specifications and quality requirements]
-- **Testing & Commissioning**: [Required testing procedures]
-- **Environmental Requirements**: [LEED, sustainability requirements]
-
-The detailed_summary must capture EVERY significant detail from the bid document that would be needed to:
-1. Answer specific questions about scope, exclusions, and assumptions
-2. Compare this bid against other contractor bids
-3. Understand WHY costs might differ between bidders
-4. Identify potential scope gaps or overlaps
-5. Support detailed Q&A about the bid contents
-
-Make the summary comprehensive but well-organized with clear headers and bullet points. Include specific dollar amounts, percentages, quantities, and technical details wherever available.
-
-**CRITICAL JSON FORMATTING REQUIREMENTS:**
-- The detailed_summary field MUST be valid JSON string content
-- Escape all quotes within the summary using \\"
-- Replace all newlines with \\n
-- Replace all tabs with \\t
-- Do not include unescaped quotes, line breaks, or control characters
-- Keep the summary under 15KB to prevent parsing issues
-- If the content is too large, prioritize the most important sections
-
-🚨 FINAL JSON VALIDATION CHECKLIST 🚨
-Before returning your JSON response, verify:
-✅ Every object in every array has a comma after its closing brace (except the last object)
-✅ All sub_items arrays have proper comma separation between objects
-✅ All allowances arrays have proper comma separation between objects
-✅ All subcontractors arrays have proper comma separation between objects
-✅ All softCosts arrays have proper comma separation between objects
-✅ All uncategorizedCosts arrays have proper comma separation between objects
-❌ No missing commas like: } { instead of }, {
-❌ No trailing commas before array closing brackets like: }, ]
-❌ Double-check appliance/equipment items in sub_items arrays
 
 Document: ${processedDoc.fileName}
 File Type: ${processedDoc.fileType}
@@ -472,59 +321,7 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
 
     // Pre-process JSON to auto-correct legacy divisions before parsing
     const correctedJsonString = autoCorrectLegacyDivisions(jsonMatch[0]);
-
-    let analysisResult: AnalysisResult;
-    try {
-      // Clean and validate JSON before parsing
-      const cleanedJsonString = sanitizeJsonString(correctedJsonString);
-      analysisResult = JSON.parse(cleanedJsonString);
-    } catch (parseError) {
-      console.log('🔄 Initial JSON parsing failed, attempting automatic retry...');
-
-      // Automatic retry: ask Claude to re-emit the same JSON, validated
-      const retryResponse = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.CLAUDE_API_KEY!,
-          'anthropic-version': '2023-06-01'
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 4000,
-          messages: [{
-            role: 'user',
-            content: 'Re-emit exactly the same JSON analysis, but ensure it is valid JSON with no syntax errors. Return ONLY the JSON, no prose.'
-          }]
-        })
-      });
-
-      if (!retryResponse.ok) {
-        throw parseError; // Fall back to original error
-      }
-
-      const retryData = await retryResponse.json();
-      const retryContent = retryData.content?.[0];
-
-      if (!retryContent || retryContent.type !== 'text') {
-        throw parseError; // Fall back to original error
-      }
-
-      // Try to extract and parse the retry JSON
-      const retryJsonMatch = retryContent.text.match(/\{[\s\S]*\}/);
-      if (!retryJsonMatch) {
-        throw parseError; // Fall back to original error
-      }
-
-      try {
-        const retryJsonString = sanitizeJsonString(retryJsonMatch[0]);
-        analysisResult = JSON.parse(retryJsonString);
-        console.log('✅ Automatic retry successful');
-      } catch {
-        console.error('❌ Automatic retry also failed');
-        throw parseError; // Throw original error with more context
-      }
-    }
+    const analysisResult: AnalysisResult = JSON.parse(correctedJsonString);
     
     // Validate required fields
     if (!analysisResult.contractor_name || !analysisResult.total_amount) {
@@ -540,133 +337,10 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     // Final completeness validation on enhanced data
     validateAnalysisCompleteness(validatedAnalysis);
 
-    // Log detailed summary status for construction analysis
-    if (validatedAnalysis.detailed_summary) {
-      const summaryLength = validatedAnalysis.detailed_summary.length;
-      console.log(`✅ Construction detailed summary generated: ${(summaryLength / 1024).toFixed(1)}KB`);
-    } else {
-      console.warn('⚠️ No detailed_summary field found in construction analysis result');
-    }
-
     return validatedAnalysis;
   } catch (error) {
     console.error('Error analyzing document with Claude:', error);
     throw error instanceof Error ? error : new Error('Failed to analyze document. Please try again.');
-  }
-}
-
-function addCommasInArrays(s: string): string {
-  let out = '';
-  let inStr = false, esc = false;
-  let arrDepth = 0;
-
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    out += c;
-
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === '\\') esc = true;
-      else if (c === '"') inStr = false;
-      continue;
-    }
-
-    if (c === '"') inStr = true;
-    else if (c === '[') arrDepth++;
-    else if (c === ']') arrDepth = Math.max(0, arrDepth - 1);
-
-    // Inside array: if a '}' is followed (after whitespace) by '{' or '"' or digit, inject a comma
-    if (arrDepth > 0 && c === '}') {
-      let j = i + 1;
-      while (j < s.length && /\s/.test(s[j])) j++;
-      const next = s[j];
-      if (next === '{' || next === '"' || next === '-' || (next && /\d/.test(next))) {
-        // ensure no existing comma
-        let k = i + 1;
-        while (k < s.length && /\s/.test(s[k])) k++;
-        if (s[k] !== ',') out += ',';
-      }
-    }
-  }
-  return out;
-}
-
-function balanceAtEnd(s: string): string {
-  let inStr = false, esc = false;
-  let braces = 0, brackets = 0;
-  for (let i = 0; i < s.length; i++) {
-    const c = s[i];
-    if (inStr) {
-      if (esc) esc = false;
-      else if (c === '\\') esc = true;
-      else if (c === '"') inStr = false;
-      continue;
-    }
-    if (c === '"') inStr = true;
-    else if (c === '{') braces++;
-    else if (c === '}') braces = Math.max(0, braces - 1);
-    else if (c === '[') brackets++;
-    else if (c === ']') brackets = Math.max(0, brackets - 1);
-  }
-  return s + (']'.repeat(brackets)) + ('}'.repeat(braces));
-}
-
-function sanitizeJsonString(jsonString: string): string {
-  console.log('🧹 Sanitizing JSON string of length:', jsonString.length);
-
-  // Check if detailed_summary is present in original
-  const hasDetailedSummary = jsonString.includes('"detailed_summary"');
-  console.log('📝 Original JSON contains detailed_summary:', hasDetailedSummary);
-
-  try {
-    // First, try to parse as-is in case it's already valid
-    JSON.parse(jsonString);
-    console.log('✅ JSON is already valid, no sanitization needed');
-    return jsonString;
-  } catch (error) {
-    console.log('⚠️ JSON needs sanitization, attempting minimal repair...');
-    console.log('Parse error details:', error instanceof Error ? error.message : 'Unknown error');
-  }
-
-  // Prefer fenced JSON if present
-  const fencedMatch = jsonString.match(/```json\s*([\s\S]*?)```/i) || jsonString.match(/```\s*([\s\S]*?)```/);
-  let sanitized = fencedMatch ? fencedMatch[1] : jsonString.slice(jsonString.indexOf('{')); // start from first '{'
-
-  // Step 1: Add missing commas in arrays
-  sanitized = addCommasInArrays(sanitized);
-
-  // Step 2: Balance closing brackets/braces at end
-  sanitized = balanceAtEnd(sanitized);
-
-  // Check if detailed_summary is still present after sanitization
-  const stillHasDetailedSummary = sanitized.includes('"detailed_summary"');
-  console.log('📝 Sanitized JSON contains detailed_summary:', stillHasDetailedSummary);
-
-  // Try parsing the minimally sanitized JSON
-  try {
-    const parsed = JSON.parse(sanitized);
-    console.log('✅ Minimal JSON sanitization successful');
-    console.log('📝 Parsed JSON has detailed_summary field:', 'detailed_summary' in parsed);
-    return sanitized;
-  } catch (error) {
-    console.error('❌ Minimal sanitization failed');
-    console.log('Sanitization error details:', error instanceof Error ? error.message : 'Unknown error');
-
-    // Enhanced debugging: Log the problem area
-    if (error instanceof Error && error.message.includes('position')) {
-      const positionMatch = error.message.match(/position (\d+)/);
-      if (positionMatch) {
-        const position = parseInt(positionMatch[1]);
-        const start = Math.max(0, position - 100);
-        const end = Math.min(sanitized.length, position + 100);
-        console.error('Problem area around position', position, ':', sanitized.substring(start, end));
-      }
-    }
-
-    throw new Error(
-      `JSON parsing failed even after minimal sanitization. ` +
-      `Original error: ${error instanceof Error ? error.message : 'Unknown error'}`
-    );
   }
 }
 
