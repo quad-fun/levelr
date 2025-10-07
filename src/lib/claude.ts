@@ -614,6 +614,10 @@ function balanceAtEnd(s: string): string {
 function sanitizeJsonString(jsonString: string): string {
   console.log('🧹 Sanitizing JSON string of length:', jsonString.length);
 
+  // Check if detailed_summary is present in original
+  const hasDetailedSummary = jsonString.includes('"detailed_summary"');
+  console.log('📝 Original JSON contains detailed_summary:', hasDetailedSummary);
+
   try {
     // First, try to parse as-is in case it's already valid
     JSON.parse(jsonString);
@@ -634,10 +638,15 @@ function sanitizeJsonString(jsonString: string): string {
   // Step 2: Balance closing brackets/braces at end
   sanitized = balanceAtEnd(sanitized);
 
+  // Check if detailed_summary is still present after sanitization
+  const stillHasDetailedSummary = sanitized.includes('"detailed_summary"');
+  console.log('📝 Sanitized JSON contains detailed_summary:', stillHasDetailedSummary);
+
   // Try parsing the minimally sanitized JSON
   try {
-    JSON.parse(sanitized);
+    const parsed = JSON.parse(sanitized);
     console.log('✅ Minimal JSON sanitization successful');
+    console.log('📝 Parsed JSON has detailed_summary field:', 'detailed_summary' in parsed);
     return sanitized;
   } catch (error) {
     console.error('❌ Minimal sanitization failed');
