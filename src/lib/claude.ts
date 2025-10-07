@@ -550,7 +550,19 @@ function sanitizeJsonString(jsonString: string): string {
     sanitized = sanitized.replace(fullMatch, newSummaryField + endChar);
   }
 
-  // 3. Additional cleanup
+  // 3. Fix property value comma issues
+  // Handle missing commas after object properties (the new error type)
+  sanitized = sanitized
+    // Fix missing commas after arrays that are property values: ] followed by "property"
+    .replace(/(\]\s*\n\s*)("[\w_]+"\s*:)/g, '$1,$2')
+    // Fix missing commas after objects that are property values: } followed by "property"
+    .replace(/(}\s*\n\s*)("[\w_]+"\s*:)/g, '$1,$2')
+    // Fix missing commas after primitive values followed by properties
+    .replace(/(["\d}\]]\s*\n\s*)("[\w_]+"\s*:)/g, '$1,$2')
+    // Fix missing commas after closing structures before next property
+    .replace(/([\}\]]\s*\n\s+)("[\w_]+"\s*:)/g, '$1,$2');
+
+  // 4. Additional cleanup
   // Fix double commas that might have been introduced
   sanitized = sanitized.replace(/,\s*,/g, ',');
 
