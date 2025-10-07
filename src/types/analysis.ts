@@ -31,6 +31,7 @@ export interface SoftCost {
 }
 
 export interface ProjectOverhead {
+  // Construction-specific overhead
   general_conditions?: number;
   general_requirements?: number;
   cm_fee?: number;
@@ -41,6 +42,13 @@ export interface ProjectOverhead {
   project_management?: number;
   supervision?: number;
   temporary_facilities?: number;
+  // Design-specific overhead
+  administration?: number;
+  professional_liability?: number;
+  travel_expenses?: number;
+  // Trade-specific overhead
+  testing_commissioning?: number;
+  // Common
   total_overhead: number;
 }
 

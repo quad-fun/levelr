@@ -140,6 +140,15 @@ export function exportDesignAnalysisToPDF(analysis: AnalysisResult): void {
     if (analysis.project_overhead.project_management) {
       overheadData.push(['Project Management', `$${analysis.project_overhead.project_management.toLocaleString()}`]);
     }
+    if (analysis.project_overhead.administration) {
+      overheadData.push(['Administration', `$${analysis.project_overhead.administration.toLocaleString()}`]);
+    }
+    if (analysis.project_overhead.professional_liability) {
+      overheadData.push(['Professional Liability', `$${analysis.project_overhead.professional_liability.toLocaleString()}`]);
+    }
+    if (analysis.project_overhead.travel_expenses) {
+      overheadData.push(['Travel & Expenses', `$${analysis.project_overhead.travel_expenses.toLocaleString()}`]);
+    }
     if (analysis.project_overhead.insurance) {
       overheadData.push(['Insurance', `$${analysis.project_overhead.insurance.toLocaleString()}`]);
     }

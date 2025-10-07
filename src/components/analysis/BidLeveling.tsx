@@ -119,9 +119,9 @@ export default function BidLeveling() {
     const selectedAnalyses = bidComparisons.map(comp => comp.analysis);
 
     if (exportFormat === 'pdf') {
-      exportBidLevelingToPDF(selectedAnalyses);
+      exportBidLevelingToPDF(selectedAnalyses, activeDiscipline);
     } else {
-      exportBidLevelingToExcel(selectedAnalyses);
+      exportBidLevelingToExcel(selectedAnalyses, activeDiscipline);
     }
   };
 
