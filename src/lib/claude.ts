@@ -501,38 +501,14 @@ function sanitizeJsonString(jsonString: string): string {
     console.log('Parse error details:', error instanceof Error ? error.message : 'Unknown error');
   }
 
-  // Enhanced approach: Handle multiple types of JSON issues
+  // Enhanced approach: Handle multiple types of JSON issues systematically
   let sanitized = jsonString;
 
-  // 1. Fix array element issues (missing commas, trailing commas in arrays)
-  // This addresses the specific error "Expected ',' or ']' after array element"
-  sanitized = sanitized
-    // Fix missing commas between array elements (common Claude issue)
-    .replace(/("\s*)\s*(\n\s*")/g, '$1,$2')
-    // Fix missing commas between object elements in arrays - enhanced pattern
-    .replace(/(}\s*)\s*(\n\s*{)/g, '$1,$2')
-    // Fix missing commas between string and object in arrays
-    .replace(/("\s*)\s*(\n\s*{)/g, '$1,$2')
-    // Fix missing commas between object and string in arrays
-    .replace(/(}\s*)\s*(\n\s*")/g, '$1,$2')
-    // NEW: Fix missing commas after complete objects (the specific issue)
-    // Pattern: } followed by whitespace and newline, then another {
-    .replace(/(}\s*\n\s*)(\{)/g, '$1,$2')
-    // NEW: Fix objects missing commas when followed by array closing
-    .replace(/(}\s*\n\s*)(\])/g, '$1$2')
-    // NEW: More aggressive object comma fixing - looks for } followed by non-comma, non-closing chars
-    .replace(/(}\s*)(\n\s*[^,\]\}])/g, '$1,$2')
-    // Remove trailing commas in arrays before closing bracket
-    .replace(/,(\s*\])/g, '$1')
-    // Remove trailing commas in objects before closing brace
-    .replace(/,(\s*})/g, '$1');
-
-  // 2. Find the detailed_summary field and extract it safely
+  // 1. Pre-process: Handle detailed_summary first (it's the most problematic)
   const detailedSummaryMatch = sanitized.match(/"detailed_summary"\s*:\s*"([\s\S]*?)"\s*[,}]/);
 
   if (detailedSummaryMatch) {
     const [fullMatch, summaryContent] = detailedSummaryMatch;
-
     // Properly escape the summary content
     const escapedSummary = summaryContent
       .replace(/\\/g, '\\\\')      // Escape backslashes first
@@ -546,28 +522,54 @@ function sanitizeJsonString(jsonString: string): string {
     // Replace the original with the escaped version
     const newSummaryField = `"detailed_summary": "${escapedSummary}"`;
     const endChar = fullMatch.endsWith(',') ? ',' : '';
-
     sanitized = sanitized.replace(fullMatch, newSummaryField + endChar);
   }
 
-  // 3. Fix property value comma issues
-  // Handle missing commas after object properties (the new error type)
-  sanitized = sanitized
-    // Fix missing commas after arrays that are property values: ] followed by "property"
-    .replace(/(\]\s*\n\s*)("[\w_]+"\s*:)/g, '$1,$2')
-    // Fix missing commas after objects that are property values: } followed by "property"
-    .replace(/(}\s*\n\s*)("[\w_]+"\s*:)/g, '$1,$2')
-    // Fix missing commas after primitive values followed by properties
-    .replace(/(["\d}\]]\s*\n\s*)("[\w_]+"\s*:)/g, '$1,$2')
-    // Fix missing commas after closing structures before next property
-    .replace(/([\}\]]\s*\n\s+)("[\w_]+"\s*:)/g, '$1,$2');
+  // 2. Comprehensive comma fixing - single pass approach
+  // Split into lines for more precise control
+  const lines = sanitized.split('\n');
+  const fixedLines: string[] = [];
 
-  // 4. Additional cleanup
-  // Fix double commas that might have been introduced
+  for (let i = 0; i < lines.length; i++) {
+    const currentLine = lines[i];
+    const nextLine = lines[i + 1];
+
+    if (nextLine) {
+      // Check if current line ends with } or ] and next line starts with { or " (but not with comma)
+      const currentTrimmed = currentLine.trim();
+      const nextTrimmed = nextLine.trim();
+
+      if (
+        // Current line ends with } or ]
+        (currentTrimmed.endsWith('}') || currentTrimmed.endsWith(']')) &&
+        // Next line starts with { or " but doesn't already start with ,
+        (nextTrimmed.startsWith('{') || nextTrimmed.startsWith('"')) &&
+        !nextTrimmed.startsWith(',') &&
+        // Make sure we're not at the end of an object/array
+        !nextTrimmed.startsWith('}') &&
+        !nextTrimmed.startsWith(']')
+      ) {
+        // Add comma to current line
+        fixedLines.push(currentLine.replace(/(\s*)$/, ',$1'));
+      } else {
+        fixedLines.push(currentLine);
+      }
+    } else {
+      fixedLines.push(currentLine);
+    }
+  }
+
+  sanitized = fixedLines.join('\n');
+
+  // 3. Final cleanup
+  // Remove double commas that might have been introduced
   sanitized = sanitized.replace(/,\s*,/g, ',');
 
-  // Fix leading commas in objects and arrays
-  sanitized = sanitized.replace(/{\s*,/g, '{').replace(/\[\s*,/g, '[');
+  // Remove trailing commas before closing brackets/braces
+  sanitized = sanitized.replace(/,(\s*[\]\}])/g, '$1');
+
+  // Fix leading commas
+  sanitized = sanitized.replace(/[\[\{]\s*,/g, (match) => match.replace(',', ''));
 
   // Remove any remaining unescaped control characters
   sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
