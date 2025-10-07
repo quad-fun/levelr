@@ -520,7 +520,7 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
         const retryJsonString = sanitizeJsonString(retryJsonMatch[0]);
         analysisResult = JSON.parse(retryJsonString);
         console.log('✅ Automatic retry successful');
-      } catch (retryParseError) {
+      } catch {
         console.error('❌ Automatic retry also failed');
         throw parseError; // Throw original error with more context
       }
