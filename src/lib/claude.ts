@@ -763,15 +763,7 @@ async function generateDetailedSummaryInProcess(analysis: AnalysisResult): Promi
     const startTime = Date.now();
     const markdown = await generateDetailedSummary({
       analysis,
-      maxChars: 15000,
-      sections: [
-        'ExecutiveSummary',
-        'CostSnapshot',
-        'ScopeByDivision',
-        'HighRiskItems',
-        'BidVarianceAnalysis',
-        'ChatFoundationData'
-      ]
+      maxChars: 15000
     });
 
     const processingTime = Date.now() - startTime;

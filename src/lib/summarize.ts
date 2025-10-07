@@ -5,13 +5,13 @@ import { AnalysisResult } from '@/types/analysis';
 interface SummaryOptions {
   analysis: AnalysisResult;
   maxChars?: number;
-  sections?: string[];
+  _sections?: string[];
 }
 
 export async function generateDetailedSummary({
   analysis,
   maxChars = 12000,
-  sections = ['ExecutiveSummary', 'CostSnapshot', 'ScopeByDivision', 'HighRiskItems', 'BidVarianceAnalysis']
+  _sections = ['ExecutiveSummary', 'CostSnapshot', 'ScopeByDivision', 'HighRiskItems', 'BidVarianceAnalysis']
 }: SummaryOptions): Promise<string> {
 
   if (!process.env.CLAUDE_API_KEY) {
