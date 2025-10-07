@@ -197,7 +197,7 @@ export function exportBidVarianceAnalysisToPDF(selectedAnalyses: SavedAnalysis[]
     doc.text('KEY VARIANCE FACTORS', 20, yPosition);
     yPosition += 10;
 
-    selectedAnalyses.forEach((analysis, index) => {
+    selectedAnalyses.forEach((analysis) => {
       if (analysis.result.detailed_summary) {
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
