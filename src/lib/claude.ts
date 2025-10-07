@@ -321,7 +321,9 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
 
     // Pre-process JSON to auto-correct legacy divisions before parsing
     const correctedJsonString = autoCorrectLegacyDivisions(jsonMatch[0]);
-    const analysisResult: AnalysisResult = JSON.parse(correctedJsonString);
+    // Simple JSON sanitization for malformed arrays
+    const sanitizedJson = correctedJsonString.replace(/,(\s*[}\]])/g, '$1');
+    const analysisResult: AnalysisResult = JSON.parse(sanitizedJson);
     
     // Validate required fields
     if (!analysisResult.contractor_name || !analysisResult.total_amount) {
