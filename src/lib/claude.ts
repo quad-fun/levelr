@@ -473,9 +473,58 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     // Pre-process JSON to auto-correct legacy divisions before parsing
     const correctedJsonString = autoCorrectLegacyDivisions(jsonMatch[0]);
 
-    // Clean and validate JSON before parsing
-    const cleanedJsonString = sanitizeJsonString(correctedJsonString);
-    const analysisResult: AnalysisResult = JSON.parse(cleanedJsonString);
+    let analysisResult: AnalysisResult;
+    try {
+      // Clean and validate JSON before parsing
+      const cleanedJsonString = sanitizeJsonString(correctedJsonString);
+      analysisResult = JSON.parse(cleanedJsonString);
+    } catch (parseError) {
+      console.log('🔄 Initial JSON parsing failed, attempting automatic retry...');
+
+      // Automatic retry: ask Claude to re-emit the same JSON, validated
+      const retryResponse = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': process.env.CLAUDE_API_KEY!,
+          'anthropic-version': '2023-06-01'
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 4000,
+          messages: [{
+            role: 'user',
+            content: 'Re-emit exactly the same JSON analysis, but ensure it is valid JSON with no syntax errors. Return ONLY the JSON, no prose.'
+          }]
+        })
+      });
+
+      if (!retryResponse.ok) {
+        throw parseError; // Fall back to original error
+      }
+
+      const retryData = await retryResponse.json();
+      const retryContent = retryData.content?.[0];
+
+      if (!retryContent || retryContent.type !== 'text') {
+        throw parseError; // Fall back to original error
+      }
+
+      // Try to extract and parse the retry JSON
+      const retryJsonMatch = retryContent.text.match(/\{[\s\S]*\}/);
+      if (!retryJsonMatch) {
+        throw parseError; // Fall back to original error
+      }
+
+      try {
+        const retryJsonString = sanitizeJsonString(retryJsonMatch[0]);
+        analysisResult = JSON.parse(retryJsonString);
+        console.log('✅ Automatic retry successful');
+      } catch (retryParseError) {
+        console.error('❌ Automatic retry also failed');
+        throw parseError; // Throw original error with more context
+      }
+    }
     
     // Validate required fields
     if (!analysisResult.contractor_name || !analysisResult.total_amount) {
@@ -506,6 +555,62 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
   }
 }
 
+function addCommasInArrays(s: string): string {
+  let out = '';
+  let inStr = false, esc = false;
+  let arrDepth = 0;
+
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    out += c;
+
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+
+    if (c === '"') inStr = true;
+    else if (c === '[') arrDepth++;
+    else if (c === ']') arrDepth = Math.max(0, arrDepth - 1);
+
+    // Inside array: if a '}' is followed (after whitespace) by '{' or '"' or digit, inject a comma
+    if (arrDepth > 0 && c === '}') {
+      let j = i + 1;
+      while (j < s.length && /\s/.test(s[j])) j++;
+      const next = s[j];
+      if (next === '{' || next === '"' || next === '-' || (next && /\d/.test(next))) {
+        // ensure no existing comma
+        let k = i + 1;
+        while (k < s.length && /\s/.test(s[k])) k++;
+        if (s[k] !== ',') out += ',';
+      }
+    }
+  }
+  return out;
+}
+
+function balanceAtEnd(s: string): string {
+  let inStr = false, esc = false;
+  let braces = 0, brackets = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') inStr = false;
+      continue;
+    }
+    if (c === '"') inStr = true;
+    else if (c === '{') braces++;
+    else if (c === '}') braces = Math.max(0, braces - 1);
+    else if (c === '[') brackets++;
+    else if (c === ']') brackets = Math.max(0, brackets - 1);
+  }
+  return s + (']'.repeat(brackets)) + ('}'.repeat(braces));
+}
+
 function sanitizeJsonString(jsonString: string): string {
   console.log('🧹 Sanitizing JSON string of length:', jsonString.length);
 
@@ -515,139 +620,44 @@ function sanitizeJsonString(jsonString: string): string {
     console.log('✅ JSON is already valid, no sanitization needed');
     return jsonString;
   } catch (error) {
-    console.log('⚠️ JSON needs sanitization, attempting to fix...');
+    console.log('⚠️ JSON needs sanitization, attempting minimal repair...');
     console.log('Parse error details:', error instanceof Error ? error.message : 'Unknown error');
   }
 
-  // Enhanced approach: Handle multiple types of JSON issues systematically
-  let sanitized = jsonString;
+  // Prefer fenced JSON if present
+  const fencedMatch = jsonString.match(/```json\s*([\s\S]*?)```/i) || jsonString.match(/```\s*([\s\S]*?)```/);
+  let sanitized = fencedMatch ? fencedMatch[1] : jsonString.slice(jsonString.indexOf('{')); // start from first '{'
 
-  // 1. Pre-process: Handle detailed_summary first (it's the most problematic)
-  const detailedSummaryMatch = sanitized.match(/"detailed_summary"\s*:\s*"([\s\S]*?)"\s*[,}]/);
+  // Step 1: Add missing commas in arrays
+  sanitized = addCommasInArrays(sanitized);
 
-  if (detailedSummaryMatch) {
-    const [fullMatch, summaryContent] = detailedSummaryMatch;
-    // Properly escape the summary content
-    const escapedSummary = summaryContent
-      .replace(/\\/g, '\\\\')      // Escape backslashes first
-      .replace(/"/g, '\\"')        // Escape quotes
-      .replace(/\n/g, '\\n')       // Escape newlines
-      .replace(/\r/g, '\\r')       // Escape carriage returns
-      .replace(/\t/g, '\\t')       // Escape tabs
-      .replace(/\f/g, '\\f')       // Escape form feeds
-      .replace(/\b/g, '\\b');      // Escape backspaces
+  // Step 2: Balance closing brackets/braces at end
+  sanitized = balanceAtEnd(sanitized);
 
-    // Replace the original with the escaped version
-    const newSummaryField = `"detailed_summary": "${escapedSummary}"`;
-    const endChar = fullMatch.endsWith(',') ? ',' : '';
-    sanitized = sanitized.replace(fullMatch, newSummaryField + endChar);
-  }
-
-  // 2. Comprehensive comma fixing - single pass approach
-  // Split into lines for more precise control
-  const lines = sanitized.split('\n');
-  const fixedLines: string[] = [];
-
-  for (let i = 0; i < lines.length; i++) {
-    const currentLine = lines[i];
-    const nextLine = lines[i + 1];
-
-    if (nextLine) {
-      // Check if current line ends with } or ] and next line starts with { or " (but not with comma)
-      const currentTrimmed = currentLine.trim();
-      const nextTrimmed = nextLine.trim();
-
-      if (
-        // Current line ends with } or ]
-        (currentTrimmed.endsWith('}') || currentTrimmed.endsWith(']')) &&
-        // Next line starts with { or " but doesn't already start with ,
-        (nextTrimmed.startsWith('{') || nextTrimmed.startsWith('"')) &&
-        !nextTrimmed.startsWith(',') &&
-        // Make sure we're not at the end of an object/array
-        !nextTrimmed.startsWith('}') &&
-        !nextTrimmed.startsWith(']')
-      ) {
-        // Add comma to current line
-        fixedLines.push(currentLine.replace(/(\s*)$/, ',$1'));
-      } else {
-        fixedLines.push(currentLine);
-      }
-    } else {
-      fixedLines.push(currentLine);
-    }
-  }
-
-  sanitized = fixedLines.join('\n');
-
-  // 3. Final cleanup
-  // Remove double commas that might have been introduced
-  sanitized = sanitized.replace(/,\s*,/g, ',');
-
-  // Remove trailing commas before closing brackets/braces
-  sanitized = sanitized.replace(/,(\s*[\]\}])/g, '$1');
-
-  // Fix leading commas
-  sanitized = sanitized.replace(/[\[\{]\s*,/g, (match) => match.replace(',', ''));
-
-  // Remove any remaining unescaped control characters
-  sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-
-  // Try parsing the cleaned JSON
+  // Try parsing the minimally sanitized JSON
   try {
     JSON.parse(sanitized);
-    console.log('✅ JSON sanitization successful');
+    console.log('✅ Minimal JSON sanitization successful');
     return sanitized;
   } catch (error) {
-    console.error('❌ JSON sanitization failed, attempting robust fallback');
+    console.error('❌ Minimal sanitization failed');
     console.log('Sanitization error details:', error instanceof Error ? error.message : 'Unknown error');
 
-    // Robust fallback: Parse without detailed_summary, then add it back safely
-    try {
-      // Remove the problematic detailed_summary field entirely
-      const withoutSummary = sanitized.replace(
-        /"detailed_summary"\s*:\s*"[\s\S]*?"\s*,?/g,
-        ''
-      );
-
-      // Clean up any double commas or trailing commas that might result
-      const cleanedWithoutSummary = withoutSummary
-        .replace(/,\s*,/g, ',')
-        .replace(/,(\s*[}\]])/g, '$1')
-        .replace(/{\s*,/g, '{')
-        .replace(/\[\s*,/g, '[')
-        .replace(/,\s*}/g, '}')
-        .replace(/,\s*\]/g, ']');
-
-      // Test if the base JSON parses
-      const baseResult = JSON.parse(cleanedWithoutSummary);
-
-      // Add back a safe detailed_summary
-      baseResult.detailed_summary = "Summary was sanitized due to special characters - basic analysis completed successfully";
-
-      console.log('⚡ Robust fallback successful - detailed_summary removed and re-added safely');
-      return JSON.stringify(baseResult);
-
-    } catch (fallbackError) {
-      console.error('💥 All sanitization attempts failed');
-      console.error('Original error:', error);
-      console.error('Fallback error:', fallbackError);
-
-      // Enhanced debugging: Log the problem area
-      if (error instanceof Error && error.message.includes('position')) {
-        const positionMatch = error.message.match(/position (\d+)/);
-        if (positionMatch) {
-          const position = parseInt(positionMatch[1]);
-          const start = Math.max(0, position - 100);
-          const end = Math.min(sanitized.length, position + 100);
-          console.error('Problem area around position', position, ':', sanitized.substring(start, end));
-        }
+    // Enhanced debugging: Log the problem area
+    if (error instanceof Error && error.message.includes('position')) {
+      const positionMatch = error.message.match(/position (\d+)/);
+      if (positionMatch) {
+        const position = parseInt(positionMatch[1]);
+        const start = Math.max(0, position - 100);
+        const end = Math.min(sanitized.length, position + 100);
+        console.error('Problem area around position', position, ':', sanitized.substring(start, end));
       }
-
-      throw new Error(
-        `JSON parsing failed even after sanitization. This may be due to malformed data in the response. ` +
-        `Original error: ${error instanceof Error ? error.message : 'Unknown error'}`
-      );
     }
+
+    throw new Error(
+      `JSON parsing failed even after minimal sanitization. ` +
+      `Original error: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 }
 
