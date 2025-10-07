@@ -509,12 +509,19 @@ function sanitizeJsonString(jsonString: string): string {
   sanitized = sanitized
     // Fix missing commas between array elements (common Claude issue)
     .replace(/("\s*)\s*(\n\s*")/g, '$1,$2')
-    // Fix missing commas between object elements in arrays
-    .replace(/("}\s*)\s*(\n\s*{)/g, '$1,$2')
+    // Fix missing commas between object elements in arrays - enhanced pattern
+    .replace(/(}\s*)\s*(\n\s*{)/g, '$1,$2')
     // Fix missing commas between string and object in arrays
     .replace(/("\s*)\s*(\n\s*{)/g, '$1,$2')
     // Fix missing commas between object and string in arrays
     .replace(/(}\s*)\s*(\n\s*")/g, '$1,$2')
+    // NEW: Fix missing commas after complete objects (the specific issue)
+    // Pattern: } followed by whitespace and newline, then another {
+    .replace(/(}\s*\n\s*)(\{)/g, '$1,$2')
+    // NEW: Fix objects missing commas when followed by array closing
+    .replace(/(}\s*\n\s*)(\])/g, '$1$2')
+    // NEW: More aggressive object comma fixing - looks for } followed by non-comma, non-closing chars
+    .replace(/(}\s*)(\n\s*[^,\]\}])/g, '$1,$2')
     // Remove trailing commas in arrays before closing bracket
     .replace(/,(\s*\])/g, '$1')
     // Remove trailing commas in objects before closing brace
