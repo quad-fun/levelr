@@ -496,14 +496,31 @@ function sanitizeJsonString(jsonString: string): string {
     JSON.parse(jsonString);
     console.log('✅ JSON is already valid, no sanitization needed');
     return jsonString;
-  } catch {
+  } catch (error) {
     console.log('⚠️ JSON needs sanitization, attempting to fix...');
+    console.log('Parse error details:', error instanceof Error ? error.message : 'Unknown error');
   }
 
-  // Better approach: Extract and handle detailed_summary separately
+  // Enhanced approach: Handle multiple types of JSON issues
   let sanitized = jsonString;
 
-  // Find the detailed_summary field and extract it safely
+  // 1. Fix array element issues (missing commas, trailing commas in arrays)
+  // This addresses the specific error "Expected ',' or ']' after array element"
+  sanitized = sanitized
+    // Fix missing commas between array elements (common Claude issue)
+    .replace(/("\s*)\s*(\n\s*")/g, '$1,$2')
+    // Fix missing commas between object elements in arrays
+    .replace(/("}\s*)\s*(\n\s*{)/g, '$1,$2')
+    // Fix missing commas between string and object in arrays
+    .replace(/("\s*)\s*(\n\s*{)/g, '$1,$2')
+    // Fix missing commas between object and string in arrays
+    .replace(/(}\s*)\s*(\n\s*")/g, '$1,$2')
+    // Remove trailing commas in arrays before closing bracket
+    .replace(/,(\s*\])/g, '$1')
+    // Remove trailing commas in objects before closing brace
+    .replace(/,(\s*})/g, '$1');
+
+  // 2. Find the detailed_summary field and extract it safely
   const detailedSummaryMatch = sanitized.match(/"detailed_summary"\s*:\s*"([\s\S]*?)"\s*[,}]/);
 
   if (detailedSummaryMatch) {
@@ -526,8 +543,12 @@ function sanitizeJsonString(jsonString: string): string {
     sanitized = sanitized.replace(fullMatch, newSummaryField + endChar);
   }
 
-  // Fix any trailing commas before closing braces/brackets
-  sanitized = sanitized.replace(/,(\s*[}\]])/g, '$1');
+  // 3. Additional cleanup
+  // Fix double commas that might have been introduced
+  sanitized = sanitized.replace(/,\s*,/g, ',');
+
+  // Fix leading commas in objects and arrays
+  sanitized = sanitized.replace(/{\s*,/g, '{').replace(/\[\s*,/g, '[');
 
   // Remove any remaining unescaped control characters
   sanitized = sanitized.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
@@ -539,6 +560,7 @@ function sanitizeJsonString(jsonString: string): string {
     return sanitized;
   } catch (error) {
     console.error('❌ JSON sanitization failed, attempting robust fallback');
+    console.log('Sanitization error details:', error instanceof Error ? error.message : 'Unknown error');
 
     // Robust fallback: Parse without detailed_summary, then add it back safely
     try {
@@ -553,7 +575,9 @@ function sanitizeJsonString(jsonString: string): string {
         .replace(/,\s*,/g, ',')
         .replace(/,(\s*[}\]])/g, '$1')
         .replace(/{\s*,/g, '{')
-        .replace(/,\s*}/g, '}');
+        .replace(/\[\s*,/g, '[')
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*\]/g, ']');
 
       // Test if the base JSON parses
       const baseResult = JSON.parse(cleanedWithoutSummary);
@@ -568,6 +592,17 @@ function sanitizeJsonString(jsonString: string): string {
       console.error('💥 All sanitization attempts failed');
       console.error('Original error:', error);
       console.error('Fallback error:', fallbackError);
+
+      // Enhanced debugging: Log the problem area
+      if (error instanceof Error && error.message.includes('position')) {
+        const positionMatch = error.message.match(/position (\d+)/);
+        if (positionMatch) {
+          const position = parseInt(positionMatch[1]);
+          const start = Math.max(0, position - 100);
+          const end = Math.min(sanitized.length, position + 100);
+          console.error('Problem area around position', position, ':', sanitized.substring(start, end));
+        }
+      }
 
       throw new Error(
         `JSON parsing failed even after sanitization. This may be due to malformed data in the response. ` +
