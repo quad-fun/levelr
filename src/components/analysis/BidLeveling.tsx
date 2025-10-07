@@ -5,7 +5,7 @@ import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
-import { ComparativeAnalysis } from '@/types/analysis';
+import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
 import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle } from 'lucide-react';
 
 interface BidComparison {
@@ -197,6 +197,74 @@ export default function BidLeveling() {
     if (variance === 0) return 'text-green-600 bg-green-50';
     if (variance <= 5) return 'text-yellow-600 bg-yellow-50';
     return 'text-red-600 bg-red-50';
+  };
+
+  // Get discipline-specific information for bid cards
+  const getDisciplineInfo = (result: AnalysisResult) => {
+    const discipline = result.discipline || 'construction';
+
+    switch (discipline) {
+      case 'design':
+        const phaseCount = result.aia_phases ? Object.keys(result.aia_phases).length : 0;
+        return `Phases: ${phaseCount}`;
+      case 'trade':
+        const systemCount = result.technical_systems ? Object.keys(result.technical_systems).length : 0;
+        return `Systems: ${systemCount}`;
+      case 'construction':
+      default:
+        const divisionCount = result.csi_divisions ? Object.keys(result.csi_divisions).length : 0;
+        return `Divisions: ${divisionCount}`;
+    }
+  };
+
+  // Get discipline-specific variance analysis title
+  const getDisciplineVarianceTitle = () => {
+    switch (activeDiscipline) {
+      case 'design':
+        return 'Phase-by-Phase Variance Analysis';
+      case 'trade':
+        return 'System-by-System Variance Analysis';
+      case 'construction':
+      default:
+        return 'Division-by-Division Variance Analysis';
+    }
+  };
+
+  // Get discipline-specific comparison matrix headers
+  const getDisciplineIncludedHeader = () => {
+    switch (activeDiscipline) {
+      case 'design':
+        return 'Phases Included';
+      case 'trade':
+        return 'Systems Included';
+      case 'construction':
+      default:
+        return 'Divisions Included';
+    }
+  };
+
+  const getDisciplineMissingHeader = () => {
+    switch (activeDiscipline) {
+      case 'design':
+        return 'Missing Phases';
+      case 'trade':
+        return 'Missing Systems';
+      case 'construction':
+      default:
+        return 'Missing Divisions';
+    }
+  };
+
+  const getDisciplineItemName = () => {
+    switch (activeDiscipline) {
+      case 'design':
+        return 'phases';
+      case 'trade':
+        return 'systems';
+      case 'construction':
+      default:
+        return 'divisions';
+    }
   };
 
   // Render discipline-specific comparison views
@@ -603,7 +671,7 @@ export default function BidLeveling() {
                         ${analysis.result.total_amount.toLocaleString()}
                       </div>
                       <div>
-                        Divisions: {Object.keys(analysis.result.csi_divisions).length}
+                        {getDisciplineInfo(analysis.result)}
                       </div>
                       <div>
                         {new Date(analysis.timestamp).toLocaleDateString()}
@@ -776,11 +844,11 @@ export default function BidLeveling() {
                 </div>
               )}
 
-              {/* Division-by-Division Analysis */}
+              {/* Discipline-Specific Variance Analysis */}
               {comparativeAnalysis.division_comparisons && Object.keys(comparativeAnalysis.division_comparisons).length > 0 && (
                 <div className="bg-white rounded-lg shadow-md p-6">
                   <h4 className="text-lg font-semibold text-gray-900 mb-4">
-                    Division-by-Division Variance Analysis
+                    {getDisciplineVarianceTitle()}
                   </h4>
                   <div className="space-y-6">
                     {Object.entries(comparativeAnalysis.division_comparisons).map(([division, analysis]) => (
@@ -871,8 +939,8 @@ export default function BidLeveling() {
                         <tr className="border-b">
                           <th className="text-left py-2">Contractor</th>
                           <th className="text-left py-2">Total Amount</th>
-                          <th className="text-left py-2">Divisions Included</th>
-                          <th className="text-left py-2">Missing Divisions</th>
+                          <th className="text-left py-2">{getDisciplineIncludedHeader()}</th>
+                          <th className="text-left py-2">{getDisciplineMissingHeader()}</th>
                           <th className="text-left py-2">Risk Factors</th>
                         </tr>
                       </thead>
@@ -883,7 +951,7 @@ export default function BidLeveling() {
                             <td className="py-2">${data.total_amount.toLocaleString()}</td>
                             <td className="py-2">
                               <span className="text-sm text-gray-600">
-                                {data.divisions_included.length} divisions
+                                {data.divisions_included.length} {getDisciplineItemName()}
                               </span>
                             </td>
                             <td className="py-2">

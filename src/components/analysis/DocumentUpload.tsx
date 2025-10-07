@@ -7,17 +7,13 @@ import { processDocument, ProcessedDocument, detectFileType } from '@/lib/docume
 import { upload } from '@vercel/blob/client';
 
 interface DocumentUploadProps {
-  onFileSelect: (file: File, processedDoc: ProcessedDocument, discipline: 'construction' | 'design' | 'trade') => void;
+  onFileSelect: (file: File, processedDoc: ProcessedDocument) => void;
   isProcessing: boolean;
 }
 
 export default function DocumentUpload({ onFileSelect, isProcessing }: DocumentUploadProps) {
   const [error, setError] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
-  // Removed selectedDiscipline state as it's not needed - discipline is passed directly to callback
-  const [showDisciplineSelection, setShowDisciplineSelection] = useState(false);
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [pendingProcessedDoc, setPendingProcessedDoc] = useState<ProcessedDocument | null>(null);
 
   const processFile = useCallback(async (file: File) => {
     setError(null);
@@ -71,10 +67,7 @@ export default function DocumentUpload({ onFileSelect, isProcessing }: DocumentU
         };
         
         setUploadProgress(null); // Clear progress before analysis starts
-        // Store processed document and show discipline selection
-        setPendingFile(file);
-        setPendingProcessedDoc(processedDoc);
-        setShowDisciplineSelection(true);
+        onFileSelect(file, processedDoc);
         
       } else {
         // For smaller files, use original processing
@@ -86,10 +79,7 @@ export default function DocumentUpload({ onFileSelect, isProcessing }: DocumentU
           contentLength: processedDoc.content.length
         });
         
-        // Store processed document and show discipline selection
-        setPendingFile(file);
-        setPendingProcessedDoc(processedDoc);
-        setShowDisciplineSelection(true);
+        onFileSelect(file, processedDoc);
       }
       
     } catch (err) {
@@ -100,22 +90,6 @@ export default function DocumentUpload({ onFileSelect, isProcessing }: DocumentU
     }
   }, [onFileSelect]);
 
-  const handleDisciplineSelect = (discipline: 'construction' | 'design' | 'trade') => {
-    if (pendingFile && pendingProcessedDoc) {
-      setShowDisciplineSelection(false);
-      onFileSelect(pendingFile, pendingProcessedDoc, discipline);
-      // Reset pending state
-      setPendingFile(null);
-      setPendingProcessedDoc(null);
-    }
-  };
-
-  const cancelDisciplineSelection = () => {
-    setShowDisciplineSelection(false);
-    setPendingFile(null);
-    setPendingProcessedDoc(null);
-    setUploadProgress(null);
-  };
 
   const onDrop = useCallback(async (acceptedFiles: File[]) => {
     if (acceptedFiles.length === 0) return;
@@ -221,55 +195,6 @@ export default function DocumentUpload({ onFileSelect, isProcessing }: DocumentU
         </div>
       </div>
 
-      {/* Discipline Selection Modal */}
-      {showDisciplineSelection && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Select Document Type</h3>
-            <p className="text-gray-600 mb-6">
-              Choose the type of document you're analyzing to ensure accurate analysis and comparison:
-            </p>
-
-            <div className="space-y-3">
-              <button
-                onClick={() => handleDisciplineSelect('construction')}
-                className="w-full p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <div className="font-medium text-gray-900">Construction</div>
-                <div className="text-sm text-gray-600">General contractor bids, construction proposals, project estimates</div>
-                <div className="text-xs text-blue-600 mt-1">→ Analyzed using CSI Division standards</div>
-              </button>
-
-              <button
-                onClick={() => handleDisciplineSelect('design')}
-                className="w-full p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <div className="font-medium text-gray-900">Design Services</div>
-                <div className="text-sm text-gray-600">Architectural, engineering, MEP design proposals</div>
-                <div className="text-xs text-blue-600 mt-1">→ Analyzed using AIA Phase standards</div>
-              </button>
-
-              <button
-                onClick={() => handleDisciplineSelect('trade')}
-                className="w-full p-4 text-left border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors"
-              >
-                <div className="font-medium text-gray-900">Trade Services</div>
-                <div className="text-sm text-gray-600">Electrical, plumbing, HVAC, specialty contractor bids</div>
-                <div className="text-xs text-blue-600 mt-1">→ Analyzed using Technical Systems standards</div>
-              </button>
-            </div>
-
-            <div className="mt-6 flex justify-end">
-              <button
-                onClick={cancelDisciplineSelection}
-                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

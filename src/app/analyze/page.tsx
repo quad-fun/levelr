@@ -25,9 +25,9 @@ export default function AnalyzePage() {
   const [selectedDiscipline, setSelectedDiscipline] = useState<'construction' | 'design' | 'trade'>('construction');
   const [marketVariance, setMarketVariance] = useState<MarketVariance | null>(null);
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null);
-  const [useMultiDisciplineAnalysis, setUseMultiDisciplineAnalysis] = useState(false);
+  const [useMultiDisciplineAnalysis] = useState(true); // Default to true now, no longer toggleable
 
-  const handleFileSelect = async (file: File, processedDoc: ProcessedDocument, discipline: 'construction' | 'design' | 'trade') => {
+  const handleFileSelect = async (file: File, processedDoc: ProcessedDocument) => {
     setIsProcessing(true);
     setError(null);
     
@@ -35,15 +35,13 @@ export default function AnalyzePage() {
     setLastProcessedDoc({ file, processedDoc });
     
     try {
-      // Update selected discipline from user selection
-      setSelectedDiscipline(discipline);
-      console.log('Starting analysis for:', file.name, 'Type:', processedDoc.fileType, 'Discipline:', discipline);
+      console.log('Starting analysis for:', file.name, 'Type:', processedDoc.fileType, 'Discipline:', selectedDiscipline);
       
       let result: AnalysisResult;
       
       if (useMultiDisciplineAnalysis) {
         // Use new multi-discipline analyzer or existing construction system
-        if (discipline === 'construction') {
+        if (selectedDiscipline === 'construction') {
           // Use existing proven construction analysis
           result = await analyzeDocument(processedDoc);
           result.discipline = 'construction';
@@ -51,7 +49,7 @@ export default function AnalyzePage() {
           // Use new AI-powered design/trade analyzers
           result = await MultiDisciplineAnalyzer.analyzeProposal(
             processedDoc,
-            discipline,
+            selectedDiscipline,
             {
               projectType: 'general',
               estimatedValue: 0 // Will be extracted from document
@@ -60,13 +58,13 @@ export default function AnalyzePage() {
         }
         
         // Generate market analysis
-        if (discipline === 'design' && result.aia_phases) {
+        if (selectedDiscipline === 'design' && result.aia_phases) {
           setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeDesignMarketRates(
             result.aia_phases,
             result.total_amount,
             'general'
           ));
-        } else if (discipline === 'trade' && result.technical_systems) {
+        } else if (selectedDiscipline === 'trade' && result.technical_systems) {
           setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeTradeMarketRates(
             result.technical_systems,
             result.total_amount,
@@ -87,10 +85,10 @@ export default function AnalyzePage() {
         
       } else {
         // Route to appropriate analyzer based on discipline
-        if (discipline === 'construction') {
+        if (selectedDiscipline === 'construction') {
           result = await analyzeDocument(processedDoc);
           result.discipline = 'construction';
-        } else if (discipline === 'design') {
+        } else if (selectedDiscipline === 'design') {
           // Route to design analyzer
           const response = await fetch('/api/claude/design', {
             method: 'POST',
@@ -284,22 +282,8 @@ export default function AnalyzePage() {
                 </div>
                 
                 <div className="space-y-4">
-                  <div className="flex items-center space-x-4 mb-4">
-                    <label className="flex items-center">
-                      <input
-                        type="checkbox"
-                        checked={useMultiDisciplineAnalysis}
-                        onChange={(e) => setUseMultiDisciplineAnalysis(e.target.checked)}
-                        className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="ml-2 text-sm font-medium text-gray-700">
-                        Use Enhanced Multi-Discipline Analysis (Beta)
-                      </span>
-                    </label>
-                  </div>
-
-                  {useMultiDisciplineAnalysis && (
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  {/* Multi-discipline analysis is now the default */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
                         selectedDiscipline === 'construction' 
                           ? 'border-blue-500 bg-blue-50' 
@@ -365,8 +349,7 @@ export default function AnalyzePage() {
                           <p className="text-sm text-gray-600">MEP and specialty trade services</p>
                         </div>
                       </label>
-                    </div>
-                  )}
+                  </div>
                 </div>
               </div>
             </div>
