@@ -67,6 +67,12 @@ EXTRACT PROFESSIONAL ESTIMATOR-LEVEL DETAIL:
 - If multiple square footage values exist, prioritize gross building area over net/usable area
 - Look for context clues like "gross building area", "total building sf", "overall project size"
 
+🚨 CRITICAL JSON FORMAT REQUIREMENTS 🚨
+⚠️ EVERY OBJECT IN ARRAYS MUST END WITH A COMMA (except the last one)
+⚠️ CHECK ALL sub_items, allowances, subcontractors, softCosts arrays
+⚠️ CORRECT: [{"desc": "A", "cost": 100}, {"desc": "B", "cost": 200}]
+⚠️ WRONG: [{"desc": "A", "cost": 100} {"desc": "B", "cost": 200}] ← MISSING COMMA!
+
 Return ONLY valid JSON with COMPLETE granular breakdown:
 {
   "contractor_name": "ACTUAL_COMPANY_NAME_FROM_DOCUMENT",
@@ -79,7 +85,7 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
   "markup_percentage": 18.75,
   "csi_divisions": {
     "01": {
-      "cost": 125000, 
+      "cost": 125000,
       "items": ["general requirements", "supervision"],
       "subcontractor": "Self-performed",
       "sub_items": [
@@ -89,7 +95,7 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
       ]
     },
     "03": {
-      "cost": 450000, 
+      "cost": 450000,
       "items": ["foundations", "structural concrete"],
       "subcontractor": "ABC Concrete Co.",
       "sub_items": [
@@ -99,7 +105,7 @@ Return ONLY valid JSON with COMPLETE granular breakdown:
       ]
     },
     "22": {
-      "cost": 200000, 
+      "cost": 200000,
       "items": ["plumbing fixtures", "water supply"],
       "subcontractor": "XYZ Plumbing Inc.",
       "sub_items": [
@@ -347,6 +353,18 @@ Make the summary comprehensive but well-organized with clear headers and bullet 
 - Do not include unescaped quotes, line breaks, or control characters
 - Keep the summary under 15KB to prevent parsing issues
 - If the content is too large, prioritize the most important sections
+
+🚨 FINAL JSON VALIDATION CHECKLIST 🚨
+Before returning your JSON response, verify:
+✅ Every object in every array has a comma after its closing brace (except the last object)
+✅ All sub_items arrays have proper comma separation between objects
+✅ All allowances arrays have proper comma separation between objects
+✅ All subcontractors arrays have proper comma separation between objects
+✅ All softCosts arrays have proper comma separation between objects
+✅ All uncategorizedCosts arrays have proper comma separation between objects
+❌ No missing commas like: } { instead of }, {
+❌ No trailing commas before array closing brackets like: }, ]
+❌ Double-check appliance/equipment items in sub_items arrays
 
 Document: ${processedDoc.fileName}
 File Type: ${processedDoc.fileType}
