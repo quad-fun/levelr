@@ -44,6 +44,7 @@ function ExplainCell({
   const [explanation, setExplanation] = useState<string | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<'left' | 'right'>('right');
 
   const enableInlineExplanations = process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false';
 
@@ -109,9 +110,23 @@ function ExplainCell({
     }
   };
 
-  const handleOpenChange = (open: boolean) => {
+  const handleOpenChange = (open: boolean, event?: React.MouseEvent) => {
     setIsOpen(open);
     if (open) {
+      // Smart positioning: check if we're close to the right edge of screen
+      if (event) {
+        const rect = (event.target as HTMLElement).getBoundingClientRect();
+        const tooltipWidth = 320; // 80 * 4 (w-80 in pixels)
+        const spaceOnRight = window.innerWidth - rect.right;
+        const spaceOnLeft = rect.left;
+
+        // If not enough space on the right (320px), position left
+        if (spaceOnRight < tooltipWidth && spaceOnLeft > tooltipWidth) {
+          setTooltipPosition('left');
+        } else {
+          setTooltipPosition('right');
+        }
+      }
       onOpen();
     }
   };
@@ -132,7 +147,7 @@ function ExplainCell({
   return (
     <div className="relative">
       <button
-        onClick={() => handleOpenChange(!isOpen)}
+        onClick={(e) => handleOpenChange(!isOpen, e)}
         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
         title="Explain variance"
       >
@@ -144,7 +159,9 @@ function ExplainCell({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 top-8 z-50 w-80 p-3 bg-white border border-gray-200 rounded-lg shadow-lg">
+        <div className={`absolute top-8 z-50 w-80 p-3 bg-white border border-gray-200 rounded-lg shadow-lg ${
+          tooltipPosition === 'left' ? 'right-0' : 'left-0'
+        }`}>
           <div className="flex justify-between items-start mb-2">
             <h6 className="text-sm font-medium text-gray-900">
               {getTitle()}

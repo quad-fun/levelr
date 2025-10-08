@@ -640,7 +640,7 @@ export function exportDesignLeveledComparisonSheet(wb: XLSX.WorkBook, bids: Save
       }
     }
 
-    const row: (string | number)[] = [`${phaseKey} - ${phaseName}`];
+    const row: (string | number)[] = [phaseName]; // Just the clean phase name
 
     bids.forEach((bid, index) => {
       const phaseData = bid.result.aia_phases?.[phaseKey];
@@ -650,8 +650,9 @@ export function exportDesignLeveledComparisonSheet(wb: XLSX.WorkBook, bids: Save
       // FEE column
       row.push(fee);
 
-      // % OF TOTAL column
-      row.push(percentage);
+      // % OF TOTAL column - normalize to decimal for Excel percentage formatting
+      const formattedPercentage = percentage / 100; // Convert from whole number percentage to decimal
+      row.push(formattedPercentage);
 
       // COMMENTS column - show deliverables or scope notes
       let comment = '';
@@ -686,7 +687,7 @@ export function exportDesignLeveledComparisonSheet(wb: XLSX.WorkBook, bids: Save
     const totalAmount = bid.result.total_amount;
 
     totalFeeRow.push(totalAmount);
-    totalFeeRow.push(100); // Always 100% for total
+    totalFeeRow.push(1.0); // Always 100% for total (1.0 = 100% when formatted)
     totalFeeRow.push('Complete design services fee');
 
     if (index < bids.length - 1) totalFeeRow.push('');
