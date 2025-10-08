@@ -1,6 +1,68 @@
 import { AnalysisResult, Subcontractor } from '@/types/analysis';
 import { ProcessedDocument } from './document-processor';
 
+function maskStrings(s: string): { masked: string; strings: string[] } {
+  const strings: string[] = [];
+  let masked = '';
+  let inStr = false, esc = false, buf = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (inStr) {
+      buf += c;
+      if (esc) esc = false;
+      else if (c === '\\') esc = true;
+      else if (c === '"') { inStr = false; strings.push(buf); masked += `__STR${strings.length - 1}__`; buf = ''; }
+    } else {
+      if (c === '"') { inStr = true; buf = '"'; }
+      else masked += c;
+    }
+  }
+  if (inStr) { strings.push(buf); masked += `__STR${strings.length - 1}__`; }
+  return { masked, strings };
+}
+
+function unmaskStrings(s: string, strings: string[]) {
+  return s.replace(/__STR(\d+)__/g, (_, i) => strings[Number(i)] ?? '""');
+}
+
+function broadCommaFix(s: string): string {
+  const { masked, strings } = maskStrings(s);
+  let m = masked;
+  // Add commas between adjacent object tokens: }{  }\n{  }   {  }"  }123  }-45
+  m = m.replace(/}\s*(?={|["\d-])/g, '},');
+  // Add commas between adjacent array elements: ][  ]\n[  ]   {  ]"  ]123
+  m = m.replace(/]\s*(?=\[|{|["\d-])/g, '],');
+  return unmaskStrings(m, strings);
+}
+
+function sanitizeJsonStringMinimal(raw: string): string {
+  let s = raw.trim();
+
+  // Remove trailing commas before closing brackets
+  s = s.replace(/,(\s*[}\]])/g, '$1');
+
+  try {
+    JSON.parse(s);
+    return s;
+  } catch (err) {
+    // Last-ditch string-safe broad fix
+    const widened = broadCommaFix(s);
+    try {
+      JSON.parse(widened);
+      return widened;
+    } catch (finalErr) {
+      // Log error context for debugging
+      const pos = (finalErr as any).position ?? -1;
+      if (pos >= 0) {
+        const start = Math.max(0, pos - 100);
+        const end = Math.min(s.length, pos + 100);
+        console.error(`JSON parse error window @${pos}: ${s.slice(start, end)}`);
+      }
+      throw finalErr;
+    }
+  }
+}
+
 export async function analyzeDocumentWithClaude(processedDoc: ProcessedDocument): Promise<AnalysisResult> {
   const prompt = `
 You are analyzing a construction bid document. Extract ALL cost information and map to MasterFormat 2018 CSI divisions.
@@ -321,8 +383,9 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
 
     // Pre-process JSON to auto-correct legacy divisions before parsing
     const correctedJsonString = autoCorrectLegacyDivisions(jsonMatch[0]);
-    // Simple JSON sanitization for malformed arrays
-    const sanitizedJson = correctedJsonString.replace(/,(\s*[}\]])/g, '$1');
+    // Robust JSON sanitization with string masking
+    const sanitizedJson = sanitizeJsonStringMinimal(correctedJsonString);
+    console.log(`About to parse length=${sanitizedJson.length}, tail=${sanitizedJson.slice(-120)}`);
     const analysisResult: AnalysisResult = JSON.parse(sanitizedJson);
     
     // Validate required fields
