@@ -216,3 +216,45 @@ Deploy command: `vercel --prod`
 **Change pricing**: Update `MVP_PRICING` in `pricing.ts`
 **Enable feature**: Set environment variable and update components
 **Add new API endpoint**: Create route and update middleware matcher
+
+## Development Log
+
+### December 2024 - Inline Variance Explanations Feature
+
+**Branch**: `inline-variance-explanations` (from `enhanced-bid-analysis`)
+
+**Major Achievement**: Implemented comprehensive inline variance explanations across all disciplines with Excel-like user experience.
+
+**Key Features Delivered:**
+- **Universal ExplainCell Component**: Multi-discipline support for Construction (CSI), Design (AIA), and Trade (Technical Systems)
+- **Smart Tooltip Positioning**: Auto-detects screen edges and positions tooltips optimally
+- **Expandable Explanations**: "Keep reading" feature with short (≤280 chars) and long (≤800 chars) versions
+- **Intelligent Caching**: 14-day TTL with deterministic cache keys for performance
+- **Feature Flag Integration**: `NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS` for controlled rollout
+
+**Technical Implementation:**
+- **API**: `/api/variance/explain` with structured Claude prompts for SHORT/LONG responses
+- **Server Helper**: `src/lib/varianceExplain.ts` with crypto-based cache keys
+- **UI Enhancement**: Added "Why?" columns to all bid leveling comparison tables
+- **Export Fixes**: Resolved design export percentage formatting (800.0% → 8.0%) and simplified phase names
+
+**Files Modified:**
+- `src/components/analysis/BidLeveling.tsx` - ExplainCell component and table integration
+- `src/lib/varianceExplain.ts` - Server-side explanation logic with caching
+- `src/app/api/variance/explain/route.ts` - API endpoint with validation
+- `src/lib/analysis/exports/index.ts` - Design export formatting fixes
+- `CLAUDE.md` - Feature flag documentation
+
+**User Experience:**
+- Click "Why?" icon → Instant tooltip with variance explanation
+- Smart positioning prevents off-screen tooltips
+- "Keep reading →" for detailed analysis when available
+- Professional styling with loading states and error handling
+
+**Performance:**
+- 14-day cache prevents repeated API calls for same data
+- Deterministic cache keys based on row data and selected bids
+- Graceful degradation when feature disabled or insufficient data
+
+**Status**: ✅ Complete and ready for user testing
+**Next Steps**: User feedback collection and potential chat integration via "Open in Chat" feature
