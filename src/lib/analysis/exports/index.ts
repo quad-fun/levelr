@@ -1,6 +1,8 @@
 // Export router for discipline-specific analysis exports
 import { AnalysisResult } from '@/types/analysis';
 import { SavedAnalysis } from '@/lib/storage';
+// Note: Variance explanations are available in the UI via inline tooltips
+// Excel exports focus on raw data and existing comments
 import {
   exportConstructionAnalysisToPDF,
   exportConstructionAnalysisToExcel,
@@ -664,6 +666,7 @@ export function exportDesignLeveledComparisonSheet(wb: XLSX.WorkBook, bids: Save
       } else {
         comment = 'Phase not included';
       }
+
       row.push(comment);
 
       // Spacer column only between bidders

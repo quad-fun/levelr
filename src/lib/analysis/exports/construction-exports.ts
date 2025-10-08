@@ -6,6 +6,8 @@ import { SavedAnalysis } from '@/lib/storage';
 import { analyzeMarketVariance } from '../market-analyzer';
 import { calculateProjectRisk } from '../risk-analyzer';
 import { CSI_DIVISIONS, LEVELING_DIVISIONS, LEVELING_LABELS, PSEUDO_SCOPES } from '../csi-analyzer';
+// Note: Variance explanations are available in the UI via inline tooltips
+// Excel exports focus on raw data and existing comments
 
 // Extend jsPDF type to include autoTable properties
 interface JsPDFWithAutoTable extends jsPDF {

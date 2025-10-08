@@ -6,7 +6,7 @@ import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF, exportBidVarianceAnalysisToPDF } from '@/lib/analysis/exports';
 import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
-import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle } from 'lucide-react';
+import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle, HelpCircle, Loader2 } from 'lucide-react';
 
 interface BidComparison {
   analysis: SavedAnalysis;
@@ -17,6 +17,159 @@ interface BidComparison {
   };
   rank: number;
   varianceFromLow: number;
+}
+
+interface VarianceExplanation {
+  key: string;
+  short: string;
+  long?: string;
+  at: string;
+  model?: string;
+}
+
+// ExplainCell component for inline variance explanations
+function ExplainCell({
+  itemCode,
+  itemName,
+  discipline,
+  bidComparisons,
+  selectedBids
+}: {
+  itemCode: string;
+  itemName: string;
+  discipline: 'construction' | 'design' | 'trade';
+  bidComparisons: BidComparison[];
+  selectedBids: string[];
+}) {
+  const [explanation, setExplanation] = useState<string | undefined>();
+  const [isLoading, setIsLoading] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+
+  const enableInlineExplanations = process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false';
+
+  if (!enableInlineExplanations || selectedBids.length < 2) {
+    return null;
+  }
+
+  const onOpen = async () => {
+    if (explanation || isLoading) return;
+
+    setIsLoading(true);
+    try {
+      // Build row data based on discipline
+      const getCostForItem = (comp: BidComparison) => {
+        switch (discipline) {
+          case 'construction':
+            return comp.analysis.result.csi_divisions?.[itemCode]?.cost || 0;
+          case 'design':
+            return comp.analysis.result.aia_phases?.[itemCode]?.fee_amount || 0;
+          case 'trade':
+            return comp.analysis.result.technical_systems?.[itemCode]?.total_cost || 0;
+          default:
+            return 0;
+        }
+      };
+
+      const costs = bidComparisons.map(getCostForItem);
+      const rows = [{
+        division: itemCode,
+        scopePath: itemName,
+        discipline,
+        bids: Object.fromEntries(
+          bidComparisons.map((comp, index) => [
+            comp.analysis.result.contractor_name,
+            costs[index]
+          ])
+        ),
+        varianceAbs: Math.max(...costs) - Math.min(...costs),
+        variancePct: 0 // Will be calculated server-side
+      }];
+
+      const response = await fetch('/api/variance/explain', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          rows,
+          selectedBids: bidComparisons.map(comp => comp.analysis.result.contractor_name),
+          maxChars: 280
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`API error: ${response.status}`);
+      }
+
+      const exp: VarianceExplanation = await response.json();
+      setExplanation(exp.short || 'No explanation available');
+    } catch (error) {
+      console.error('Failed to get variance explanation:', error);
+      setExplanation('Unable to generate explanation');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleOpenChange = (open: boolean) => {
+    setIsOpen(open);
+    if (open) {
+      onOpen();
+    }
+  };
+
+  const getTitle = () => {
+    switch (discipline) {
+      case 'construction':
+        return `Division ${itemCode} Variance`;
+      case 'design':
+        return `${itemName} Phase Variance`;
+      case 'trade':
+        return `${itemName} System Variance`;
+      default:
+        return `${itemName} Variance`;
+    }
+  };
+
+  return (
+    <div className="relative">
+      <button
+        onClick={() => handleOpenChange(!isOpen)}
+        className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
+        title="Explain variance"
+      >
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <HelpCircle className="h-4 w-4" />
+        )}
+      </button>
+
+      {isOpen && (
+        <div className="absolute left-0 top-8 z-50 w-80 p-3 bg-white border border-gray-200 rounded-lg shadow-lg">
+          <div className="flex justify-between items-start mb-2">
+            <h6 className="text-sm font-medium text-gray-900">
+              {getTitle()}
+            </h6>
+            <button
+              onClick={() => setIsOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              ×
+            </button>
+          </div>
+          <div className="text-sm text-gray-700">
+            {isLoading ? (
+              <div className="flex items-center">
+                <Loader2 className="h-3 w-3 animate-spin mr-2" />
+                Analyzing variance...
+              </div>
+            ) : (
+              explanation || 'No explanation available'
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function BidLeveling() {
@@ -465,6 +618,9 @@ export default function BidLeveling() {
                   {comp.analysis.result.contractor_name}
                 </th>
               ))}
+              {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
+                <th className="text-left py-2 w-16">Explain</th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -503,6 +659,17 @@ export default function BidLeveling() {
                         </td>
                       );
                     })}
+                    {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
+                      <td className="py-2">
+                        <ExplainCell
+                          itemCode={code}
+                          itemName={division.name}
+                          discipline="construction"
+                          bidComparisons={bidComparisons}
+                          selectedBids={selectedBids}
+                        />
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -537,6 +704,9 @@ export default function BidLeveling() {
                     {comp.analysis.result.contractor_name}
                   </th>
                 ))}
+                {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
+                  <th className="text-left py-2 w-16">Explain</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -577,6 +747,17 @@ export default function BidLeveling() {
                         </td>
                       );
                     })}
+                    {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
+                      <td className="py-2">
+                        <ExplainCell
+                          itemCode={phase.code}
+                          itemName={phase.name}
+                          discipline="design"
+                          bidComparisons={bidComparisons}
+                          selectedBids={selectedBids}
+                        />
+                      </td>
+                    )}
                   </tr>
                 );
               })}
@@ -613,6 +794,9 @@ export default function BidLeveling() {
                     {comp.analysis.result.contractor_name}
                   </th>
                 ))}
+                {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
+                  <th className="text-left py-2 w-16">Explain</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -657,6 +841,17 @@ export default function BidLeveling() {
                         </td>
                       );
                     })}
+                    {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
+                      <td className="py-2">
+                        <ExplainCell
+                          itemCode={system.code}
+                          itemName={system.name}
+                          discipline="trade"
+                          bidComparisons={bidComparisons}
+                          selectedBids={selectedBids}
+                        />
+                      </td>
+                    )}
                   </tr>
                 );
               })}

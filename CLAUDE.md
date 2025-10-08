@@ -163,6 +163,7 @@ NEXT_PUBLIC_ENABLE_AUTH=false           # Clerk authentication
 NEXT_PUBLIC_ENABLE_USAGE_LIMITS=false  # Analysis limits
 NEXT_PUBLIC_ENABLE_PAYMENTS=false      # Stripe billing
 NEXT_PUBLIC_ENABLE_TEAMS=false         # Team features
+NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS=true  # Inline variance explanations (default enabled)
 ```
 
 ## Environment Setup
