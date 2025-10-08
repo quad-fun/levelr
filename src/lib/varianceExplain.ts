@@ -60,7 +60,7 @@ async function callClaudeForVarianceExplanation(
   rows: Record<string, unknown>[],
   selectedBids: string[],
   maxChars: number
-): Promise<string> {
+): Promise<{ short: string; long: string }> {
   if (!process.env.CLAUDE_API_KEY) {
     throw new Error('Claude API key not configured');
   }
@@ -68,8 +68,16 @@ async function callClaudeForVarianceExplanation(
   const bidNames = selectedBids.length > 0 ? selectedBids.join(' vs ') : 'selected bids';
   const rowsData = JSON.stringify(rows, null, 2);
 
-  const prompt = `Return PLAIN TEXT only. No JSON. Max ${maxChars} chars.
-Explain why costs differ between ${bidNames}. Call out scope adds/substitutions/allowances and likely cost drivers (materials, systems, labor). Use ONLY the provided data.
+  const prompt = `Analyze why costs differ between ${bidNames}. Provide TWO versions:
+
+1. SHORT (≤${maxChars} chars): Brief explanation of main variance drivers
+2. LONG (≤800 chars): Detailed analysis including specific scope differences, material choices, allowances, and recommendations
+
+Format as:
+SHORT: [brief explanation]
+LONG: [detailed analysis]
+
+Call out scope adds/substitutions/allowances and likely cost drivers (materials, systems, labor). Use ONLY the provided data.
 
 DATA:
 ${rowsData}`;
@@ -84,7 +92,7 @@ ${rowsData}`;
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: Math.ceil(maxChars / 3), // rough token estimate
+        max_tokens: 400, // More tokens for both versions
         messages: [{
           role: 'user',
           content: prompt
@@ -105,13 +113,28 @@ ${rowsData}`;
       throw new Error('Unexpected response format from Claude API');
     }
 
-    // Trim to max chars if Claude exceeded
-    let explanation = content.text.trim();
-    if (explanation.length > maxChars) {
-      explanation = explanation.substring(0, maxChars - 3) + '...';
+    const fullText = content.text.trim();
+
+    // Parse the SHORT and LONG sections
+    const shortMatch = fullText.match(/SHORT:\s*([\s\S]*?)(?=\nLONG:|$)/);
+    const longMatch = fullText.match(/LONG:\s*([\s\S]*?)$/);
+
+    let shortExplanation = shortMatch?.[1]?.trim() || fullText.substring(0, maxChars);
+    let longExplanation = longMatch?.[1]?.trim() || fullText;
+
+    // Ensure length limits
+    if (shortExplanation.length > maxChars) {
+      shortExplanation = shortExplanation.substring(0, maxChars - 3) + '...';
     }
 
-    return explanation;
+    if (longExplanation.length > 800) {
+      longExplanation = longExplanation.substring(0, 797) + '...';
+    }
+
+    return {
+      short: shortExplanation,
+      long: longExplanation
+    };
   } catch (error) {
     console.error('Error calling Claude for variance explanation:', error);
     throw error;
@@ -146,12 +169,13 @@ export async function explainVariance(opts: {
 
   try {
     const startTime = Date.now();
-    const shortExplanation = await callClaudeForVarianceExplanation(rows, selectedBids, maxChars);
+    const explanations = await callClaudeForVarianceExplanation(rows, selectedBids, maxChars);
     const duration = Date.now() - startTime;
 
     const explanation: VarianceExplanation = {
       key,
-      short: shortExplanation,
+      short: explanations.short,
+      long: explanations.long,
       at: new Date().toISOString(),
       model: 'claude-sonnet-4-20250514'
     };
@@ -159,7 +183,7 @@ export async function explainVariance(opts: {
     // Cache the result
     setCachedExplanation(key, explanation);
 
-    console.log(`✅ Variance explanation generated in ${duration}ms: ${shortExplanation.length} chars`);
+    console.log(`✅ Variance explanation generated in ${duration}ms: ${explanations.short.length}/${explanations.long.length} chars`);
     return explanation;
 
   } catch (error) {
@@ -169,6 +193,7 @@ export async function explainVariance(opts: {
     const fallbackExplanation: VarianceExplanation = {
       key,
       short: 'Unable to generate explanation at this time.',
+      long: 'Unable to generate detailed explanation at this time. Please try again later or check your network connection.',
       at: new Date().toISOString(),
       model: 'fallback'
     };

@@ -41,9 +41,10 @@ function ExplainCell({
   bidComparisons: BidComparison[];
   selectedBids: string[];
 }) {
-  const [explanation, setExplanation] = useState<string | undefined>();
+  const [explanation, setExplanation] = useState<VarianceExplanation | undefined>();
   const [isLoading, setIsLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [showExpanded, setShowExpanded] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState<'left' | 'right'>('right');
 
   const enableInlineExplanations = process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false';
@@ -101,10 +102,16 @@ function ExplainCell({
       }
 
       const exp: VarianceExplanation = await response.json();
-      setExplanation(exp.short || 'No explanation available');
+      setExplanation(exp);
     } catch (error) {
       console.error('Failed to get variance explanation:', error);
-      setExplanation('Unable to generate explanation');
+      setExplanation({
+        key: 'error',
+        short: 'Unable to generate explanation',
+        long: 'Unable to generate explanation at this time. Please try again later.',
+        at: new Date().toISOString(),
+        model: 'error'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -149,7 +156,7 @@ function ExplainCell({
       <button
         onClick={(e) => handleOpenChange(!isOpen, e)}
         className="p-1 text-gray-400 hover:text-blue-600 transition-colors"
-        title="Explain variance"
+        title="Explain variance differences"
       >
         {isLoading ? (
           <Loader2 className="h-4 w-4 animate-spin" />
@@ -179,8 +186,22 @@ function ExplainCell({
                 <Loader2 className="h-3 w-3 animate-spin mr-2" />
                 Analyzing variance...
               </div>
+            ) : explanation ? (
+              <div>
+                <div className="mb-2">
+                  {showExpanded ? explanation.long : explanation.short}
+                </div>
+                {explanation.long && explanation.long !== explanation.short && (
+                  <button
+                    onClick={() => setShowExpanded(!showExpanded)}
+                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                  >
+                    {showExpanded ? 'Show less' : 'Keep reading →'}
+                  </button>
+                )}
+              </div>
             ) : (
-              explanation || 'No explanation available'
+              'No explanation available'
             )}
           </div>
         </div>
@@ -636,7 +657,7 @@ export default function BidLeveling() {
                 </th>
               ))}
               {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
-                <th className="text-left py-2 w-16">Explain</th>
+                <th className="text-left py-2 w-16">Why?</th>
               )}
             </tr>
           </thead>
@@ -722,7 +743,7 @@ export default function BidLeveling() {
                   </th>
                 ))}
                 {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
-                  <th className="text-left py-2 w-16">Explain</th>
+                  <th className="text-left py-2 w-16">Why?</th>
                 )}
               </tr>
             </thead>
@@ -812,7 +833,7 @@ export default function BidLeveling() {
                   </th>
                 ))}
                 {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
-                  <th className="text-left py-2 w-16">Explain</th>
+                  <th className="text-left py-2 w-16">Why?</th>
                 )}
               </tr>
             </thead>
