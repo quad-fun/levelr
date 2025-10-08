@@ -44,7 +44,7 @@ function sanitizeJsonStringMinimal(raw: string): string {
   try {
     JSON.parse(s);
     return s;
-  } catch (err) {
+  } catch {
     // Last-ditch string-safe broad fix
     const widened = broadCommaFix(s);
     try {
@@ -52,7 +52,7 @@ function sanitizeJsonStringMinimal(raw: string): string {
       return widened;
     } catch (finalErr) {
       // Log error context for debugging
-      const pos = (finalErr as any).position ?? -1;
+      const pos = (finalErr as SyntaxError & { position?: number }).position ?? -1;
       if (pos >= 0) {
         const start = Math.max(0, pos - 100);
         const end = Math.min(s.length, pos + 100);
