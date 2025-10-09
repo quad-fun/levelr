@@ -87,12 +87,13 @@ function ExplainCell({
         variancePct: 0 // Will be calculated server-side
       }];
 
+      const contractorNames = bidComparisons.map(comp => comp.analysis.result.contractor_name);
       const response = await fetch('/api/variance/explain', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           rows,
-          selectedBids: bidComparisons.map(comp => comp.analysis.result.contractor_name),
+          selectedBids: contractorNames.sort(), // Ensure consistent ordering
           maxChars: 280
         })
       });
@@ -429,12 +430,13 @@ export default function BidLeveling() {
           }];
 
           // Call variance explanation API
+          const contractorNames = selectedComparisons.map(comp => comp.analysis.result.contractor_name);
           const response = await fetch('/api/variance/explain', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               rows,
-              selectedBids: selectedComparisons.map(comp => comp.analysis.result.contractor_name),
+              selectedBids: contractorNames.sort(), // Ensure consistent ordering
               maxChars: 280
             })
           });
