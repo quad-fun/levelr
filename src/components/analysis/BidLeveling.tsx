@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
-import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
+import { CSI_DIVISIONS, LEVELING_LABELS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF, exportBidVarianceAnalysisToPDF } from '@/lib/analysis/exports';
 import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
 import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle, HelpCircle, Loader2 } from 'lucide-react';
@@ -217,7 +217,7 @@ export default function BidLeveling() {
   const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf'>('excel');
   const [activeDiscipline, setActiveDiscipline] = useState<'construction' | 'design' | 'trade'>('construction');
-  const [comparativeAnalysis, setComparativeAnalysis] = useState<ComparativeAnalysis | null>(null);
+  const [comparativeAnalysis] = useState<ComparativeAnalysis | null>(null);
   const [isLoadingComparison, setIsLoadingComparison] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
 
@@ -331,52 +331,143 @@ export default function BidLeveling() {
     setComparisonError(null);
 
     try {
-      // Get the selected analyses
-      const selectedAnalyses = analyses
-        .filter(a => selectedBids.includes(a.id))
-        .map(a => a.result);
+      console.log('🚀 Starting bulk variance analysis for all divisions/phases');
 
-      // Check if at least 2 bids have detailed summaries
-      const bidsWithSummaries = selectedAnalyses.filter(bid =>
-        bid.detailed_summary && bid.detailed_summary.length > 1000
+      // Get the selected bid comparisons
+      const selectedComparisons = bidComparisons.filter(comp =>
+        selectedBids.includes(comp.analysis.id)
       );
 
-      if (bidsWithSummaries.length < 2) {
-        setComparisonError(
-          `Only ${bidsWithSummaries.length} of ${selectedAnalyses.length} selected bids have detailed summaries. ` +
-          'Please re-analyze older bids to generate summaries, or select different bids.'
-        );
+      if (selectedComparisons.length < 2) {
+        setComparisonError('Please select at least 2 bids for comparison.');
         setIsLoadingComparison(false);
         return;
       }
 
-      // Call the comparative analysis API
-      const response = await fetch('/api/leveling/compare', {
-        method: 'PUT', // Use PUT endpoint that accepts full analysis data
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          analyses: selectedAnalyses,
-          comparison_focus: 'comprehensive'
-        }),
-      });
+      // Determine which items to analyze based on discipline
+      let itemsToAnalyze: string[] = [];
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Comparative analysis failed');
+      if (activeDiscipline === 'construction') {
+        // Get all CSI divisions that appear in at least 2 bids
+        const allDivisions = new Set<string>();
+        selectedComparisons.forEach(comp => {
+          if (comp.analysis.result.csi_divisions) {
+            Object.keys(comp.analysis.result.csi_divisions).forEach(div => allDivisions.add(div));
+          }
+        });
+        itemsToAnalyze = Array.from(allDivisions);
+      } else if (activeDiscipline === 'design') {
+        // Get all AIA phases that appear in at least 2 bids
+        const allPhases = new Set<string>();
+        selectedComparisons.forEach(comp => {
+          if (comp.analysis.result.aia_phases) {
+            Object.keys(comp.analysis.result.aia_phases).forEach(phase => allPhases.add(phase));
+          }
+        });
+        itemsToAnalyze = Array.from(allPhases);
+      } else if (activeDiscipline === 'trade') {
+        // Get all technical systems that appear in at least 2 bids
+        const allSystems = new Set<string>();
+        selectedComparisons.forEach(comp => {
+          if (comp.analysis.result.technical_systems) {
+            Object.keys(comp.analysis.result.technical_systems).forEach(sys => allSystems.add(sys));
+          }
+        });
+        itemsToAnalyze = Array.from(allSystems);
       }
 
-      const result = await response.json();
-      setComparativeAnalysis(result.analysis);
-      console.log('✅ Comparative analysis completed:', result.metadata);
+      console.log(`📊 Analyzing ${itemsToAnalyze.length} items across ${selectedComparisons.length} bids`);
+
+      // Generate variance explanations for each item
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (const itemCode of itemsToAnalyze) {
+        try {
+          // Get item name and costs for each bid
+          let itemName = itemCode;
+          const costs: number[] = [];
+
+          selectedComparisons.forEach(comp => {
+            let cost = 0;
+            switch (activeDiscipline) {
+              case 'construction':
+                cost = comp.analysis.result.csi_divisions?.[itemCode]?.cost || 0;
+                itemName = LEVELING_LABELS[itemCode] || itemCode;
+                break;
+              case 'design':
+                cost = comp.analysis.result.aia_phases?.[itemCode]?.fee_amount || 0;
+                itemName = comp.analysis.result.aia_phases?.[itemCode]?.phase_name || itemCode;
+                break;
+              case 'trade':
+                cost = comp.analysis.result.technical_systems?.[itemCode]?.total_cost || 0;
+                itemName = comp.analysis.result.technical_systems?.[itemCode]?.system_name || itemCode;
+                break;
+            }
+            costs.push(cost);
+          });
+
+          // Skip if all costs are zero or less than 2 bids have this item
+          const nonZeroCosts = costs.filter(c => c > 0);
+          if (nonZeroCosts.length < 2) {
+            continue;
+          }
+
+          // Build row data for variance explanation
+          const rows = [{
+            division: itemCode,
+            scopePath: itemName,
+            discipline: activeDiscipline,
+            bids: Object.fromEntries(
+              selectedComparisons.map((comp, index) => [
+                comp.analysis.result.contractor_name,
+                costs[index]
+              ])
+            ),
+            varianceAbs: Math.max(...costs) - Math.min(...costs),
+            variancePct: 0 // Will be calculated server-side
+          }];
+
+          // Call variance explanation API
+          const response = await fetch('/api/variance/explain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rows,
+              selectedBids: selectedComparisons.map(comp => comp.analysis.result.contractor_name),
+              maxChars: 280
+            })
+          });
+
+          if (response.ok) {
+            const explanation = await response.json();
+            console.log(`✅ Generated explanation for ${itemCode}: ${explanation.short.substring(0, 50)}...`);
+            successCount++;
+          } else {
+            console.warn(`❌ Failed to generate explanation for ${itemCode}: ${response.status}`);
+            errorCount++;
+          }
+
+        } catch (error) {
+          console.warn(`❌ Error generating explanation for ${itemCode}:`, error);
+          errorCount++;
+        }
+      }
+
+      console.log(`🎉 Bulk analysis complete: ${successCount} explanations generated, ${errorCount} errors`);
+
+      if (successCount > 0) {
+        // Show success message
+        setComparisonError(null);
+        console.log(`✅ Successfully generated ${successCount} variance explanations. They will be included in Excel exports.`);
+      } else {
+        setComparisonError('Failed to generate variance explanations. Please check the console for details.');
+      }
 
     } catch (error) {
-      console.error('Comparative analysis error:', error);
+      console.error('Bulk variance analysis error:', error);
       setComparisonError(
-        error instanceof Error
-          ? error.message
-          : 'Failed to perform comparative analysis. Please try again.'
+        error instanceof Error ? error.message : 'Analysis failed. Please try again.'
       );
     } finally {
       setIsLoadingComparison(false);
