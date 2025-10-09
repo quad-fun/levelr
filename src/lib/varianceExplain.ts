@@ -29,11 +29,14 @@ function generateCacheKey(opts: {
     v: 'v1' // version for cache invalidation
   };
 
-  return crypto
+  const key = crypto
     .createHash('sha256')
     .update(JSON.stringify(payload))
     .digest('hex')
     .substring(0, 16); // shorter key for logs
+
+  console.log('🔑 Cache key generated:', key, 'for payload:', JSON.stringify(payload, null, 2));
+  return key;
 }
 
 function getCachedExplanation(key: string): VarianceExplanation | null {

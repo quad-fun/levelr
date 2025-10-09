@@ -272,6 +272,11 @@ async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedA
 
   console.log(`📋 Found ${allPhases.size} unique AIA phases across bids:`, Array.from(allPhases));
 
+  // Show what's in the cache
+  const { getCacheStats } = await import('../../varianceExplain');
+  const cacheStats = getCacheStats();
+  console.log(`💾 Current cache has ${cacheStats.size} entries:`, cacheStats.entries);
+
   // Check for cached explanations for each AIA phase across all bid combinations
   for (const phaseKey of allPhases) {
     // Get phase name from first bid that has this phase
