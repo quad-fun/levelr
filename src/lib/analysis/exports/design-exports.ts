@@ -20,6 +20,8 @@ import {
   generateExcelFilename,
   saveExcelFile
 } from './shared/excel-helpers';
+import { getCachedVarianceExplanation } from '../../varianceExplain';
+import { SavedAnalysis } from '@/lib/storage';
 
 export function exportDesignAnalysisToPDF(analysis: AnalysisResult): void {
   const doc = new jsPDF();
@@ -241,3 +243,178 @@ export function exportDesignAnalysisToExcel(analysis: AnalysisResult): void {
   const fileName = generateExcelFilename('design', analysis.contractor_name);
   saveExcelFile(wb, fileName);
 }
+
+// Enhanced function to add variance explanations sheet for design bid leveling
+async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
+  if (bids.length < 2) return; // Need at least 2 bids for variance analysis
+
+  const explanations: Array<{
+    scope: string;
+    bidsCompared: string;
+    shortExplanation: string;
+    detailedAnalysis: string;
+    generatedAt: string;
+    confidence: string;
+  }> = [];
+
+  // Get all AIA phases across all bids
+  const allPhases = new Set<string>();
+  bids.forEach(bid => {
+    if (bid.result.aia_phases) {
+      Object.keys(bid.result.aia_phases).forEach(phase => allPhases.add(phase));
+    }
+  });
+
+  // Check for cached explanations for each AIA phase across all bid combinations
+  for (const phaseKey of allPhases) {
+    // Get phase name from first bid that has this phase
+    let phaseName = phaseKey;
+    for (const bid of bids) {
+      if (bid.result.aia_phases?.[phaseKey]) {
+        phaseName = bid.result.aia_phases[phaseKey].phase_name;
+        break;
+      }
+    }
+
+    // Generate all possible bid pair combinations
+    for (let i = 0; i < bids.length - 1; i++) {
+      for (let j = i + 1; j < bids.length; j++) {
+        const bid1 = bids[i];
+        const bid2 = bids[j];
+
+        // Check if both bids have this phase
+        const phase1 = bid1.result.aia_phases?.[phaseKey];
+        const phase2 = bid2.result.aia_phases?.[phaseKey];
+
+        if (!phase1 || !phase2 || (phase1.fee_amount === 0 && phase2.fee_amount === 0)) {
+          continue; // Skip if either bid doesn't have this phase or both are zero
+        }
+
+        // Create row data for this phase comparison
+        const rows = [{
+          division: phaseKey,
+          scopePath: phaseName,
+          item: phaseName,
+          bids: {
+            [bid1.result.contractor_name]: phase1.fee_amount,
+            [bid2.result.contractor_name]: phase2.fee_amount
+          },
+          varianceAbs: Math.abs(phase1.fee_amount - phase2.fee_amount),
+          variancePct: phase1.fee_amount > 0 ? Math.abs((phase1.fee_amount - phase2.fee_amount) / phase1.fee_amount) * 100 : 0
+        }];
+
+        const selectedBids = [bid1.result.contractor_name, bid2.result.contractor_name];
+
+        try {
+          // Check for cached explanation
+          const cached = await getCachedVarianceExplanation(rows, selectedBids);
+
+          if (cached) {
+            // Calculate confidence based on variance magnitude and explanation length
+            let confidence = 'High';
+            const variancePct = rows[0].variancePct;
+            if (variancePct < 8) confidence = 'Medium'; // Design services typically have wider acceptable variance
+            if (variancePct < 3) confidence = 'Low';
+            if (cached.short.includes('Unable to') || cached.model === 'fallback') confidence = 'Low';
+
+            explanations.push({
+              scope: `${phaseKey} - ${phaseName}`,
+              bidsCompared: selectedBids.join(' vs '),
+              shortExplanation: cached.short,
+              detailedAnalysis: cached.long || cached.short,
+              generatedAt: cached.at,
+              confidence: confidence
+            });
+          }
+        } catch (error) {
+          console.warn(`Failed to get cached explanation for phase ${phaseKey}:`, error);
+          // Continue processing other phases
+        }
+      }
+    }
+  }
+
+  // Only create the sheet if we have explanations
+  if (explanations.length === 0) {
+    console.log('No variance explanations found in cache for design phases - skipping Variance Explanations sheet');
+    return;
+  }
+
+  // Create the variance explanations sheet
+  const sheetData = [
+    ['DESIGN VARIANCE EXPLANATIONS'],
+    ['Generated explanations for fee differences across AIA phases'],
+    [''],
+    ['AIA Phase', 'Bids Compared', 'Short Explanation', 'Detailed Analysis', 'Generated At', 'Confidence Level']
+  ];
+
+  // Sort explanations by scope for better organization
+  explanations.sort((a, b) => a.scope.localeCompare(b.scope));
+
+  explanations.forEach(exp => {
+    sheetData.push([
+      exp.scope,
+      exp.bidsCompared,
+      exp.shortExplanation,
+      exp.detailedAnalysis,
+      new Date(exp.generatedAt).toLocaleString(),
+      exp.confidence
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+  // Set column widths for readability
+  ws['!cols'] = [
+    { wch: 25 }, // AIA Phase
+    { wch: 20 }, // Bids Compared
+    { wch: 40 }, // Short Explanation
+    { wch: 60 }, // Detailed Analysis
+    { wch: 18 }, // Generated At
+    { wch: 15 }  // Confidence Level
+  ];
+
+  // Apply formatting
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  for (let row = 0; row <= range.e.r; row++) {
+    for (let col = 0; col <= range.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = ws[cellAddr];
+      if (!cell) continue;
+
+      // Header formatting
+      if (row === 0) {
+        cell.s = { font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2563EB' } } };
+      } else if (row === 1) {
+        cell.s = { font: { italic: true, sz: 11, color: { rgb: '6B7280' } } };
+      } else if (row === 3) {
+        cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+      }
+
+      // Data row formatting
+      if (row > 3) {
+        // Color code confidence levels
+        if (col === 5) { // Confidence Level column
+          const confidence = cell.v;
+          let fillColor = 'FFFFFF';
+          if (confidence === 'High') fillColor = 'DCFCE7'; // Green
+          else if (confidence === 'Medium') fillColor = 'FEF3C7'; // Yellow
+          else if (confidence === 'Low') fillColor = 'FEE2E2'; // Red
+
+          cell.s = { fill: { fgColor: { rgb: fillColor } } };
+        }
+
+        // Wrap text for explanation columns
+        if (col === 2 || col === 3) {
+          cell.s = { ...(cell.s || {}), alignment: { wrapText: true, vertical: 'top' } };
+        }
+      }
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Variance Explanations');
+  console.log(`Added Design Variance Explanations sheet with ${explanations.length} explanations`);
+}
+
+// Export the function for use in index.ts
+export { addDesignVarianceExplanationSheet };

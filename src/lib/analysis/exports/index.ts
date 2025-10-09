@@ -9,8 +9,8 @@ import {
   exportBidLevelingToExcel as exportConstructionBidLevelingToExcel,
   exportBidLevelingToPDF as exportConstructionBidLevelingToPDF
 } from './construction-exports';
-import { exportDesignAnalysisToPDF, exportDesignAnalysisToExcel } from './design-exports';
-import { exportTradeAnalysisToPDF, exportTradeAnalysisToExcel } from './trade-exports';
+import { exportDesignAnalysisToPDF, exportDesignAnalysisToExcel, addDesignVarianceExplanationSheet } from './design-exports';
+import { exportTradeAnalysisToPDF, exportTradeAnalysisToExcel, addTradeVarianceExplanationSheet } from './trade-exports';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as XLSX from 'xlsx';
@@ -86,12 +86,15 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[], acti
 
   switch (discipline) {
     case 'design':
-      return exportDesignBidLevelingToExcel(selectedAnalyses);
+      exportDesignBidLevelingToExcel(selectedAnalyses);
+      break;
     case 'trade':
-      return exportTradeBidLevelingToExcel(selectedAnalyses);
+      exportTradeBidLevelingToExcel(selectedAnalyses);
+      break;
     case 'construction':
     default:
-      return exportConstructionBidLevelingToExcel(selectedAnalyses);
+      exportConstructionBidLevelingToExcel(selectedAnalyses);
+      break;
   }
 }
 
@@ -394,7 +397,7 @@ export function exportDesignBidLevelingToPDF(selectedAnalyses: SavedAnalysis[]):
   doc.save(`Design_Bid_Leveling_Report_${timestamp}.pdf`);
 }
 
-export function exportDesignBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]): void {
+export async function exportDesignBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]): Promise<void> {
   const wb = XLSX.utils.book_new();
 
   // Sort bids by total amount for consistent ranking
@@ -574,6 +577,9 @@ export function exportDesignBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]
   ];
 
   XLSX.utils.book_append_sheet(wb, deliverableWS, 'Deliverables');
+
+  // SHEET 5 (OPTIONAL) - VARIANCE EXPLANATIONS (only if explanations exist in cache)
+  await addDesignVarianceExplanationSheet(wb, sortedBids);
 
   // Save the file with timestamp
   const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
@@ -763,15 +769,32 @@ export {
   exportTradeAnalysisToExcel
 } from './trade-exports';
 
-// Trade bid leveling exports (using construction fallback with proper messaging)
+// Trade bid leveling exports (enhanced with trade-specific variance explanations)
 export function exportTradeBidLevelingToPDF(selectedAnalyses: SavedAnalysis[]): void {
   console.log('Trade bid leveling PDF export using construction format with trade-specific analysis');
   return exportConstructionBidLevelingToPDF(selectedAnalyses);
 }
 
-export function exportTradeBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]): void {
-  console.log('Trade bid leveling Excel export using construction format with trade-specific analysis');
-  return exportConstructionBidLevelingToExcel(selectedAnalyses);
+export async function exportTradeBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]): Promise<void> {
+  console.log('Trade bid leveling Excel export with trade-specific variance explanations');
+
+  // Start with construction format but add trade-specific variance explanations
+  const wb = XLSX.utils.book_new();
+
+  // Sort bids by total amount for consistent ranking
+  const sortedBids = selectedAnalyses.sort((a, b) => a.result.total_amount - b.result.total_amount);
+
+  // SHEET 1 - Use construction leveled comparison (works for trade too)
+  const { exportLeveledComparisonSheet } = await import('./construction-exports');
+  exportLeveledComparisonSheet(wb, sortedBids);
+
+  // SHEET 2 - TRADE VARIANCE EXPLANATIONS (only if explanations exist in cache)
+  await addTradeVarianceExplanationSheet(wb, sortedBids);
+
+  // Save the file with timestamp
+  const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  const fileName = `Levelr_Trade_Leveling_Analysis_${timestamp}.xlsx`;
+  XLSX.writeFile(wb, fileName);
 }
 
 // Note: Legacy export-generator.ts is deprecated in favor of discipline-specific exports above

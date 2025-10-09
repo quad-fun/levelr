@@ -6,8 +6,7 @@ import { SavedAnalysis } from '@/lib/storage';
 import { analyzeMarketVariance } from '../market-analyzer';
 import { calculateProjectRisk } from '../risk-analyzer';
 import { CSI_DIVISIONS, LEVELING_DIVISIONS, LEVELING_LABELS, PSEUDO_SCOPES } from '../csi-analyzer';
-// Note: Variance explanations are available in the UI via inline tooltips
-// Excel exports focus on raw data and existing comments
+import { getCachedVarianceExplanation } from '../../varianceExplain';
 
 // Extend jsPDF type to include autoTable properties
 interface JsPDFWithAutoTable extends jsPDF {
@@ -867,8 +866,8 @@ export function exportConstructionAnalysisToExcel(analysis: AnalysisResult): voi
   XLSX.writeFile(wb, fileName);
 }
 
-// Enhanced Excel export for bid leveling with professional analysis (5 sheets)
-export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
+// Enhanced Excel export for bid leveling with professional analysis (5+ sheets)
+export async function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
   const wb = XLSX.utils.book_new();
 
   // Sort bids by total amount for consistent ranking
@@ -1325,6 +1324,9 @@ export function exportBidLevelingToExcel(selectedAnalyses: SavedAnalysis[]) {
 
   XLSX.utils.book_append_sheet(wb, benchmarkWS, 'Market Benchmarking');
 
+  // SHEET 6 (OPTIONAL) - VARIANCE EXPLANATIONS (only if explanations exist in cache)
+  await addVarianceExplanationSheet(wb, sortedBids);
+
   // Save the file with timestamp
   const timestamp = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const fileName = `Levelr_Leveling_Analysis_${timestamp}.xlsx`;
@@ -1659,4 +1661,161 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
   });
 
   XLSX.utils.book_append_sheet(wb, ws, 'Leveled Comparison');
+}
+
+// Enhanced function to add variance explanations sheet if explanations exist
+async function addVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
+  if (bids.length < 2) return; // Need at least 2 bids for variance analysis
+
+  const explanations: Array<{
+    scope: string;
+    bidsCompared: string;
+    shortExplanation: string;
+    detailedAnalysis: string;
+    generatedAt: string;
+    confidence: string;
+  }> = [];
+
+  // Check for cached explanations for each CSI division across all bid combinations
+  for (const divisionCode of LEVELING_DIVISIONS) {
+    const divisionName = LEVELING_LABELS[divisionCode] || `Division ${divisionCode}`;
+
+    // Generate all possible bid pair combinations
+    for (let i = 0; i < bids.length - 1; i++) {
+      for (let j = i + 1; j < bids.length; j++) {
+        const bid1 = bids[i];
+        const bid2 = bids[j];
+
+        // Check if both bids have this division
+        const division1 = bid1.result.csi_divisions?.[divisionCode];
+        const division2 = bid2.result.csi_divisions?.[divisionCode];
+
+        if (!division1 || !division2 || (division1.cost === 0 && division2.cost === 0)) {
+          continue; // Skip if either bid doesn't have this division or both are zero
+        }
+
+        // Create row data for this division comparison
+        const rows = [{
+          division: divisionCode,
+          scopePath: divisionName,
+          item: divisionName,
+          bids: {
+            [bid1.result.contractor_name]: division1.cost,
+            [bid2.result.contractor_name]: division2.cost
+          },
+          varianceAbs: Math.abs(division1.cost - division2.cost),
+          variancePct: division1.cost > 0 ? Math.abs((division1.cost - division2.cost) / division1.cost) * 100 : 0
+        }];
+
+        const selectedBids = [bid1.result.contractor_name, bid2.result.contractor_name];
+
+        try {
+          // Check for cached explanation
+          const cached = await getCachedVarianceExplanation(rows, selectedBids);
+
+          if (cached) {
+            // Calculate confidence based on variance magnitude and explanation length
+            let confidence = 'High';
+            const variancePct = rows[0].variancePct;
+            if (variancePct < 5) confidence = 'Medium';
+            if (variancePct < 2) confidence = 'Low';
+            if (cached.short.includes('Unable to') || cached.model === 'fallback') confidence = 'Low';
+
+            explanations.push({
+              scope: `${divisionCode} - ${divisionName}`,
+              bidsCompared: selectedBids.join(' vs '),
+              shortExplanation: cached.short,
+              detailedAnalysis: cached.long || cached.short,
+              generatedAt: cached.at,
+              confidence: confidence
+            });
+          }
+        } catch (error) {
+          console.warn(`Failed to get cached explanation for ${divisionCode}:`, error);
+          // Continue processing other divisions
+        }
+      }
+    }
+  }
+
+  // Only create the sheet if we have explanations
+  if (explanations.length === 0) {
+    console.log('No variance explanations found in cache - skipping Variance Explanations sheet');
+    return;
+  }
+
+  // Create the variance explanations sheet
+  const sheetData = [
+    ['VARIANCE EXPLANATIONS'],
+    ['Generated explanations for bid differences across CSI divisions'],
+    [''],
+    ['Scope/Division', 'Bids Compared', 'Short Explanation', 'Detailed Analysis', 'Generated At', 'Confidence Level']
+  ];
+
+  // Sort explanations by scope for better organization
+  explanations.sort((a, b) => a.scope.localeCompare(b.scope));
+
+  explanations.forEach(exp => {
+    sheetData.push([
+      exp.scope,
+      exp.bidsCompared,
+      exp.shortExplanation,
+      exp.detailedAnalysis,
+      new Date(exp.generatedAt).toLocaleString(),
+      exp.confidence
+    ]);
+  });
+
+  const ws = XLSX.utils.aoa_to_sheet(sheetData);
+
+  // Set column widths for readability
+  ws['!cols'] = [
+    { wch: 25 }, // Scope/Division
+    { wch: 20 }, // Bids Compared
+    { wch: 40 }, // Short Explanation
+    { wch: 60 }, // Detailed Analysis
+    { wch: 18 }, // Generated At
+    { wch: 15 }  // Confidence Level
+  ];
+
+  // Apply formatting
+  const range = XLSX.utils.decode_range(ws['!ref'] || 'A1');
+  for (let row = 0; row <= range.e.r; row++) {
+    for (let col = 0; col <= range.e.c; col++) {
+      const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+      const cell = ws[cellAddr];
+      if (!cell) continue;
+
+      // Header formatting
+      if (row === 0) {
+        cell.s = { font: { bold: true, sz: 16, color: { rgb: 'FFFFFF' } }, fill: { fgColor: { rgb: '2563EB' } } };
+      } else if (row === 1) {
+        cell.s = { font: { italic: true, sz: 11, color: { rgb: '6B7280' } } };
+      } else if (row === 3) {
+        cell.s = { font: { bold: true }, fill: { fgColor: { rgb: 'E5E7EB' } } };
+      }
+
+      // Data row formatting
+      if (row > 3) {
+        // Color code confidence levels
+        if (col === 5) { // Confidence Level column
+          const confidence = cell.v;
+          let fillColor = 'FFFFFF';
+          if (confidence === 'High') fillColor = 'DCFCE7'; // Green
+          else if (confidence === 'Medium') fillColor = 'FEF3C7'; // Yellow
+          else if (confidence === 'Low') fillColor = 'FEE2E2'; // Red
+
+          cell.s = { fill: { fgColor: { rgb: fillColor } } };
+        }
+
+        // Wrap text for explanation columns
+        if (col === 2 || col === 3) {
+          cell.s = { ...(cell.s || {}), alignment: { wrapText: true, vertical: 'top' } };
+        }
+      }
+    }
+  }
+
+  XLSX.utils.book_append_sheet(wb, ws, 'Variance Explanations');
+  console.log(`Added Variance Explanations sheet with ${explanations.length} explanations`);
 }
