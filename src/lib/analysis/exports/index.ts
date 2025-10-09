@@ -576,6 +576,22 @@ export async function exportDesignBidLevelingToExcel(selectedAnalyses: SavedAnal
     { wch: 30 }   // Disciplines
   ];
 
+  // Apply text wrapping to Key Deliverables and Responsible Disciplines columns
+  const deliverableRange = XLSX.utils.decode_range(deliverableWS['!ref'] || 'A1');
+  for (let row = 3; row <= deliverableRange.e.r; row++) { // Start from row 3 (data rows)
+    // Key Deliverables column (C)
+    const keyDeliverablesCell = `C${row + 1}`;
+    if (deliverableWS[keyDeliverablesCell]) {
+      deliverableWS[keyDeliverablesCell].s = { alignment: { wrapText: true, vertical: 'top' } };
+    }
+
+    // Responsible Disciplines column (D)
+    const disciplinesCell = `D${row + 1}`;
+    if (deliverableWS[disciplinesCell]) {
+      deliverableWS[disciplinesCell].s = { alignment: { wrapText: true, vertical: 'top' } };
+    }
+  }
+
   XLSX.utils.book_append_sheet(wb, deliverableWS, 'Deliverables');
 
   // SHEET 5 (OPTIONAL) - VARIANCE EXPLANATIONS (only if explanations exist in cache)

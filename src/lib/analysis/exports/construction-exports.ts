@@ -1665,7 +1665,12 @@ export function exportLeveledComparisonSheet(wb: XLSX.WorkBook, bids: SavedAnaly
 
 // Enhanced function to add variance explanations sheet if explanations exist
 async function addVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
-  if (bids.length < 2) return; // Need at least 2 bids for variance analysis
+  console.log(`🔍 addVarianceExplanationSheet (construction) called with ${bids.length} bids`);
+
+  if (bids.length < 2) {
+    console.log('⚠️ Not enough bids for variance analysis (need at least 2)');
+    return; // Need at least 2 bids for variance analysis
+  }
 
   const explanations: Array<{
     scope: string;

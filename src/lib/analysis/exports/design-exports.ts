@@ -246,7 +246,12 @@ export function exportDesignAnalysisToExcel(analysis: AnalysisResult): void {
 
 // Enhanced function to add variance explanations sheet for design bid leveling
 async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedAnalysis[]) {
-  if (bids.length < 2) return; // Need at least 2 bids for variance analysis
+  console.log(`🔍 addDesignVarianceExplanationSheet called with ${bids.length} bids`);
+
+  if (bids.length < 2) {
+    console.log('⚠️ Not enough bids for variance analysis (need at least 2)');
+    return; // Need at least 2 bids for variance analysis
+  }
 
   const explanations: Array<{
     scope: string;
@@ -264,6 +269,8 @@ async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedA
       Object.keys(bid.result.aia_phases).forEach(phase => allPhases.add(phase));
     }
   });
+
+  console.log(`📋 Found ${allPhases.size} unique AIA phases across bids:`, Array.from(allPhases));
 
   // Check for cached explanations for each AIA phase across all bid combinations
   for (const phaseKey of allPhases) {
@@ -307,9 +314,11 @@ async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedA
 
         try {
           // Check for cached explanation
+          console.log(`🔍 Checking cache for ${phaseKey} between ${selectedBids.join(' vs ')}`);
           const cached = await getCachedVarianceExplanation(rows, selectedBids);
 
           if (cached) {
+            console.log(`✅ Found cached explanation for ${phaseKey}:`, cached.short.substring(0, 50) + '...');
             // Calculate confidence based on variance magnitude and explanation length
             let confidence = 'High';
             const variancePct = rows[0].variancePct;
@@ -325,6 +334,8 @@ async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedA
               generatedAt: cached.at,
               confidence: confidence
             });
+          } else {
+            console.log(`❌ No cached explanation found for ${phaseKey} between ${selectedBids.join(' vs ')}`);
           }
         } catch (error) {
           console.warn(`Failed to get cached explanation for phase ${phaseKey}:`, error);
