@@ -104,6 +104,19 @@ function ExplainCell({
 
       const exp: VarianceExplanation = await response.json();
       setExplanation(exp);
+
+      // Cache the explanation in browser localStorage for export use
+      try {
+        const cacheKey = `levelr_variance_cache_${exp.key}`;
+        const cacheEntry = {
+          data: exp,
+          expiry: Date.now() + (14 * 24 * 60 * 60 * 1000) // 14 days
+        };
+        localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+        console.log(`💾 Cached individual explanation in browser: ${exp.key}`);
+      } catch (error) {
+        console.warn('Failed to cache individual explanation:', error);
+      }
     } catch (error) {
       console.error('Failed to get variance explanation:', error);
       setExplanation({
@@ -444,6 +457,20 @@ export default function BidLeveling() {
           if (response.ok) {
             const explanation = await response.json();
             console.log(`✅ Generated explanation for ${itemCode}: ${explanation.short.substring(0, 50)}...`);
+
+            // Cache the explanation in browser localStorage for export use
+            try {
+              const cacheKey = `levelr_variance_cache_${explanation.key}`;
+              const cacheEntry = {
+                data: explanation,
+                expiry: Date.now() + (14 * 24 * 60 * 60 * 1000) // 14 days
+              };
+              localStorage.setItem(cacheKey, JSON.stringify(cacheEntry));
+              console.log(`💾 Cached explanation in browser: ${explanation.key}`);
+            } catch (error) {
+              console.warn('Failed to cache explanation:', error);
+            }
+
             successCount++;
           } else {
             console.warn(`❌ Failed to generate explanation for ${itemCode}: ${response.status}`);

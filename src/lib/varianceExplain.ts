@@ -9,9 +9,9 @@ export type VarianceExplanation = {
   model?: string;       // provenance
 };
 
-// Simple in-memory cache with TTL (replace with Redis/KV in production)
-const cache = new Map<string, { data: VarianceExplanation; expiry: number }>();
+// Browser-based cache with TTL (works across server instances)
 const CACHE_TTL_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+const CACHE_KEY_PREFIX = 'levelr_variance_cache_';
 
 function generateCacheKey(opts: {
   rows: Record<string, unknown>[];
@@ -40,22 +40,43 @@ function generateCacheKey(opts: {
 }
 
 function getCachedExplanation(key: string): VarianceExplanation | null {
-  const cached = cache.get(key);
-  if (!cached) return null;
+  // Check if we're in browser environment
+  if (typeof window === 'undefined') return null;
 
-  if (Date.now() > cached.expiry) {
-    cache.delete(key);
+  try {
+    const cached = localStorage.getItem(CACHE_KEY_PREFIX + key);
+    if (!cached) return null;
+
+    const parsedCache = JSON.parse(cached);
+
+    // Check if expired
+    if (Date.now() > parsedCache.expiry) {
+      localStorage.removeItem(CACHE_KEY_PREFIX + key);
+      return null;
+    }
+
+    return parsedCache.data;
+  } catch (error) {
+    console.warn('Error reading from variance cache:', error);
     return null;
   }
-
-  return cached.data;
 }
 
 function setCachedExplanation(key: string, explanation: VarianceExplanation): void {
-  cache.set(key, {
-    data: explanation,
-    expiry: Date.now() + CACHE_TTL_MS
-  });
+  // Check if we're in browser environment
+  if (typeof window === 'undefined') return;
+
+  try {
+    const cacheEntry = {
+      data: explanation,
+      expiry: Date.now() + CACHE_TTL_MS
+    };
+
+    localStorage.setItem(CACHE_KEY_PREFIX + key, JSON.stringify(cacheEntry));
+    console.log(`💾 Cached variance explanation: ${key}`);
+  } catch (error) {
+    console.warn('Error writing to variance cache:', error);
+  }
 }
 
 async function callClaudeForVarianceExplanation(
@@ -218,14 +239,45 @@ export function getCacheStats(): {
   size: number;
   entries: Array<{ key: string; at: string; chars: number }>;
 } {
-  const entries = Array.from(cache.entries()).map(([key, { data }]) => ({
-    key,
-    at: data.at,
-    chars: data.short.length
-  }));
+  // Check if we're in browser environment
+  if (typeof window === 'undefined') {
+    return { size: 0, entries: [] };
+  }
 
-  return {
-    size: cache.size,
-    entries
-  };
+  const entries: Array<{ key: string; at: string; chars: number }> = [];
+  let size = 0;
+
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(CACHE_KEY_PREFIX)) {
+        const cached = localStorage.getItem(key);
+        if (cached) {
+          try {
+            const parsedCache = JSON.parse(cached);
+            // Check if expired
+            if (Date.now() <= parsedCache.expiry) {
+              const shortKey = key.replace(CACHE_KEY_PREFIX, '');
+              entries.push({
+                key: shortKey,
+                at: parsedCache.data.at,
+                chars: parsedCache.data.short.length
+              });
+              size++;
+            } else {
+              // Clean up expired entries
+              localStorage.removeItem(key);
+            }
+          } catch {
+            // Invalid cache entry, remove it
+            localStorage.removeItem(key);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Error reading cache stats:', error);
+  }
+
+  return { size, entries };
 }
