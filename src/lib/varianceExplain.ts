@@ -1,5 +1,4 @@
 // src/lib/varianceExplain.ts
-import 'server-only';
 import crypto from 'crypto';
 
 export type VarianceExplanation = {
