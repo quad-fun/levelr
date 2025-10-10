@@ -11,6 +11,7 @@ import RFPBuilder from '@/components/rfp/RFPBuilder';
 import ProjectEcosystem from '@/components/ecosystem/ProjectEcosystem';
 import { analyzeDocument } from '@/lib/claude-client';
 import { MultiDisciplineAnalyzer, MultiDisciplineMarketAnalyzer } from '@/lib/analysis/multi-discipline-analyzer';
+import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
 import { AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
 import { saveAnalysis } from '@/lib/storage';
 import { ProcessedDocument } from '@/lib/document-processor';
@@ -72,16 +73,8 @@ export default function AnalyzePage() {
           ));
         }
         
-        // Generate basic risk assessment
-        setRiskAssessment({
-          score: result.categorizationPercentage || 0,
-          level: (result.categorizationPercentage || 0) > 80 ? 'LOW' : 
-                 (result.categorizationPercentage || 0) > 60 ? 'MEDIUM' : 'HIGH',
-          factors: [
-            ...(result.exclusions || []),
-            ...(result.assumptions || [])
-          ]
-        });
+        // Generate discipline-appropriate risk assessment
+        setRiskAssessment(calculateMultiDisciplineRisk(result));
         
       } else {
         // Route to appropriate analyzer based on discipline

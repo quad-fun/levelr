@@ -326,7 +326,14 @@ export default function AnalysisHistory() {
                     <div className="flex flex-wrap gap-4 text-sm text-gray-600">
                       <div className="flex items-center">
                         <Building className="h-4 w-4 mr-1" />
-                        <span>{Object.keys(analysis.result.csi_divisions).length} CSI Divisions</span>
+                        <span>
+                          {analysis.result.discipline === 'design'
+                            ? `${Object.keys(analysis.result.aia_phases || {}).length} AIA Phases`
+                            : analysis.result.discipline === 'trade'
+                            ? `${Object.keys(analysis.result.technical_systems || {}).length} Technical Systems`
+                            : `${Object.keys(analysis.result.csi_divisions || {}).length} CSI Divisions`
+                          }
+                        </span>
                       </div>
                       {subSummary.count > 0 && (
                         <div className="flex items-center">

@@ -1,9 +1,183 @@
 import { RiskAssessment, AnalysisResult } from '@/types/analysis';
 import { CSI_DIVISIONS } from './csi-analyzer';
 
+// Multi-discipline risk calculation that routes to appropriate analyzer
+export function calculateMultiDisciplineRisk(
+  analysisResult: AnalysisResult
+): RiskAssessment {
+  const discipline = analysisResult.discipline || 'construction';
+
+  switch (discipline) {
+    case 'design':
+      return calculateDesignRisk(analysisResult);
+    case 'trade':
+      return calculateTradeRisk(analysisResult);
+    case 'construction':
+    default:
+      return calculateProjectRisk(
+        Object.fromEntries(Object.entries(analysisResult.csi_divisions).map(([code, data]) => [code, data.cost])),
+        analysisResult.total_amount,
+        analysisResult.uncategorizedTotal || 0,
+        analysisResult
+      );
+  }
+}
+
+// Design-specific risk assessment using AIA phases
+function calculateDesignRisk(analysisResult: AnalysisResult): RiskAssessment {
+  let riskScore = 0;
+  const risks: string[] = [];
+
+  // Check for missing essential AIA phases
+  const essentialPhases = ['schematic_design', 'design_development', 'construction_documents'];
+  const presentPhases = Object.keys(analysisResult.aia_phases || {});
+
+  const missingEssential = essentialPhases.filter(phase => !presentPhases.includes(phase));
+  riskScore += missingEssential.length * 30;
+  if (missingEssential.length > 0) {
+    const phaseNames = missingEssential.map(phase => {
+      switch (phase) {
+        case 'schematic_design': return 'Schematic Design';
+        case 'design_development': return 'Design Development';
+        case 'construction_documents': return 'Construction Documents';
+        default: return phase;
+      }
+    });
+    risks.push(`Missing essential design phases: ${phaseNames.join(", ")}`);
+  }
+
+  // Check for reasonable phase distribution
+  if (analysisResult.aia_phases) {
+    const phases = Object.values(analysisResult.aia_phases);
+    const totalFees = phases.reduce((sum, phase) => sum + phase.fee_amount, 0);
+
+    // Check individual phase percentages
+    phases.forEach(phase => {
+      const percentage = (phase.fee_amount / analysisResult.total_amount) * 100;
+
+      // Construction Documents should typically be 35-45%
+      if (phase.phase_name.toLowerCase().includes('construction documents')) {
+        if (percentage > 50) {
+          riskScore += 15;
+          risks.push(`High CD phase allocation: ${percentage.toFixed(1)}% may indicate scope creep`);
+        } else if (percentage < 25) {
+          riskScore += 10;
+          risks.push(`Low CD phase allocation: ${percentage.toFixed(1)}% may indicate insufficient design development`);
+        }
+      }
+    });
+  }
+
+  // Check for missing deliverables in key phases
+  if (analysisResult.aia_phases) {
+    Object.entries(analysisResult.aia_phases).forEach(([phaseKey, phase]) => {
+      if (!phase.deliverables || phase.deliverables.length === 0) {
+        riskScore += 10;
+        risks.push(`No deliverables specified for ${phase.phase_name}`);
+      }
+    });
+  }
+
+  // Check design duration vs project complexity
+  if (analysisResult.project_duration) {
+    const designMonths = parseInt(analysisResult.project_duration.replace(/\D/g, '')) || 0;
+    if (designMonths < 6 && analysisResult.total_amount > 500000) {
+      riskScore += 15;
+      risks.push(`Short design duration (${designMonths} months) for large project may indicate compressed schedule risk`);
+    }
+  }
+
+  // Coverage assessment for design
+  const totalPhaseAmount = Object.values(analysisResult.aia_phases || {}).reduce((sum, phase) => sum + phase.fee_amount, 0);
+  const coveragePercentage = (totalPhaseAmount / analysisResult.total_amount) * 100;
+
+  if (coveragePercentage < 80) {
+    riskScore += (80 - coveragePercentage) * 1.5;
+    risks.push(`Low phase coverage: ${coveragePercentage.toFixed(1)}% may indicate incomplete fee breakdown`);
+  }
+
+  // Check phase count
+  if (presentPhases.length < 3) {
+    riskScore += (3 - presentPhases.length) * 20;
+    risks.push(`Limited phase coverage: only ${presentPhases.length} phases identified`);
+  }
+
+  return {
+    score: Math.min(riskScore, 100),
+    level: riskScore > 70 ? "HIGH" : riskScore > 40 ? "MEDIUM" : "LOW",
+    factors: risks
+  };
+}
+
+// Trade-specific risk assessment using technical systems
+function calculateTradeRisk(analysisResult: AnalysisResult): RiskAssessment {
+  let riskScore = 0;
+  const risks: string[] = [];
+
+  // Check for missing critical technical systems
+  const criticalSystems = ['electrical_power', 'mechanical_hvac', 'plumbing_systems'];
+  const presentSystems = Object.keys(analysisResult.technical_systems || {});
+
+  const missingCritical = criticalSystems.filter(system => !presentSystems.includes(system));
+  riskScore += missingCritical.length * 25;
+  if (missingCritical.length > 0) {
+    const systemNames = missingCritical.map(system => {
+      switch (system) {
+        case 'electrical_power': return 'Electrical Power';
+        case 'mechanical_hvac': return 'HVAC Systems';
+        case 'plumbing_systems': return 'Plumbing Systems';
+        default: return system;
+      }
+    });
+    risks.push(`Missing critical systems: ${systemNames.join(", ")}`);
+  }
+
+  // Check for system cost concentration
+  if (analysisResult.technical_systems) {
+    Object.entries(analysisResult.technical_systems).forEach(([systemKey, system]) => {
+      const percentage = (system.total_cost / analysisResult.total_amount) * 100;
+      if (percentage > 50) {
+        riskScore += (percentage - 50) * 2;
+        risks.push(`High cost concentration in ${system.system_name}: ${percentage.toFixed(1)}%`);
+      }
+    });
+  }
+
+  // Check for missing equipment specifications
+  if (analysisResult.technical_systems) {
+    Object.entries(analysisResult.technical_systems).forEach(([systemKey, system]) => {
+      if (!system.specifications || system.specifications.length === 0) {
+        riskScore += 10;
+        risks.push(`No equipment specifications for ${system.system_name}`);
+      }
+    });
+  }
+
+  // Coverage assessment for trade
+  const totalSystemCost = Object.values(analysisResult.technical_systems || {}).reduce((sum, system) => sum + system.total_cost, 0);
+  const coveragePercentage = (totalSystemCost / analysisResult.total_amount) * 100;
+
+  if (coveragePercentage < 80) {
+    riskScore += (80 - coveragePercentage) * 1.5;
+    risks.push(`Low system coverage: ${coveragePercentage.toFixed(1)}% may indicate incomplete cost breakdown`);
+  }
+
+  // Check system count
+  if (presentSystems.length < 2) {
+    riskScore += (2 - presentSystems.length) * 25;
+    risks.push(`Limited system coverage: only ${presentSystems.length} systems identified`);
+  }
+
+  return {
+    score: Math.min(riskScore, 100),
+    level: riskScore > 70 ? "HIGH" : riskScore > 40 ? "MEDIUM" : "LOW",
+    factors: risks
+  };
+}
+
 export function calculateProjectRisk(
-  categories: Record<string, number>, 
-  totalCost: number, 
+  categories: Record<string, number>,
+  totalCost: number,
   uncategorizedTotal: number = 0,
   analysisResult?: AnalysisResult
 ): RiskAssessment {
