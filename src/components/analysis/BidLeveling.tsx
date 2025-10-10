@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS, LEVELING_LABELS } from '@/lib/analysis/csi-analyzer';
-import { exportBidLevelingToExcel, exportBidLevelingToPDF, exportBidVarianceAnalysisToPDF } from '@/lib/analysis/exports';
+import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
 import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
 import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle, HelpCircle, Loader2 } from 'lucide-react';
 
@@ -234,6 +234,7 @@ export default function BidLeveling() {
   const [comparativeAnalysis] = useState<ComparativeAnalysis | null>(null);
   const [isLoadingComparison, setIsLoadingComparison] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
+  const [bulkVarianceExplanations, setBulkVarianceExplanations] = useState<VarianceExplanation[]>([]);
 
   const loadAnalyses = () => {
     const savedAnalyses = getAllAnalyses();
@@ -330,13 +331,6 @@ export default function BidLeveling() {
     }
   };
 
-  const handleExportVarianceAnalysis = () => {
-    if (bidComparisons.length < 2) return;
-
-    // Convert bidComparisons back to SavedAnalysis array for the export function
-    const selectedAnalyses = bidComparisons.map(comp => comp.analysis);
-    exportBidVarianceAnalysisToPDF(selectedAnalyses);
-  };
 
   const performComparativeAnalysis = async () => {
     if (selectedBids.length < 2) return;
@@ -486,7 +480,26 @@ export default function BidLeveling() {
       console.log(`🎉 Bulk analysis complete: ${successCount} explanations generated, ${errorCount} errors`);
 
       if (successCount > 0) {
-        // Show success message
+        // Load all generated explanations from localStorage and display in UI
+        const allExplanations: VarianceExplanation[] = [];
+        try {
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key && key.startsWith('levelr_variance_cache_')) {
+              const cached = localStorage.getItem(key);
+              if (cached) {
+                const parsedCache = JSON.parse(cached);
+                if (Date.now() <= parsedCache.expiry) {
+                  allExplanations.push(parsedCache.data);
+                }
+              }
+            }
+          }
+          setBulkVarianceExplanations(allExplanations);
+        } catch (error) {
+          console.warn('Error loading explanations for display:', error);
+        }
+
         setComparisonError(null);
         console.log(`✅ Successfully generated ${successCount} variance explanations. They will be included in Excel exports.`);
       } else {
@@ -1077,15 +1090,6 @@ export default function BidLeveling() {
                 <Download className="h-4 w-4 mr-2" />
                 Export {exportFormat.toUpperCase()}
               </button>
-              {bidComparisons.length >= 2 && (
-                <button
-                  onClick={handleExportVarianceAnalysis}
-                  className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg flex items-center"
-                >
-                  <BarChart3 className="h-4 w-4 mr-2" />
-                  Variance Analysis
-                </button>
-              )}
             </div>
           )}
         </div>
@@ -1268,6 +1272,99 @@ export default function BidLeveling() {
 
           {/* Discipline-Specific Comparison */}
           {renderDisciplineSpecificComparison()}
+
+          {/* Bulk Variance Explanations */}
+          {bulkVarianceExplanations.length > 0 && (
+            <div className="bg-white rounded-lg shadow-md p-6">
+              <div className="flex items-center mb-4">
+                <Search className="h-5 w-5 text-purple-600 mr-2" />
+                <h4 className="text-lg font-semibold text-gray-900">
+                  AI-Generated Variance Explanations
+                </h4>
+                <span className="ml-2 bg-purple-100 text-purple-700 px-2 py-1 rounded-full text-xs font-medium">
+                  {bulkVarianceExplanations.length} explanations
+                </span>
+              </div>
+
+              <div className="text-sm text-gray-600 mb-4">
+                AI analysis explains why costs differ between {activeDiscipline === 'construction' ? 'CSI divisions' : activeDiscipline === 'design' ? 'AIA phases' : 'technical systems'} across selected bids.
+              </div>
+
+              <div className="grid gap-4">
+                {bulkVarianceExplanations
+                  .filter(exp => exp.model !== 'fallback' && !exp.short.includes('Unable to'))
+                  .sort((a, b) => {
+                    // Extract division/phase number for sorting
+                    const extractNumber = (key: string) => {
+                      const match = key.match(/^(\d+)/);
+                      return match ? parseInt(match[1]) : 999;
+                    };
+                    return extractNumber(a.key) - extractNumber(b.key);
+                  })
+                  .map((explanation, index) => {
+                    // Parse the explanation key to get division/phase info
+                    const keyParts = explanation.key.split('_');
+                    const itemCode = keyParts[0] || 'Unknown';
+
+                    // Get item name based on discipline
+                    let itemName = itemCode;
+                    if (activeDiscipline === 'construction') {
+                      itemName = LEVELING_LABELS[itemCode] || `Division ${itemCode}`;
+                    } else if (activeDiscipline === 'design') {
+                      // For design, try to find the actual phase name from the bid data
+                      const phaseInfo = bidComparisons[0]?.analysis.result.aia_phases?.[itemCode];
+                      itemName = phaseInfo?.phase_name || itemCode;
+                    } else if (activeDiscipline === 'trade') {
+                      // For trade, try to find the actual system name from the bid data
+                      const systemInfo = bidComparisons[0]?.analysis.result.technical_systems?.[itemCode];
+                      itemName = systemInfo?.system_name || itemCode;
+                    }
+
+                    return (
+                      <div key={explanation.key} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex-1">
+                            <h5 className="font-semibold text-gray-900 mb-1">
+                              {activeDiscipline === 'construction' && `Division ${itemCode}: `}
+                              {itemName}
+                            </h5>
+                            <div className="text-xs text-gray-500">
+                              Generated {new Date(explanation.at).toLocaleString()} • {explanation.model || 'AI Analysis'}
+                            </div>
+                          </div>
+                          <div className="flex items-center ml-4">
+                            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+                              {activeDiscipline === 'construction' ? 'CSI' : activeDiscipline === 'design' ? 'AIA' : 'Tech'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="text-sm text-gray-700 leading-relaxed">
+                          {explanation.short}
+                        </div>
+
+                        {explanation.long && explanation.long !== explanation.short && (
+                          <details className="mt-3">
+                            <summary className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer font-medium">
+                              Show detailed analysis →
+                            </summary>
+                            <div className="mt-2 text-sm text-gray-600 leading-relaxed border-l-2 border-blue-200 pl-3">
+                              {explanation.long}
+                            </div>
+                          </details>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+
+              {bulkVarianceExplanations.filter(exp => exp.model === 'fallback' || exp.short.includes('Unable to')).length > 0 && (
+                <div className="mt-4 text-xs text-gray-500">
+                  {bulkVarianceExplanations.filter(exp => exp.model === 'fallback' || exp.short.includes('Unable to')).length} explanations could not be generated due to API limitations.
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Comparative Analysis Results */}
           {comparisonError && (

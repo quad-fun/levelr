@@ -21,9 +21,8 @@ function generateCacheKey(opts: {
     rows: opts.rows.map(row => ({
       division: row.division,
       scopePath: row.scopePath || row.item,
-      bids: row.bids,
-      varianceAbs: row.varianceAbs,
-      variancePct: row.variancePct
+      bids: row.bids
+      // Exclude varianceAbs and variancePct as they're calculated values that may differ slightly
     })),
     selectedBids: opts.selectedBids.sort(), // normalize order
     v: 'v1' // version for cache invalidation
