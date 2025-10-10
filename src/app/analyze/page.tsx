@@ -58,19 +58,13 @@ export default function AnalyzePage() {
           );
         }
         
-        // Generate market analysis
-        if (selectedDiscipline === 'design' && result.aia_phases) {
-          setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeDesignMarketRates(
-            result.aia_phases,
-            result.total_amount,
-            'general'
-          ));
-        } else if (selectedDiscipline === 'trade' && result.technical_systems) {
-          setMarketVariance(MultiDisciplineMarketAnalyzer.analyzeTradeMarketRates(
-            result.technical_systems,
-            result.total_amount,
-            'general'
-          ));
+        // Generate market analysis (only for construction discipline)
+        // Design and trade market analysis requires construction project value which isn't available
+        if (selectedDiscipline === 'construction') {
+          // Construction market analysis would go here if implemented
+          setMarketVariance(null);
+        } else {
+          setMarketVariance(null);
         }
         
         // Generate discipline-appropriate risk assessment
