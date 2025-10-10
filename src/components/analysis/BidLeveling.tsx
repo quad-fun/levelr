@@ -1301,7 +1301,7 @@ export default function BidLeveling() {
                     };
                     return extractNumber(a.key) - extractNumber(b.key);
                   })
-                  .map((explanation, index) => {
+                  .map((explanation) => {
                     // Parse the explanation key to get division/phase info
                     const keyParts = explanation.key.split('_');
                     const itemCode = keyParts[0] || 'Unknown';
