@@ -49,7 +49,6 @@ function calculateDesignRisk(analysisResult: AnalysisResult): RiskAssessment {
   // Check for reasonable phase distribution
   if (analysisResult.aia_phases) {
     const phases = Object.values(analysisResult.aia_phases);
-    const totalFees = phases.reduce((sum, phase) => sum + phase.fee_amount, 0);
 
     // Check individual phase percentages
     phases.forEach(phase => {
@@ -70,7 +69,7 @@ function calculateDesignRisk(analysisResult: AnalysisResult): RiskAssessment {
 
   // Check for missing deliverables in key phases
   if (analysisResult.aia_phases) {
-    Object.entries(analysisResult.aia_phases).forEach(([phaseKey, phase]) => {
+    Object.entries(analysisResult.aia_phases).forEach(([_phaseKey, phase]) => {
       if (!phase.deliverables || phase.deliverables.length === 0) {
         riskScore += 10;
         risks.push(`No deliverables specified for ${phase.phase_name}`);
@@ -134,7 +133,7 @@ function calculateTradeRisk(analysisResult: AnalysisResult): RiskAssessment {
 
   // Check for system cost concentration
   if (analysisResult.technical_systems) {
-    Object.entries(analysisResult.technical_systems).forEach(([systemKey, system]) => {
+    Object.entries(analysisResult.technical_systems).forEach(([_systemKey, system]) => {
       const percentage = (system.total_cost / analysisResult.total_amount) * 100;
       if (percentage > 50) {
         riskScore += (percentage - 50) * 2;
@@ -145,7 +144,7 @@ function calculateTradeRisk(analysisResult: AnalysisResult): RiskAssessment {
 
   // Check for missing equipment specifications
   if (analysisResult.technical_systems) {
-    Object.entries(analysisResult.technical_systems).forEach(([systemKey, system]) => {
+    Object.entries(analysisResult.technical_systems).forEach(([_systemKey, system]) => {
       if (!system.specifications || system.specifications.length === 0) {
         riskScore += 10;
         risks.push(`No equipment specifications for ${system.system_name}`);
