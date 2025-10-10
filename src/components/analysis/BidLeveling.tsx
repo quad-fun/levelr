@@ -777,7 +777,28 @@ export default function BidLeveling() {
   // Construction: CSI Division Comparison
   const renderConstructionComparison = () => (
     <div className="bg-white rounded-lg shadow-md p-6">
-      <h4 className="text-lg font-semibold text-gray-900 mb-4">CSI Division Comparison</h4>
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="text-lg font-semibold text-gray-900">CSI Division Comparison</h4>
+        {bidComparisons.length >= 2 && (
+          <button
+            onClick={performComparativeAnalysis}
+            disabled={isLoadingComparison}
+            className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-3 py-1.5 rounded-lg flex items-center text-sm"
+          >
+            {isLoadingComparison ? (
+              <>
+                <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Search className="h-3 w-3 mr-2" />
+                Explain Variances
+              </>
+            )}
+          </button>
+        )}
+      </div>
 
       <div className="overflow-x-auto">
         <table className="min-w-full">
@@ -790,7 +811,7 @@ export default function BidLeveling() {
                 </th>
               ))}
               {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
-                <th className="text-left py-2 w-16">Why?</th>
+                <th className="text-left py-2 w-16">Variance</th>
               )}
             </tr>
           </thead>
@@ -862,7 +883,28 @@ export default function BidLeveling() {
 
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4">AIA Phase Comparison</h4>
+        <div className="flex justify-between items-center mb-4">
+          <h4 className="text-lg font-semibold text-gray-900">AIA Phase Comparison</h4>
+          {bidComparisons.length >= 2 && (
+            <button
+              onClick={performComparativeAnalysis}
+              disabled={isLoadingComparison}
+              className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-3 py-1.5 rounded-lg flex items-center text-sm"
+            >
+              {isLoadingComparison ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Search className="h-3 w-3 mr-2" />
+                  Explain Variances
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full">
@@ -876,7 +918,7 @@ export default function BidLeveling() {
                   </th>
                 ))}
                 {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
-                  <th className="text-left py-2 w-16">Why?</th>
+                  <th className="text-left py-2 w-16">Variance</th>
                 )}
               </tr>
             </thead>
@@ -953,7 +995,28 @@ export default function BidLeveling() {
 
     return (
       <div className="bg-white rounded-lg shadow-md p-6">
-        <h4 className="text-lg font-semibold text-gray-900 mb-4">Technical Systems Comparison</h4>
+        <div className="flex justify-between items-center mb-4">
+          <h4 className="text-lg font-semibold text-gray-900">Technical Systems Comparison</h4>
+          {bidComparisons.length >= 2 && (
+            <button
+              onClick={performComparativeAnalysis}
+              disabled={isLoadingComparison}
+              className="bg-purple-600 hover:bg-purple-700 disabled:bg-purple-400 text-white px-3 py-1.5 rounded-lg flex items-center text-sm"
+            >
+              {isLoadingComparison ? (
+                <>
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-2"></div>
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Search className="h-3 w-3 mr-2" />
+                  Explain Variances
+                </>
+              )}
+            </button>
+          )}
+        </div>
 
         <div className="overflow-x-auto">
           <table className="min-w-full">
@@ -966,7 +1029,7 @@ export default function BidLeveling() {
                   </th>
                 ))}
                 {process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false' && bidComparisons.length >= 2 && (
-                  <th className="text-left py-2 w-16">Why?</th>
+                  <th className="text-left py-2 w-16">Variance</th>
                 )}
               </tr>
             </thead>
