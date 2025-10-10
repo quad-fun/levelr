@@ -318,6 +318,48 @@ src/lib/analysis/
 **Status**: Complete and ready for production
 **Implementation**: Complete design export system with 4 new functions, enhanced TypeScript interfaces, and professional formatting
 
+### 10. AI-Powered Variance Explanations System (October 2025)
+**Objective**: Implement intelligent explanations for cost differences between competing proposals
+**Impact**: Transform bid leveling from simple comparison to intelligent analysis with AI-generated insights
+**Solution**: Complete variance analysis system with browser-based caching and multi-discipline support
+
+**Major Features Implemented**:
+- **AI-Generated Explanations**: Claude-powered analysis explaining why costs differ between bids across divisions, phases, or systems
+- **Multi-Discipline Intelligence**: Specialized variance analysis for CSI divisions (construction), AIA phases (design), and technical systems (trade)
+- **Browser-Based Caching**: LocalStorage persistence for explanation caching with 14-day TTL to minimize API costs
+- **Comprehensive UI Integration**: Professional variance explanations display in bid leveling interface
+- **Enhanced Excel Exports**: Variance explanations automatically included in Excel exports with professional formatting
+
+**Technical Architecture**:
+- **Variance Explanation API**: New `/api/variance/explain` endpoint with Claude integration for intelligent cost analysis
+- **Browser Caching System**: `src/lib/varianceExplain.ts` with localStorage-based persistence solving serverless cache challenges
+- **Inline Explanations**: Individual variance explanations with expandable UI tooltips for detailed analysis
+- **Bulk Analysis**: Complete variance analysis across all divisions/phases/systems with one-click generation
+- **Export Integration**: Variance explanations automatically included in all discipline-specific exports
+
+**Key Implementation Details**:
+- **Cache Architecture**: Browser localStorage cache with hash-based keys for efficient explanation retrieval
+- **Multi-Discipline Export Sheets**: "CONSTRUCTION VARIANCE EXPLANATIONS", "DESIGN VARIANCE EXPLANATIONS", "TRADE VARIANCE EXPLANATIONS"
+- **Professional UI**: Smart positioning tooltips, expandable details, and discipline-specific formatting
+- **Export Formatting**: Text wrapping, confidence levels, and professional styling in Excel variance sheets
+- **API Optimization**: Cached explanations reduce API costs while providing instant explanation retrieval
+
+**Business Value**:
+- **Intelligent Decision Making**: Real estate professionals understand WHY costs differ, not just THAT they differ
+- **Risk Mitigation**: AI identifies potential scope gaps, material differences, and approach variations
+- **Professional Analysis**: Export-quality variance explanations suitable for stakeholder presentations
+- **Cost Efficiency**: Browser caching minimizes API costs while providing comprehensive analysis
+
+**Technical Innovations**:
+- **Serverless Cache Solution**: Overcame serverless function limitations with browser-based localStorage persistence
+- **Smart Key Generation**: Cache keys exclude calculated values to ensure consistent explanation matching
+- **Multi-Discipline Routing**: Intelligent routing ensures appropriate analysis for each industry discipline
+- **Professional Export Integration**: Variance explanations seamlessly integrated into existing export workflows
+
+**Branch**: `inline-variance-explanations`
+**Status**: Complete and deployed with comprehensive multi-discipline support
+**Implementation**: 6 major files enhanced, new API endpoint, complete caching system, and professional UI integration
+
 ### Known Issues
 - **Subcontractor null values**: Some legacy data may have null total_amount causing toLocaleString() errors
 - **Cost/SF calculations**: Require gross_sqft field to be extracted by Claude
@@ -329,3 +371,4 @@ src/lib/analysis/
 ✅ GitHub: https://github.com/quad-fun/levelr
 ✅ Enhanced Multi-Discipline Analysis complete with AI-powered design and trade analysis
 ✅ Complete Design Bid Leveling System with AIA phase-based exports
+✅ AI-Powered Variance Explanations with comprehensive multi-discipline support

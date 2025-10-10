@@ -37,11 +37,13 @@ Levelr is the first complete construction bidding ecosystem that combines AI-enh
 - **Export Options**: Professional PDF, Word, and Excel generation with real document creation (not demos)
 
 ### **⚖️ Advanced Bid Leveling**
-- **Multi-Bid Comparison**: Compare up to 5 bids side-by-side with variance analysis
-- **Professional Reports**: Leveled comparison sheets with cost breakdowns
+- **Multi-Bid Comparison**: Compare up to 5 bids side-by-side with AI-powered variance analysis
+- **AI Variance Explanations**: Intelligent explanations for cost differences between competing proposals
+- **Multi-Discipline Intelligence**: Specialized analysis for CSI divisions, AIA phases, and technical systems
+- **Professional Reports**: Leveled comparison sheets with variance explanations included
 - **Markup Transparency**: Shows CM fees, insurance, bonds, and general conditions
-- **Executive Summaries**: Rankings, recommendations, and risk assessments
-- **Export Excellence**: Professional Excel workbooks with multiple analysis sheets
+- **Executive Summaries**: Rankings, recommendations, and comprehensive risk assessments
+- **Export Excellence**: Professional Excel workbooks with dedicated variance explanation sheets
 
 ### **🔒 Security & Privacy**
 - **Browser-Only Processing**: All analysis happens locally with no server storage
@@ -228,8 +230,9 @@ src/
 ### **3. Bid Leveling Workflow**
 1. **Multi-Bid Selection**: Add up to 5 bids for comparison
 2. **Automated Leveling**: Side-by-side cost comparison with variance analysis
-3. **Executive Summary**: Rankings, recommendations, and risk assessments
-4. **Professional Export**: Comprehensive Excel workbooks with multiple analysis sheets
+3. **AI Variance Analysis**: Generate intelligent explanations for cost differences
+4. **Executive Summary**: Rankings, recommendations, and risk assessments
+5. **Professional Export**: Comprehensive Excel workbooks with variance explanation sheets
 
 ## 🎯 Business Intelligence
 
