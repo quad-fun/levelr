@@ -215,6 +215,19 @@ export function exportDesignAnalysisToExcel(analysis: AnalysisResult): void {
     const aiaWs = XLSX.utils.aoa_to_sheet(aiaData);
     aiaWs['!cols'] = calculateOptimalColumnWidths(aiaData);
     formatCurrencyColumns(aiaWs, [1], 1); // Column B (Fee Amount), starting from row 2
+
+    // Add text wrapping for deliverables and scope notes columns
+    const range = XLSX.utils.decode_range(aiaWs['!ref'] || 'A1');
+    for (let row = 1; row <= range.e.r; row++) { // Start from row 1 (skip header)
+      for (let col = 3; col <= 4; col++) { // Columns D (Deliverables) and E (Scope Notes)
+        const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+        const cell = aiaWs[cellAddr];
+        if (cell) {
+          cell.s = { ...(cell.s || {}), alignment: { wrapText: true, vertical: 'top' } };
+        }
+      }
+    }
+
     XLSX.utils.book_append_sheet(wb, aiaWs, 'AIA Phases');
   }
 
@@ -233,6 +246,19 @@ export function exportDesignAnalysisToExcel(analysis: AnalysisResult): void {
 
     const deliverableWs = XLSX.utils.aoa_to_sheet(deliverableData);
     deliverableWs['!cols'] = [{ wch: 50 }, { wch: 25 }];
+
+    // Add text wrapping for deliverable descriptions
+    const deliverableRange = XLSX.utils.decode_range(deliverableWs['!ref'] || 'A1');
+    for (let row = 1; row <= deliverableRange.e.r; row++) { // Start from row 1 (skip header)
+      for (let col = 0; col <= 1; col++) { // Both columns could have long text
+        const cellAddr = XLSX.utils.encode_cell({ r: row, c: col });
+        const cell = deliverableWs[cellAddr];
+        if (cell) {
+          cell.s = { ...(cell.s || {}), alignment: { wrapText: true, vertical: 'top' } };
+        }
+      }
+    }
+
     XLSX.utils.book_append_sheet(wb, deliverableWs, 'Deliverables');
   }
 
@@ -332,7 +358,7 @@ async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedA
             if (cached.short.includes('Unable to') || cached.model === 'fallback') confidence = 'Low';
 
             explanations.push({
-              scope: `${phaseKey} - ${phaseName}`,
+              scope: phaseName, // Use clean phase name only
               bidsCompared: selectedBids.join(' vs '),
               shortExplanation: cached.short,
               detailedAnalysis: cached.long || cached.short,
@@ -420,8 +446,8 @@ async function addDesignVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedA
           cell.s = { fill: { fgColor: { rgb: fillColor } } };
         }
 
-        // Wrap text for explanation columns
-        if (col === 2 || col === 3) {
+        // Wrap text for explanation columns and other text-heavy columns
+        if (col === 0 || col === 1 || col === 2 || col === 3) {
           cell.s = { ...(cell.s || {}), alignment: { wrapText: true, vertical: 'top' } };
         }
       }

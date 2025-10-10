@@ -1302,22 +1302,49 @@ export default function BidLeveling() {
                     return extractNumber(a.key) - extractNumber(b.key);
                   })
                   .map((explanation) => {
-                    // Parse the explanation key to get division/phase info
-                    const keyParts = explanation.key.split('_');
-                    const itemCode = keyParts[0] || 'Unknown';
+                    // Extract item information from the explanation text itself since cache key is a hash
+                    let itemName = 'Variance Analysis';
 
-                    // Get item name based on discipline
-                    let itemName = itemCode;
-                    if (activeDiscipline === 'construction') {
-                      itemName = LEVELING_LABELS[itemCode] || `Division ${itemCode}`;
-                    } else if (activeDiscipline === 'design') {
-                      // For design, try to find the actual phase name from the bid data
-                      const phaseInfo = bidComparisons[0]?.analysis.result.aia_phases?.[itemCode];
-                      itemName = phaseInfo?.phase_name || itemCode;
+                    // Try to extract phase/division name from the explanation text
+                    const text = explanation.short;
+
+                    if (activeDiscipline === 'design') {
+                      // Look for AIA phase keywords in the text
+                      if (text.toLowerCase().includes('construction administration') || text.toLowerCase().includes(' ca ')) {
+                        itemName = 'Construction Administration (CA)';
+                      } else if (text.toLowerCase().includes('construction documents') || text.toLowerCase().includes(' cd ')) {
+                        itemName = 'Construction Documents (CD)';
+                      } else if (text.toLowerCase().includes('design development') || text.toLowerCase().includes(' dd ')) {
+                        itemName = 'Design Development (DD)';
+                      } else if (text.toLowerCase().includes('schematic design') || text.toLowerCase().includes(' sd ')) {
+                        itemName = 'Schematic Design (SD)';
+                      } else if (text.toLowerCase().includes('bidding') || text.toLowerCase().includes('negotiation') || text.toLowerCase().includes(' bn ')) {
+                        itemName = 'Bidding/Negotiation (BN)';
+                      } else {
+                        itemName = 'Design Phase Analysis';
+                      }
+                    } else if (activeDiscipline === 'construction') {
+                      // For construction, try to extract division info
+                      const divisionMatch = text.match(/Division (\d+)/i);
+                      if (divisionMatch) {
+                        const divCode = divisionMatch[1];
+                        itemName = LEVELING_LABELS[divCode] || `Division ${divCode}`;
+                      } else {
+                        itemName = 'Construction Division Analysis';
+                      }
                     } else if (activeDiscipline === 'trade') {
-                      // For trade, try to find the actual system name from the bid data
-                      const systemInfo = bidComparisons[0]?.analysis.result.technical_systems?.[itemCode];
-                      itemName = systemInfo?.system_name || itemCode;
+                      // For trade, look for system keywords
+                      if (text.toLowerCase().includes('electrical')) {
+                        itemName = 'Electrical Systems';
+                      } else if (text.toLowerCase().includes('mechanical') || text.toLowerCase().includes('hvac')) {
+                        itemName = 'HVAC Systems';
+                      } else if (text.toLowerCase().includes('plumbing')) {
+                        itemName = 'Plumbing Systems';
+                      } else if (text.toLowerCase().includes('fire protection')) {
+                        itemName = 'Fire Protection';
+                      } else {
+                        itemName = 'Technical System Analysis';
+                      }
                     }
 
                     return (
@@ -1325,7 +1352,6 @@ export default function BidLeveling() {
                         <div className="flex items-start justify-between mb-3">
                           <div className="flex-1">
                             <h5 className="font-semibold text-gray-900 mb-1">
-                              {activeDiscipline === 'construction' && `Division ${itemCode}: `}
                               {itemName}
                             </h5>
                             <div className="text-xs text-gray-500">

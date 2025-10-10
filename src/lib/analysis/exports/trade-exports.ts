@@ -339,7 +339,7 @@ async function addTradeVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedAn
             if (cached.short.includes('Unable to') || cached.model === 'fallback') confidence = 'Low';
 
             explanations.push({
-              scope: `${systemKey} - ${systemName}`,
+              scope: systemName, // Use clean system name only
               bidsCompared: selectedBids.join(' vs '),
               shortExplanation: cached.short,
               detailedAnalysis: cached.long || cached.short,
@@ -425,8 +425,8 @@ async function addTradeVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedAn
           cell.s = { fill: { fgColor: { rgb: fillColor } } };
         }
 
-        // Wrap text for explanation columns
-        if (col === 2 || col === 3) {
+        // Wrap text for explanation columns and other text-heavy columns
+        if (col === 0 || col === 1 || col === 2 || col === 3) {
           cell.s = { ...(cell.s || {}), alignment: { wrapText: true, vertical: 'top' } };
         }
       }

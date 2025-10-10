@@ -1813,8 +1813,8 @@ async function addVarianceExplanationSheet(wb: XLSX.WorkBook, bids: SavedAnalysi
           cell.s = { fill: { fgColor: { rgb: fillColor } } };
         }
 
-        // Wrap text for explanation columns
-        if (col === 2 || col === 3) {
+        // Wrap text for explanation columns and other text-heavy columns
+        if (col === 0 || col === 1 || col === 2 || col === 3) {
           cell.s = { ...(cell.s || {}), alignment: { wrapText: true, vertical: 'top' } };
         }
       }
