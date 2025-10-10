@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
-import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
+import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS, LEVELING_LABELS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
 import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
@@ -259,14 +259,7 @@ export default function BidLeveling() {
     const selectedAnalyses = analyses.filter(a => selectedBids.includes(a.id));
     
     const comparisons = selectedAnalyses.map(analysis => {
-      const risk = calculateProjectRisk(
-        Object.fromEntries(
-          Object.entries(analysis.result.csi_divisions).map(([code, data]) => [code, data.cost])
-        ),
-        analysis.result.total_amount,
-        analysis.result.uncategorizedTotal || 0,
-        analysis.result
-      );
+      const risk = calculateMultiDisciplineRisk(analysis.result);
       
       return {
         analysis,
