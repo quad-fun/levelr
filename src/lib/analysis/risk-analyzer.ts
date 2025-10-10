@@ -78,8 +78,8 @@ function calculateDesignRisk(analysisResult: AnalysisResult): RiskAssessment {
   }
 
   // Check design duration vs project complexity
-  if (analysisResult.project_duration) {
-    const designMonths = parseInt(analysisResult.project_duration.replace(/\D/g, '')) || 0;
+  if (analysisResult.timeline) {
+    const designMonths = parseInt(analysisResult.timeline.replace(/\D/g, '')) || 0;
     if (designMonths < 6 && analysisResult.total_amount > 500000) {
       riskScore += 15;
       risks.push(`Short design duration (${designMonths} months) for large project may indicate compressed schedule risk`);
