@@ -12,7 +12,7 @@ interface ProjectBudgetTrackerProps {
   onBudgetUpdate: () => void;
 }
 
-export default function ProjectBudgetTracker({ project, onBudgetUpdate }: ProjectBudgetTrackerProps) {
+export default function ProjectBudgetTracker({ project, onBudgetUpdate: _onBudgetUpdate }: ProjectBudgetTrackerProps) {
   const [activeView, setActiveView] = useState<'overview' | 'breakdown' | 'cashflow' | 'forecasting'>('overview');
 
   const formatCurrency = (amount: number) =>
@@ -87,7 +87,7 @@ export default function ProjectBudgetTracker({ project, onBudgetUpdate }: Projec
             return (
               <button
                 key={tab.id}
-                onClick={() => setActiveView(tab.id as any)}
+                onClick={() => setActiveView(tab.id as 'overview' | 'breakdown' | 'cashflow' | 'forecasting')}
                 className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
                   isActive
                     ? 'border-blue-500 text-blue-600'
@@ -257,7 +257,7 @@ export default function ProjectBudgetTracker({ project, onBudgetUpdate }: Projec
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-6">Budget by Category</h3>
             <div className="space-y-4">
-              {project.budget.breakdown.map((category, index) => (
+              {project.budget.breakdown.map((category, index: _index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex justify-between items-center mb-3">
                     <h4 className="font-medium text-gray-900 capitalize">{category.category.replace('_', ' ')}</h4>

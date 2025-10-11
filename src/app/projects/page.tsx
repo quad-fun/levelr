@@ -1,24 +1,22 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import {
   getAllProjects,
-  searchProjects,
-  updateProjectStatus
+  searchProjects
 } from '@/lib/project-storage';
 import { SavedProject, ProjectFilter, ProjectStatus, ProjectPriority } from '@/types/project';
 import ProjectCreationWizard from '@/components/project/ProjectCreationWizard';
 import DemoModeToggle from '@/components/demo/DemoModeToggle';
 import {
   Building2, Plus, Search, Filter, Calendar, DollarSign,
-  Users, MapPin, TrendingUp, AlertTriangle, CheckCircle,
+  Users, MapPin, TrendingUp, AlertTriangle,
   Eye, Edit, Archive, MoreHorizontal, Target
 } from 'lucide-react';
 
 export default function ProjectsPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const [projects, setProjects] = useState<SavedProject[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<SavedProject[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,11 +51,6 @@ export default function ProjectsPage() {
     setShowCreateWizard(false);
     loadProjects();
     router.push(`/projects/${projectId}`);
-  };
-
-  const handleStatusChange = (projectId: string, status: ProjectStatus) => {
-    updateProjectStatus(projectId, status);
-    loadProjects();
   };
 
   const formatCurrency = (amount: number) =>
@@ -257,7 +250,7 @@ export default function ProjectsPage() {
                   value={filters.discipline?.[0] || ''}
                   onChange={(e) => setFilters(prev => ({
                     ...prev,
-                    discipline: e.target.value ? [e.target.value as any] : undefined
+                    discipline: e.target.value ? [e.target.value as 'construction' | 'design' | 'trade'] : undefined
                   }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >

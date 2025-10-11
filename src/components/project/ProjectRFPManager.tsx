@@ -14,7 +14,7 @@ interface ProjectRFPManagerProps {
   onBidAward: (rfpId: string, bidId: string) => void;
 }
 
-export default function ProjectRFPManager({ project, onRFPUpdate, onBidAward }: ProjectRFPManagerProps) {
+export default function ProjectRFPManager({ project, onRFPUpdate: _onRFPUpdate, onBidAward }: ProjectRFPManagerProps) {
   const [selectedRFP, setSelectedRFP] = useState<ProjectRFP | null>(null);
   const [activeTab, setActiveTab] = useState<'active' | 'awarded' | 'all'>('active');
 

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import {
   getProject,
@@ -38,9 +38,9 @@ export default function ProjectPage() {
     if (projectId) {
       loadProject();
     }
-  }, [projectId]);
+  }, [projectId, loadProject]);
 
-  const loadProject = async () => {
+  const loadProject = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -66,9 +66,9 @@ export default function ProjectPage() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [projectId]);
 
-  const handleMilestoneUpdate = async (milestoneId: string, updates: any) => {
+  const handleMilestoneUpdate = async (milestoneId: string, updates: Partial<SavedProject>) => {
     if (!project) return;
 
     try {

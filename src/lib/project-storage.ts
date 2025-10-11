@@ -11,7 +11,6 @@ import {
   ProjectRFP,
   ProjectBid,
   ProjectAnalytics,
-  ProjectReportData,
   GanttData,
   GanttTask,
   MilestoneStatus,
@@ -24,8 +23,7 @@ import { SavedAnalysis } from '@/lib/storage';
 import {
   isDemoModeEnabled,
   getDemoProjects,
-  getDemoAnalytics,
-  DEMO_STORAGE_KEYS
+  getDemoAnalytics
 } from '@/lib/demo-data';
 
 const PROJECTS_STORAGE_KEY = 'levelr_projects';

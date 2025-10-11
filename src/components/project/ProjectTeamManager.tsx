@@ -12,7 +12,7 @@ interface ProjectTeamManagerProps {
   onTeamUpdate: () => void;
 }
 
-export default function ProjectTeamManager({ project, onTeamUpdate }: ProjectTeamManagerProps) {
+export default function ProjectTeamManager({ project, onTeamUpdate: _onTeamUpdate }: ProjectTeamManagerProps) {
   const [showAddMember, setShowAddMember] = useState(false);
   const [selectedMember, setSelectedMember] = useState<TeamMember | null>(null);
 
@@ -116,7 +116,7 @@ export default function ProjectTeamManager({ project, onTeamUpdate }: ProjectTea
         </div>
 
         <div className="divide-y divide-gray-200">
-          {allTeamMembers.map((member, index) => {
+          {allTeamMembers.map((member, index: _index) => {
             const isOwner = member.id === project.team.owner.id;
             const isProjectManager = project.team.projectManager && member.id === project.team.projectManager.id;
             const isConsultant = project.team.consultants.some(c => c.id === member.id);

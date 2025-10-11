@@ -11,15 +11,15 @@ import {
 interface ProjectDashboardProps {
   project: SavedProject;
   analytics: ProjectAnalytics | null;
-  onMilestoneUpdate: (milestoneId: string, updates: any) => void;
+  onMilestoneUpdate: (milestoneId: string, updates: unknown) => void;
   onBidAward: (rfpId: string, bidId: string) => void;
 }
 
 export default function ProjectDashboard({
   project,
-  analytics,
-  onMilestoneUpdate,
-  onBidAward
+  analytics: _analytics,
+  onMilestoneUpdate: _onMilestoneUpdate,
+  onBidAward: _onBidAward
 }: ProjectDashboardProps) {
   const [selectedTimeframe, setSelectedTimeframe] = useState<'week' | 'month' | 'quarter'>('month');
 
@@ -106,16 +106,6 @@ export default function ProjectDashboard({
   const recentBids = getRecentBids();
   const riskAlerts = getRiskAlerts();
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return 'text-green-600';
-      case 'in_progress': return 'text-blue-600';
-      case 'pending': return 'text-gray-600';
-      case 'overdue': return 'text-red-600';
-      default: return 'text-gray-600';
-    }
-  };
-
   const getMilestoneStatusIcon = (status: MilestoneStatus) => {
     switch (status) {
       case 'completed': return <CheckCircle className="h-4 w-4 text-green-600" />;
@@ -162,7 +152,7 @@ export default function ProjectDashboard({
             <h3 className="text-lg font-semibold text-red-900">Risk Alerts</h3>
           </div>
           <div className="space-y-2">
-            {riskAlerts.map((alert, index) => (
+            {riskAlerts.map((alert, index: _index) => (
               <div key={index} className={`flex items-center space-x-2 ${
                 alert.level === 'critical' ? 'text-red-800' : 'text-red-700'
               }`}>
@@ -428,7 +418,7 @@ export default function ProjectDashboard({
           <div className="bg-white rounded-lg shadow-sm border p-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">Budget Breakdown</h3>
             <div className="space-y-3">
-              {project.budget.breakdown.map((category, index) => (
+              {project.budget.breakdown.map((category, index: _index) => (
                 <div key={index} className="flex justify-between items-center">
                   <div>
                     <p className="font-medium text-gray-900 capitalize">{category.category.replace('_', ' ')}</p>

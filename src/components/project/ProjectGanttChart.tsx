@@ -3,18 +3,17 @@
 import React, { useState } from 'react';
 import { SavedProject, GanttData } from '@/types/project';
 import {
-  Calendar, Clock, Target, AlertTriangle, CheckCircle,
-  Play, Pause, RotateCcw, Settings
+  Calendar, Target, CheckCircle, Play, Settings
 } from 'lucide-react';
 
 interface ProjectGanttChartProps {
   project: SavedProject;
   ganttData: GanttData;
-  onMilestoneUpdate: (milestoneId: string, updates: any) => void;
+  onMilestoneUpdate: (milestoneId: string, updates: Record<string, unknown>) => void;
 }
 
 export default function ProjectGanttChart({
-  project,
+  project: _project,
   ganttData,
   onMilestoneUpdate
 }: ProjectGanttChartProps) {
@@ -23,7 +22,7 @@ export default function ProjectGanttChart({
 
   const formatDate = (date: Date) => date.toLocaleDateString();
 
-  const getTaskColor = (task: any) => {
+  const getTaskColor = (task: Record<string, unknown>) => {
     if (task.type === 'milestone') return task.critical ? '#EF4444' : '#10B981';
     if (task.type === 'project') return '#3B82F6';
     return task.color || '#8B5CF6';
@@ -121,7 +120,7 @@ export default function ProjectGanttChart({
             <div className="col-span-8">
               <div className="relative h-8">
                 {/* Timeline markers */}
-                {timelineMarkers.map((marker, index) => (
+                {timelineMarkers.map((marker, index: _index) => (
                   <div
                     key={index}
                     className="absolute top-0 text-xs text-gray-600"
@@ -148,7 +147,7 @@ export default function ProjectGanttChart({
 
         {/* Task Rows */}
         <div className="max-h-96 overflow-y-auto">
-          {ganttData.tasks.map((task, index) => {
+          {ganttData.tasks.map((task, index: _index) => {
             const isSelected = selectedTask === task.id;
             const leftPosition = calculateTimelinePosition(task.start);
             const width = calculateTaskWidth(task.start, task.end);

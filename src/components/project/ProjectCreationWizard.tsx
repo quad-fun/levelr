@@ -11,7 +11,7 @@ import { getProjectTemplates, createProjectFromWizard, saveProject } from '@/lib
 import {
   Building2, Calendar, DollarSign, Users, FileText,
   CheckCircle, ArrowLeft, ArrowRight, Upload, X,
-  MapPin, AlertTriangle, Target, Clock
+  MapPin, Target, Clock
 } from 'lucide-react';
 import DocumentUploadAnalysis from './DocumentUploadAnalysis';
 import { DocumentAnalysisResult } from '@/lib/document-analysis';
@@ -71,14 +71,14 @@ export default function ProjectCreationWizard({ onComplete, onCancel }: ProjectC
 
   const currentStepIndex = steps.findIndex(step => step.id === currentStep);
 
-  const updateWizardData = (field: keyof ProjectWizardData, value: any) => {
+  const updateWizardData = (field: keyof ProjectWizardData, value: unknown) => {
     setWizardData(prev => ({ ...prev, [field]: value }));
   };
 
-  const updateNestedField = (parent: keyof ProjectWizardData, field: string, value: any) => {
+  const updateNestedField = (parent: keyof ProjectWizardData, field: string, value: unknown) => {
     setWizardData(prev => ({
       ...prev,
-      [parent]: { ...(prev[parent] as any), [field]: value }
+      [parent]: { ...(prev[parent] as Record<string, unknown>), [field]: value }
     }));
   };
 
@@ -155,7 +155,7 @@ export default function ProjectCreationWizard({ onComplete, onCancel }: ProjectC
       {/* Progress Steps */}
       <div className="mb-8">
         <div className="flex items-center justify-between">
-          {steps.map((step, index) => {
+          {steps.map((step, index: _index) => {
             const Icon = step.icon;
             const isActive = step.id === currentStep;
             const isCompleted = index < currentStepIndex;
@@ -259,7 +259,7 @@ export default function ProjectCreationWizard({ onComplete, onCancel }: ProjectC
                     Project Type *
                   </label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {DISCIPLINE_OPTIONS[wizardData.discipline as keyof typeof DISCIPLINE_OPTIONS]?.subtypes.map((subtype: any) => (
+                    {DISCIPLINE_OPTIONS[wizardData.discipline as keyof typeof DISCIPLINE_OPTIONS]?.subtypes.map((subtype) => (
                       <button
                         key={subtype.value}
                         onClick={() => updateWizardData('projectType', subtype.value)}
@@ -488,7 +488,7 @@ export default function ProjectCreationWizard({ onComplete, onCancel }: ProjectC
                   Key Milestones
                 </label>
                 <div className="space-y-3">
-                  {wizardData.keyMilestones.map((milestone, index) => (
+                  {wizardData.keyMilestones.map((milestone, index: _index) => (
                     <div key={index} className="flex items-center space-x-3">
                       <Target className="h-4 w-4 text-gray-400" />
                       <input
@@ -646,7 +646,7 @@ export default function ProjectCreationWizard({ onComplete, onCancel }: ProjectC
               </p>
 
               <div className="space-y-6">
-                {wizardData.anticipatedRFPs.map((rfp, index) => (
+                {wizardData.anticipatedRFPs.map((rfp, index: _index) => (
                   <div key={index} className="border border-gray-200 rounded-lg p-6">
                     <div className="flex justify-between items-start mb-4">
                       <h3 className="text-lg font-medium text-gray-900">RFP #{index + 1}</h3>
@@ -829,7 +829,7 @@ export default function ProjectCreationWizard({ onComplete, onCancel }: ProjectC
               <div className="bg-blue-50 rounded-lg p-6 mb-6">
                 <h3 className="text-lg font-semibold text-blue-900 mb-4">Key Milestones</h3>
                 <div className="space-y-2">
-                  {wizardData.keyMilestones.filter(m => m.trim()).map((milestone, index) => (
+                  {wizardData.keyMilestones.filter(m => m.trim()).map((milestone, index: _index) => (
                     <div key={index} className="flex items-center space-x-2">
                       <Target className="h-4 w-4 text-blue-600" />
                       <span className="text-blue-900">{milestone}</span>
@@ -843,7 +843,7 @@ export default function ProjectCreationWizard({ onComplete, onCancel }: ProjectC
                 <div className="bg-green-50 rounded-lg p-6 mb-6">
                   <h3 className="text-lg font-semibold text-green-900 mb-4">Anticipated RFPs</h3>
                   <div className="space-y-3">
-                    {wizardData.anticipatedRFPs.map((rfp, index) => (
+                    {wizardData.anticipatedRFPs.map((rfp, index: _index) => (
                       <div key={index} className="flex justify-between items-center">
                         <div>
                           <p className="font-medium text-green-900">{rfp.name}</p>

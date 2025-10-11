@@ -3,7 +3,7 @@
 import React, { useState, useCallback } from 'react';
 import {
   Upload, X, FileText, AlertCircle, CheckCircle,
-  Loader2, Download, Eye, Sparkles
+  Loader2, Sparkles
 } from 'lucide-react';
 import {
   DocumentFile,
@@ -32,33 +32,7 @@ export default function DocumentUploadAnalysis({
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleDrag = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === 'dragenter' || e.type === 'dragover') {
-      setDragActive(true);
-    } else if (e.type === 'dragleave') {
-      setDragActive(false);
-    }
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDragActive(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    handleFiles(files);
-  }, []);
-
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      handleFiles(files);
-    }
-  }, []);
-
-  const handleFiles = async (files: File[]) => {
+  const handleFiles = useCallback(async (files: File[]) => {
     setError(null);
 
     // Filter supported file types
@@ -81,7 +55,33 @@ export default function DocumentUploadAnalysis({
 
     // Start analysis
     await analyzeFiles(supportedFiles);
-  };
+  }, [wizardData, onAnalysisComplete]);
+
+  const handleDrag = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+
+    const files = Array.from(e.dataTransfer.files);
+    handleFiles(files);
+  }, [handleFiles]);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files) {
+      const files = Array.from(e.target.files);
+      handleFiles(files);
+    }
+  }, [handleFiles]);
 
   const analyzeFiles = async (files: File[]) => {
     setIsAnalyzing(true);

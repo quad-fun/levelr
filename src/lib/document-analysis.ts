@@ -129,7 +129,7 @@ export async function analyzeDocument(file: File): Promise<DocumentAnalysisResul
     let analysisResult: DocumentAnalysisResult;
     try {
       analysisResult = JSON.parse(result.content);
-    } catch (parseError) {
+    } catch {
       console.warn('Failed to parse Claude response as JSON:', result.content);
       // Fallback: extract basic info from filename
       analysisResult = extractBasicInfoFromFilename(file.name);

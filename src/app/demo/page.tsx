@@ -1,12 +1,12 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { useRouter } from 'next/navigation';
 import { enableDemoMode } from '@/lib/demo-data';
 import DemoModeToggle from '@/components/demo/DemoModeToggle';
 import {
-  Building2, BarChart3, Users, FileText, Calendar, DollarSign,
-  Target, TrendingUp, CheckCircle, ArrowRight, Play, Zap
+  Building2, BarChart3, FileText, Calendar,
+  CheckCircle, ArrowRight, Play, Zap
 } from 'lucide-react';
 
 export default function DemoPage() {
