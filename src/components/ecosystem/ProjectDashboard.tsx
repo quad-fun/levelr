@@ -349,6 +349,52 @@ export default function ProjectDashboard({
           </div>
         </div>
       </div>
+
+      {/* Linked RFPs */}
+      {relatedRFPs.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900">Linked RFPs</h3>
+            <button
+              onClick={() => setActiveTab('rfps')}
+              className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+            >
+              View All RFPs →
+            </button>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {relatedRFPs.slice(0, 3).map(rfp => (
+              <div key={rfp.id} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors">
+                <div className="flex items-start justify-between mb-2">
+                  <h4 className="font-medium text-gray-900 text-sm">{rfp.project.projectName}</h4>
+                  <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                    rfp.project.discipline === 'construction' ? 'bg-blue-100 text-blue-800' :
+                    rfp.project.discipline === 'design' ? 'bg-purple-100 text-purple-800' :
+                    'bg-green-100 text-green-800'
+                  }`}>
+                    {rfp.project.discipline}
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 mb-2">{rfp.project.projectType}</p>
+                <div className="flex items-center justify-between text-xs text-gray-500">
+                  <span>Budget: {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(rfp.project.estimatedValue)}</span>
+                  <span>{new Date(rfp.timestamp).toLocaleDateString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+          {relatedRFPs.length > 3 && (
+            <div className="mt-4 text-center">
+              <button
+                onClick={() => setActiveTab('rfps')}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium"
+              >
+                View {relatedRFPs.length - 3} more RFPs →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 

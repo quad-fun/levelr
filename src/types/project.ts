@@ -337,15 +337,15 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
   {
     id: 'commercial_office',
     name: 'Commercial Office Building',
-    description: 'Complete commercial office development with design, construction, and trade coordination',
+    description: 'Multi-story commercial office development with full MEP systems',
     projectType: 'commercial_office',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 450 // Design (180) + overlap with Construction (300) + MEP trades (120)
+    estimatedDuration: 450
   },
   {
     id: 'retail_development',
     name: 'Retail Development',
-    description: 'Multi-tenant retail development project',
+    description: 'Shopping centers, strip malls, and retail facilities',
     projectType: 'retail',
     disciplines: ['design', 'construction', 'trade'],
     estimatedDuration: 365
@@ -353,15 +353,63 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
   {
     id: 'industrial_facility',
     name: 'Industrial Facility',
-    description: 'Manufacturing or warehouse facility development',
+    description: 'Manufacturing, warehouse, and distribution facilities',
     projectType: 'industrial',
     disciplines: ['design', 'construction', 'trade'],
     estimatedDuration: 400
   },
   {
+    id: 'residential_multifamily',
+    name: 'Residential - Multifamily',
+    description: 'Apartment complexes, condominiums, and residential communities',
+    projectType: 'residential_multifamily',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 420
+  },
+  {
+    id: 'residential_single_family',
+    name: 'Residential - Single Family',
+    description: 'Custom homes and single-family residential development',
+    projectType: 'residential_single_family',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 300
+  },
+  {
+    id: 'mixed_use',
+    name: 'Mixed-Use Development',
+    description: 'Combined residential, commercial, and retail development',
+    projectType: 'mixed_use',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 600
+  },
+  {
+    id: 'hospitality',
+    name: 'Hospitality',
+    description: 'Hotels, resorts, and hospitality facilities',
+    projectType: 'hospitality',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 480
+  },
+  {
+    id: 'healthcare',
+    name: 'Healthcare Facility',
+    description: 'Medical offices, clinics, and healthcare facilities',
+    projectType: 'healthcare',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 540
+  },
+  {
+    id: 'educational',
+    name: 'Educational Facility',
+    description: 'Schools, universities, and educational buildings',
+    projectType: 'educational',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 500
+  },
+  {
     id: 'design_only',
     name: 'Design Services Only',
-    description: 'Architectural and engineering design services',
+    description: 'Architectural and MEP engineering design services',
     projectType: 'design_services',
     disciplines: ['design'],
     estimatedDuration: 180
