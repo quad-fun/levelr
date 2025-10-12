@@ -933,7 +933,7 @@ export function getProjectIntelligence(discipline?: 'construction' | 'design' | 
 
   // Filter by discipline if specified
   const targetProjects = discipline
-    ? allProjects.filter(p => p.project.discipline === discipline)
+    ? allProjects.filter(p => p.project.disciplines.includes(discipline))
     : allProjects;
 
   if (targetProjects.length === 0) {
@@ -961,8 +961,9 @@ export function getProjectIntelligence(discipline?: 'construction' | 'design' | 
 
   // Discipline breakdown
   const disciplineBreakdown = allProjects.reduce((acc, project) => {
-    const disc = project.project.discipline;
-    acc[disc] = (acc[disc] || 0) + 1;
+    project.project.disciplines.forEach(disc => {
+      acc[disc] = (acc[disc] || 0) + 1;
+    });
     return acc;
   }, {} as Record<string, number>);
 

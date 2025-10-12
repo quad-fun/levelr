@@ -47,7 +47,7 @@ export default function ProjectDashboard({
       const linkedRFPs = allRFPs.filter(rfp => project.project.rfpIds.includes(rfp.id));
       const unlinkedRFPs = allRFPs.filter(rfp =>
         !project.project.rfpIds.includes(rfp.id) &&
-        rfp.project.discipline === project.project.discipline
+        project.project.disciplines.includes(rfp.project.discipline)
       );
 
       setRelatedRFPs(linkedRFPs);
@@ -133,7 +133,11 @@ export default function ProjectDashboard({
       <div className="bg-white rounded-lg shadow-sm border p-6">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center space-x-3">
-            {getDisciplineIcon(project.project.discipline)}
+            <div className="flex items-center space-x-1">
+              {project.project.disciplines.map(discipline => (
+                <span key={discipline}>{getDisciplineIcon(discipline)}</span>
+              ))}
+            </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">{project.project.name}</h2>
               <p className="text-gray-600">{project.project.description}</p>
@@ -533,7 +537,11 @@ export default function ProjectDashboard({
             </button>
             <div className="h-6 w-px bg-gray-300" />
             <div className="flex items-center space-x-3">
-              {getDisciplineIcon(project.project.discipline)}
+              <div className="flex items-center space-x-1">
+              {project.project.disciplines.map(discipline => (
+                <span key={discipline}>{getDisciplineIcon(discipline)}</span>
+              ))}
+            </div>
               <h1 className="text-2xl font-bold text-gray-900">{project.project.name}</h1>
             </div>
           </div>

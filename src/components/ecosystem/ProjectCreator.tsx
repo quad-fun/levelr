@@ -10,6 +10,7 @@ import {
   ProjectEcosystem,
   ProjectCreationData,
   DEFAULT_PROJECT_TEMPLATES,
+  DISCIPLINE_TEMPLATES,
   ProjectDiscipline
 } from '@/types/project';
 import { DISCIPLINE_OPTIONS } from '@/types/rfp';
@@ -59,7 +60,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
     basicInfo: {
       name: '',
       description: '',
-      discipline: 'construction',
+      disciplines: ['construction'], // Changed to array
       projectType: '',
       totalBudget: 1000000,
       location: {
@@ -136,58 +137,72 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
     }));
   };
 
-  const generateScheduleFromTemplate = (discipline: ProjectDiscipline, projectType: string) => {
-    const templates = DEFAULT_PROJECT_TEMPLATES[discipline];
-    const template = templates.find(t => t.projectType === projectType);
+  const generateScheduleFromTemplate = (disciplines: ProjectDiscipline[], projectType: string) => {
+    // Find the matching project template
+    const projectTemplate = DEFAULT_PROJECT_TEMPLATES.find(t => t.projectType === projectType);
 
-    if (template && creationData.schedule.startDate) {
+    if (projectTemplate && creationData.schedule.startDate) {
       const startDate = new Date(creationData.schedule.startDate);
-      const endDate = new Date(startDate.getTime() + template.estimatedDuration * 24 * 60 * 60 * 1000);
+      const endDate = new Date(startDate.getTime() + projectTemplate.estimatedDuration * 24 * 60 * 60 * 1000);
 
-      // Generate phases with dates
-      const phases = template.defaultPhases.map((phase, index) => {
-        const phaseStart = new Date(startDate.getTime() + (index * (template.estimatedDuration / template.defaultPhases.length)) * 24 * 60 * 60 * 1000);
-        const phaseEnd = new Date(phaseStart.getTime() + (template.estimatedDuration / template.defaultPhases.length) * 24 * 60 * 60 * 1000);
+      // Collect all discipline templates for this project
+      const allPhases: typeof creationData.schedule.phases = [];
+      const allMilestones: typeof creationData.schedule.milestones = [];
+      const allAllocations: typeof creationData.budget.allocations = [];
 
-        return {
-          ...phase,
-          id: `phase_${index + 1}`,
-          startDate: phaseStart.toISOString().split('T')[0],
-          endDate: phaseEnd.toISOString().split('T')[0],
-          budgetAllocated: phase.budgetAllocated * creationData.basicInfo.totalBudget,
-          budgetUsed: 0,
-          milestoneIds: []
-        };
+      let phaseIndex = 0;
+      let milestoneIndex = 0;
+
+      // For each discipline, get its template and add to the project
+      disciplines.forEach(discipline => {
+        const disciplineTemplates = DISCIPLINE_TEMPLATES[discipline];
+        if (disciplineTemplates && disciplineTemplates.length > 0) {
+          const disciplineTemplate = disciplineTemplates[0]; // Use first template for each discipline
+
+          // Add phases from this discipline
+          disciplineTemplate.defaultPhases.forEach(phase => {
+            const phaseStart = new Date(startDate.getTime() + (phaseIndex * (projectTemplate.estimatedDuration / (disciplines.length * 4))) * 24 * 60 * 60 * 1000);
+            const phaseEnd = new Date(phaseStart.getTime() + (projectTemplate.estimatedDuration / (disciplines.length * 4)) * 24 * 60 * 60 * 1000);
+
+            allPhases.push({
+              ...phase,
+              startDate: phaseStart.toISOString().split('T')[0],
+              endDate: phaseEnd.toISOString().split('T')[0],
+              budgetAllocated: phase.budgetAllocated * creationData.basicInfo.totalBudget * (disciplineTemplate.budgetPercentage || 0.33),
+              milestoneIds: []
+            });
+            phaseIndex++;
+          });
+
+          // Add milestones from this discipline
+          disciplineTemplate.defaultMilestones.forEach(milestone => {
+            const milestoneDate = new Date(startDate.getTime() + ((milestoneIndex + 1) * (projectTemplate.estimatedDuration / (disciplines.length * 6))) * 24 * 60 * 60 * 1000);
+
+            allMilestones.push({
+              ...milestone,
+              date: milestoneDate.toISOString().split('T')[0]
+            });
+            milestoneIndex++;
+          });
+
+          // Add budget allocations from this discipline
+          disciplineTemplate.defaultBudgetAllocations.forEach(allocation => {
+            allAllocations.push({
+              ...allocation,
+              allocatedAmount: allocation.allocatedAmount * creationData.basicInfo.totalBudget * (disciplineTemplate.budgetPercentage || 0.33),
+              committedAmount: 0
+            });
+          });
+        }
       });
-
-      // Generate milestones with dates
-      const milestones = template.defaultMilestones.map((milestone, index) => {
-        const milestoneDate = new Date(startDate.getTime() + ((index + 1) * (template.estimatedDuration / (template.defaultMilestones.length + 1))) * 24 * 60 * 60 * 1000);
-
-        return {
-          ...milestone,
-          id: `milestone_${index + 1}`,
-          date: milestoneDate.toISOString().split('T')[0]
-        };
-      });
-
-      // Generate budget allocations
-      const allocations = template.defaultBudgetAllocations.map((allocation, index) => ({
-        ...allocation,
-        id: `allocation_${index + 1}`,
-        allocatedAmount: allocation.allocatedAmount * creationData.basicInfo.totalBudget,
-        actualAmount: 0,
-        variance: 0,
-        linkedRfpIds: []
-      }));
 
       updateSchedule('endDate', endDate.toISOString().split('T')[0]);
-      updateSchedule('phases', phases);
-      updateSchedule('milestones', milestones);
+      updateSchedule('phases', allPhases);
+      updateSchedule('milestones', allMilestones);
       setCreationData(prev => ({
         ...prev,
         budget: {
-          allocations
+          allocations: allAllocations
         }
       }));
     }
@@ -201,7 +216,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
       const projectEcosystem: Omit<ProjectEcosystem, 'id' | 'createdAt' | 'updatedAt'> = {
         name: creationData.basicInfo.name,
         description: creationData.basicInfo.description,
-        discipline: creationData.basicInfo.discipline,
+        disciplines: creationData.basicInfo.disciplines,
         projectType: creationData.basicInfo.projectType,
         totalBudget: creationData.basicInfo.totalBudget,
         location: creationData.basicInfo.location,
@@ -327,11 +342,11 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
             <button
               key={key}
               onClick={() => {
-                updateBasicInfo('discipline', key as ProjectDiscipline);
+                updateBasicInfo('disciplines', [key as ProjectDiscipline]);
                 updateBasicInfo('projectType', ''); // Reset project type when discipline changes
               }}
               className={`p-4 border rounded-lg text-left transition-colors ${
-                creationData.basicInfo.discipline === key
+                creationData.basicInfo.disciplines.includes(key as ProjectDiscipline)
                   ? 'border-blue-500 bg-blue-50'
                   : 'border-gray-300 hover:border-gray-400'
               }`}
@@ -346,7 +361,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
         </div>
       </div>
 
-      {creationData.basicInfo.discipline && (
+      {creationData.basicInfo.disciplines.length > 0 && (
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">Project Type *</label>
           <select
@@ -355,7 +370,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Select project type...</option>
-            {DISCIPLINE_OPTIONS[creationData.basicInfo.discipline].subtypes.map(subtype => (
+            {DISCIPLINE_OPTIONS[creationData.basicInfo.disciplines[0] as ProjectDiscipline]?.subtypes.map(subtype => (
               <option key={subtype.value} value={subtype.value}>
                 {subtype.name} - {subtype.description}
               </option>
@@ -443,11 +458,11 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
             <div>
               <h4 className="font-medium text-blue-900">Use Template Schedule</h4>
               <p className="text-sm text-blue-700">
-                Generate phases, milestones, and budget allocations based on {creationData.basicInfo.discipline} best practices.
+                Generate phases, milestones, and budget allocations based on {creationData.basicInfo.disciplines.join(', ')} best practices.
               </p>
             </div>
             <button
-              onClick={() => generateScheduleFromTemplate(creationData.basicInfo.discipline, creationData.basicInfo.projectType)}
+              onClick={() => generateScheduleFromTemplate(creationData.basicInfo.disciplines, creationData.basicInfo.projectType)}
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
             >
               Generate
@@ -500,7 +515,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
 
   const renderRFPIntegrationStep = () => {
     const existingRFPs = getAllRFPs().filter(rfp =>
-      rfp.project.discipline === creationData.basicInfo.discipline
+      creationData.basicInfo.disciplines.includes(rfp.project.discipline)
     );
 
     return (
@@ -596,12 +611,12 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Discipline:</span>
-              <span className="font-medium capitalize">{creationData.basicInfo.discipline}</span>
+              <span className="font-medium capitalize">{creationData.basicInfo.disciplines.join(', ')}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Type:</span>
               <span className="font-medium">
-                {DISCIPLINE_OPTIONS[creationData.basicInfo.discipline].subtypes
+                {DISCIPLINE_OPTIONS[creationData.basicInfo.disciplines[0] as ProjectDiscipline]?.subtypes
                   .find(t => t.value === creationData.basicInfo.projectType)?.name}
               </span>
             </div>
