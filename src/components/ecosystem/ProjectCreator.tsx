@@ -13,10 +13,9 @@ import {
   DISCIPLINE_TEMPLATES,
   ProjectDiscipline
 } from '@/types/project';
-import { DISCIPLINE_OPTIONS } from '@/types/rfp';
 import {
-  ChevronLeft, ChevronRight, Check, Building2,
-  MapPin, Palette, Zap, X
+  ChevronLeft, ChevronRight, Check,
+  MapPin, X
 } from 'lucide-react';
 
 interface ProjectCreatorProps {
@@ -60,7 +59,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
     basicInfo: {
       name: '',
       description: '',
-      disciplines: ['construction'], // Changed to array
+      disciplines: [], // Will be set based on project type selection
       projectType: '',
       totalBudget: 1000000,
       location: {
@@ -86,13 +85,6 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
     }
   });
 
-  const getDisciplineIcon = (discipline: ProjectDiscipline) => {
-    switch (discipline) {
-      case 'construction': return <Building2 className="h-5 w-5 text-blue-600" />;
-      case 'design': return <Palette className="h-5 w-5 text-purple-600" />;
-      case 'trade': return <Zap className="h-5 w-5 text-green-600" />;
-    }
-  };
 
   const updateBasicInfo = (field: string, value: unknown) => {
     setCreationData(prev => ({
@@ -336,48 +328,26 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Discipline *</label>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Object.entries(DISCIPLINE_OPTIONS).map(([key, option]) => (
-            <button
-              key={key}
-              onClick={() => {
-                updateBasicInfo('disciplines', [key as ProjectDiscipline]);
-                updateBasicInfo('projectType', ''); // Reset project type when discipline changes
-              }}
-              className={`p-4 border rounded-lg text-left transition-colors ${
-                creationData.basicInfo.disciplines.includes(key as ProjectDiscipline)
-                  ? 'border-blue-500 bg-blue-50'
-                  : 'border-gray-300 hover:border-gray-400'
-              }`}
-            >
-              <div className="flex items-center mb-2">
-                {getDisciplineIcon(key as ProjectDiscipline)}
-                <span className="ml-2 font-medium">{option.title}</span>
-              </div>
-              <p className="text-sm text-gray-600">{option.description}</p>
-            </button>
+        <label className="block text-sm font-medium text-gray-700 mb-2">Project Type *</label>
+        <select
+          value={creationData.basicInfo.projectType}
+          onChange={(e) => {
+            const selectedTemplate = DEFAULT_PROJECT_TEMPLATES.find(t => t.projectType === e.target.value);
+            updateBasicInfo('projectType', e.target.value);
+            if (selectedTemplate) {
+              updateBasicInfo('disciplines', selectedTemplate.disciplines);
+            }
+          }}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        >
+          <option value="">Select project type...</option>
+          {DEFAULT_PROJECT_TEMPLATES.map(template => (
+            <option key={template.id} value={template.projectType}>
+              {template.name} - {template.description}
+            </option>
           ))}
-        </div>
+        </select>
       </div>
-
-      {creationData.basicInfo.disciplines.length > 0 && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Project Type *</label>
-          <select
-            value={creationData.basicInfo.projectType}
-            onChange={(e) => updateBasicInfo('projectType', e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-          >
-            <option value="">Select project type...</option>
-            {DISCIPLINE_OPTIONS[creationData.basicInfo.disciplines[0] as ProjectDiscipline]?.subtypes.map(subtype => (
-              <option key={subtype.value} value={subtype.value}>
-                {subtype.name} - {subtype.description}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-2">Total Budget</label>
@@ -458,7 +428,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
             <div>
               <h4 className="font-medium text-blue-900">Use Template Schedule</h4>
               <p className="text-sm text-blue-700">
-                Generate phases, milestones, and budget allocations based on {creationData.basicInfo.disciplines.join(', ')} best practices.
+                Generate phases, milestones, and budget allocations based on {creationData.basicInfo.projectType} project best practices.
               </p>
             </div>
             <button
@@ -616,8 +586,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
             <div className="flex justify-between">
               <span className="text-gray-600">Type:</span>
               <span className="font-medium">
-                {DISCIPLINE_OPTIONS[creationData.basicInfo.disciplines[0] as ProjectDiscipline]?.subtypes
-                  .find(t => t.value === creationData.basicInfo.projectType)?.name}
+                {DEFAULT_PROJECT_TEMPLATES.find(t => t.projectType === creationData.basicInfo.projectType)?.name}
               </span>
             </div>
             <div className="flex justify-between">
