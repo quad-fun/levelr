@@ -105,6 +105,15 @@ export default function ProjectManager({ onCreateRFP, onAnalyzeProposal }: Proje
     }
   };
 
+  const getDisciplineIcons = (disciplines: string[]) => {
+    return disciplines.map((discipline, index) => (
+      <span key={discipline} className={`inline-flex ${index > 0 ? 'ml-1' : ''}`}>
+        {getDisciplineIcon(discipline)}
+      </span>
+    ));
+  };
+
+
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
 
@@ -122,7 +131,7 @@ export default function ProjectManager({ onCreateRFP, onAnalyzeProposal }: Proje
 
   const filteredProjects = projects.filter(project => {
     const statusMatch = filterStatus === 'all' || project.project.status === filterStatus;
-    const disciplineMatch = filterDiscipline === 'all' || project.project.discipline === filterDiscipline;
+    const disciplineMatch = filterDiscipline === 'all' || project.project.disciplines.includes(filterDiscipline);
     const searchMatch = searchTerm === '' ||
       project.project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       project.project.description.toLowerCase().includes(searchTerm.toLowerCase());
@@ -303,12 +312,18 @@ export default function ProjectManager({ onCreateRFP, onAnalyzeProposal }: Proje
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center space-x-3">
-                      {getDisciplineIcon(project.discipline)}
+                      <div className="flex items-center space-x-1">
+                        {getDisciplineIcons(project.disciplines)}
+                      </div>
                       <div>
                         <h3 className="font-semibold text-gray-900">{project.name}</h3>
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getDisciplineColor(project.discipline)}`}>
-                          <span className="capitalize">{project.discipline}</span>
-                        </span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {project.disciplines.map(discipline => (
+                            <span key={discipline} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${getDisciplineColor(discipline)}`}>
+                              <span className="capitalize">{discipline}</span>
+                            </span>
+                          ))}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center space-x-2">

@@ -10,15 +10,15 @@ export interface ProjectEcosystem {
   id: string;
   name: string;
   description: string;
-  discipline: ProjectDiscipline;
+  disciplines: ProjectDiscipline[]; // Projects can include multiple disciplines
   projectType: string;
   totalBudget: number;
   baselineSchedule: ProjectSchedule;
   currentSchedule: ProjectSchedule;
   status: 'planning' | 'bidding' | 'pre-construction' | 'active' | 'completed';
-  rfpIds: string[];
+  rfpIds: string[]; // RFPs are discipline-specific but linked to project
   awardedBids: AwardedBid[];
-  budgetAllocations: BudgetAllocation[];
+  budgetAllocations: BudgetAllocation[]; // Budget allocated by discipline
   location?: {
     address: string;
     city: string;
@@ -145,16 +145,25 @@ export interface GanttChartConfig {
   endDate: Date;
 }
 
-// Project templates and defaults
-export interface ProjectTemplate {
+// Project templates and defaults - discipline-specific templates that can be combined
+export interface DisciplineTemplate {
   id: string;
   name: string;
   description: string;
   discipline: ProjectDiscipline;
-  projectType: string;
   defaultBudgetAllocations: Omit<BudgetAllocation, 'id' | 'actualAmount' | 'variance' | 'linkedRfpIds'>[];
   defaultPhases: Omit<ProjectPhase, 'id' | 'budgetUsed' | 'actualStartDate' | 'actualEndDate'>[];
   defaultMilestones: Omit<ProjectMilestone, 'id' | 'actualDate'>[];
+  estimatedDuration: number; // days
+  budgetPercentage: number; // typical percentage of total project budget
+}
+
+export interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  projectType: string;
+  disciplines: ProjectDiscipline[]; // Multiple disciplines for complete projects
   estimatedDuration: number; // days
 }
 
@@ -180,7 +189,7 @@ export interface ProjectCreationData {
   basicInfo: {
     name: string;
     description: string;
-    discipline: ProjectDiscipline;
+    disciplines: ProjectDiscipline[]; // Changed to support multiple disciplines
     projectType: string;
     totalBudget: number;
     location?: ProjectEcosystem['location'];
@@ -222,15 +231,14 @@ export interface ProjectRiskFactor {
   mitigation: string;
 }
 
-// Default project templates by discipline
-export const DEFAULT_PROJECT_TEMPLATES: Record<ProjectDiscipline, ProjectTemplate[]> = {
+// Discipline-specific templates that can be combined into multi-discipline projects
+export const DISCIPLINE_TEMPLATES: Record<ProjectDiscipline, DisciplineTemplate[]> = {
   construction: [
     {
-      id: 'commercial_office_construction',
-      name: 'Commercial Office Building',
-      description: 'Multi-story commercial office construction project',
+      id: 'commercial_construction',
+      name: 'Commercial Construction',
+      description: 'General construction work and trades coordination',
       discipline: 'construction',
-      projectType: 'commercial_office',
       defaultBudgetAllocations: [
         { name: 'Site Preparation', discipline: 'construction', category: '01', allocatedAmount: 0.05, committedAmount: 0, status: 'open', notes: 'General conditions and site work' },
         { name: 'Concrete Work', discipline: 'construction', category: '03', allocatedAmount: 0.15, committedAmount: 0, status: 'open', notes: 'Foundations and structure' },
@@ -239,41 +247,31 @@ export const DEFAULT_PROJECT_TEMPLATES: Record<ProjectDiscipline, ProjectTemplat
         { name: 'Carpentry', discipline: 'construction', category: '06', allocatedAmount: 0.10, committedAmount: 0, status: 'open', notes: 'Framing and millwork' },
         { name: 'Roofing', discipline: 'construction', category: '07', allocatedAmount: 0.06, committedAmount: 0, status: 'open', notes: 'Roof systems' },
         { name: 'Doors & Windows', discipline: 'construction', category: '08', allocatedAmount: 0.08, committedAmount: 0, status: 'open', notes: 'Openings' },
-        { name: 'Finishes', discipline: 'construction', category: '09', allocatedAmount: 0.12, committedAmount: 0, status: 'open', notes: 'Interior finishes' },
-        { name: 'HVAC', discipline: 'construction', category: '23', allocatedAmount: 0.12, committedAmount: 0, status: 'open', notes: 'Mechanical systems' },
-        { name: 'Electrical', discipline: 'construction', category: '26', allocatedAmount: 0.10, committedAmount: 0, status: 'open', notes: 'Electrical systems' },
-        { name: 'Contingency', discipline: 'construction', category: 'contingency', allocatedAmount: 0.02, committedAmount: 0, status: 'open', notes: 'Project contingency' }
+        { name: 'Finishes', discipline: 'construction', category: '09', allocatedAmount: 0.12, committedAmount: 0, status: 'open', notes: 'Interior finishes' }
       ],
       defaultPhases: [
-        { name: 'Preconstruction', description: 'Planning and design', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.02, milestoneIds: [] },
-        { name: 'Site Work', description: 'Site preparation and utilities', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.08, milestoneIds: [] },
-        { name: 'Structure', description: 'Foundation and framing', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.35, milestoneIds: [] },
-        { name: 'Envelope', description: 'Building envelope completion', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.25, milestoneIds: [] },
-        { name: 'MEP Systems', description: 'Mechanical, electrical, plumbing', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.20, milestoneIds: [] },
-        { name: 'Finishes', description: 'Interior finishes and closeout', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.10, milestoneIds: [] }
+        { name: 'Site Work', description: 'Site preparation and utilities', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] },
+        { name: 'Structure', description: 'Foundation and framing', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.40, milestoneIds: [] },
+        { name: 'Envelope', description: 'Building envelope completion', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.30, milestoneIds: [] },
+        { name: 'Finishes', description: 'Interior finishes and closeout', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] }
       ],
       defaultMilestones: [
-        { name: 'Project Kickoff', description: 'Project initiation and team mobilization', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Permits Obtained', description: 'All required permits secured', date: '', status: 'upcoming', dependencies: [] },
         { name: 'Site Cleared', description: 'Site preparation completed', date: '', status: 'upcoming', dependencies: [] },
         { name: 'Foundation Complete', description: 'Foundation work finished', date: '', status: 'upcoming', dependencies: [] },
         { name: 'Structure Complete', description: 'Structural framing finished', date: '', status: 'upcoming', dependencies: [] },
         { name: 'Envelope Complete', description: 'Building weatherproof', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'MEP Rough-in', description: 'Mechanical, electrical, plumbing rough-in', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Drywall Complete', description: 'Drywall installation finished', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Final Inspections', description: 'All final inspections passed', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Project Closeout', description: 'Project completion and handover', date: '', status: 'upcoming', dependencies: [] }
+        { name: 'Final Inspections', description: 'All final inspections passed', date: '', status: 'upcoming', dependencies: [] }
       ],
-      estimatedDuration: 365
+      estimatedDuration: 300,
+      budgetPercentage: 0.65 // 65% of total project budget typically
     }
   ],
   design: [
     {
       id: 'architectural_design',
       name: 'Architectural Design Services',
-      description: 'Complete architectural design project using AIA phases',
+      description: 'Complete architectural design using AIA phases',
       discipline: 'design',
-      projectType: 'architectural',
       defaultBudgetAllocations: [
         { name: 'Schematic Design', discipline: 'design', category: 'schematic_design', allocatedAmount: 0.15, committedAmount: 0, status: 'open', notes: 'Conceptual design phase' },
         { name: 'Design Development', discipline: 'design', category: 'design_development', allocatedAmount: 0.20, committedAmount: 0, status: 'open', notes: 'Design refinement' },
@@ -286,29 +284,25 @@ export const DEFAULT_PROJECT_TEMPLATES: Record<ProjectDiscipline, ProjectTemplat
         { name: 'Schematic Design', description: 'Conceptual design development', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] },
         { name: 'Design Development', description: 'Design refinement and coordination', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.20, milestoneIds: [] },
         { name: 'Construction Documents', description: 'Final documentation', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.40, milestoneIds: [] },
-        { name: 'Bidding', description: 'Contractor selection process', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.05, milestoneIds: [] },
-        { name: 'Construction Administration', description: 'Construction oversight', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] }
+        { name: 'Construction Administration', description: 'Construction oversight', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.20, milestoneIds: [] }
       ],
       defaultMilestones: [
-        { name: 'Project Award', description: 'Design contract executed', date: '', status: 'upcoming', dependencies: [] },
         { name: 'Programming Complete', description: 'Requirements finalized', date: '', status: 'upcoming', dependencies: [] },
         { name: 'SD Submittal', description: 'Schematic design submitted', date: '', status: 'upcoming', dependencies: [] },
         { name: 'DD Submittal', description: 'Design development submitted', date: '', status: 'upcoming', dependencies: [] },
         { name: 'CD Submittal', description: 'Construction documents submitted', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Permit Submission', description: 'Permits submitted to authorities', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Bidding Complete', description: 'Contractor selected', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Construction Start', description: 'Construction begins', date: '', status: 'upcoming', dependencies: [] }
+        { name: 'Permit Submission', description: 'Permits submitted to authorities', date: '', status: 'upcoming', dependencies: [] }
       ],
-      estimatedDuration: 180
+      estimatedDuration: 180,
+      budgetPercentage: 0.12 // 12% of total project budget typically
     }
   ],
   trade: [
     {
-      id: 'electrical_installation',
-      name: 'Electrical System Installation',
-      description: 'Complete electrical systems design and installation',
+      id: 'electrical_systems',
+      name: 'Electrical Systems',
+      description: 'Electrical design and installation services',
       discipline: 'trade',
-      projectType: 'electrical',
       defaultBudgetAllocations: [
         { name: 'Design & Engineering', discipline: 'trade', category: 'design', allocatedAmount: 0.15, committedAmount: 0, status: 'open', notes: 'Electrical design services' },
         { name: 'Power Distribution', discipline: 'trade', category: 'power_distribution', allocatedAmount: 0.30, committedAmount: 0, status: 'open', notes: 'Main distribution equipment' },
@@ -332,10 +326,63 @@ export const DEFAULT_PROJECT_TEMPLATES: Record<ProjectDiscipline, ProjectTemplat
         { name: 'Energization', description: 'System energized and operational', date: '', status: 'upcoming', dependencies: [] },
         { name: 'Final Testing', description: 'All testing completed', date: '', status: 'upcoming', dependencies: [] }
       ],
-      estimatedDuration: 120
+      estimatedDuration: 120,
+      budgetPercentage: 0.23 // 23% of total project budget typically
     }
   ]
 };
+
+// Multi-discipline project templates that combine the above disciplines
+export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
+  {
+    id: 'commercial_office',
+    name: 'Commercial Office Building',
+    description: 'Complete commercial office development with design, construction, and trade coordination',
+    projectType: 'commercial_office',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 450 // Design (180) + overlap with Construction (300) + MEP trades (120)
+  },
+  {
+    id: 'retail_development',
+    name: 'Retail Development',
+    description: 'Multi-tenant retail development project',
+    projectType: 'retail',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 365
+  },
+  {
+    id: 'industrial_facility',
+    name: 'Industrial Facility',
+    description: 'Manufacturing or warehouse facility development',
+    projectType: 'industrial',
+    disciplines: ['design', 'construction', 'trade'],
+    estimatedDuration: 400
+  },
+  {
+    id: 'design_only',
+    name: 'Design Services Only',
+    description: 'Architectural and engineering design services',
+    projectType: 'design_services',
+    disciplines: ['design'],
+    estimatedDuration: 180
+  },
+  {
+    id: 'construction_only',
+    name: 'Construction Services Only',
+    description: 'General contracting and construction management',
+    projectType: 'construction_services',
+    disciplines: ['construction'],
+    estimatedDuration: 300
+  },
+  {
+    id: 'tenant_improvement',
+    name: 'Tenant Improvement',
+    description: 'Interior renovation and improvement project',
+    projectType: 'tenant_improvement',
+    disciplines: ['design', 'construction'],
+    estimatedDuration: 120
+  }
+];
 
 // Status color mappings for consistent UI
 export const PROJECT_STATUS_COLORS = {
