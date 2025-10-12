@@ -8,7 +8,7 @@ import ExportTools from '@/components/analysis/ExportTools';
 import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
 import RFPBuilder from '@/components/rfp/RFPBuilder';
-import ProjectEcosystem from '@/components/ecosystem/ProjectEcosystem';
+import ProjectManager from '@/components/ecosystem/ProjectManager';
 import { analyzeDocument } from '@/lib/claude-client';
 import { MultiDisciplineAnalyzer } from '@/lib/analysis/multi-discipline-analyzer';
 import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
@@ -211,7 +211,7 @@ export default function AnalyzePage() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              Project Ecosystem
+              Project Management
             </button>
             <button
               onClick={() => setActiveTab('history')}
@@ -243,7 +243,7 @@ export default function AnalyzePage() {
         ) : activeTab === 'rfp' ? (
           <RFPBuilder onCancel={() => setActiveTab('upload')} />
         ) : activeTab === 'ecosystem' ? (
-          <ProjectEcosystem 
+          <ProjectManager
             onCreateRFP={() => setActiveTab('rfp')}
             onAnalyzeProposal={() => setActiveTab('upload')}
           />

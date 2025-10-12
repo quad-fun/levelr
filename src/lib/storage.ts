@@ -1,6 +1,13 @@
 import CryptoJS from 'crypto-js';
 import { UsageData, AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
 import { RFPProject, SavedRFP } from '@/types/rfp';
+import {
+  ProjectEcosystem,
+  SavedProject,
+  ProjectDashboardMetrics,
+  AwardedBid,
+  ProjectChangeOrder
+} from '@/types/project';
 
 // MVP: Simple localStorage utilities with optional encryption
 export function secureStore(key: string, data: unknown, userSecret?: string): void {
@@ -671,4 +678,337 @@ export function clearAllRFPs(): void {
   const rfps = getSavedRFPs();
   rfps.forEach(id => localStorage.removeItem(`rfp_${id}`));
   localStorage.removeItem('rfp_index');
+}
+
+// Project Ecosystem Storage Functions - Added for project management functionality
+export function saveProject(project: ProjectEcosystem): string {
+  const id = `project_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const metrics = calculateProjectMetrics(project);
+  const savedProject: SavedProject = {
+    id,
+    timestamp: new Date().toISOString(),
+    project: {
+      ...project,
+      id,
+      updatedAt: new Date().toISOString()
+    },
+    metrics,
+    lastActivity: new Date().toISOString()
+  };
+
+  // Save individual project
+  secureStore(`project_${id}`, savedProject);
+
+  // Update project index
+  const projects = getSavedProjects();
+  const updatedIndex = [...projects, id];
+
+  // Keep only last 100 projects for performance
+  if (updatedIndex.length > 100) {
+    const oldProjectId = updatedIndex.shift();
+    if (oldProjectId) {
+      localStorage.removeItem(`project_${oldProjectId}`);
+    }
+  }
+
+  secureStore('project_index', updatedIndex);
+
+  return id;
+}
+
+export function getSavedProjects(): string[] {
+  const index = secureRetrieve('project_index');
+  return Array.isArray(index) ? index : [];
+}
+
+export function getProject(id: string): SavedProject | null {
+  const project = secureRetrieve(`project_${id}`);
+  return project as SavedProject | null;
+}
+
+export function getAllProjects(): SavedProject[] {
+  const ids = getSavedProjects();
+  return ids
+    .map(id => getProject(id))
+    .filter((project): project is SavedProject => project !== null)
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+}
+
+export function updateProject(id: string, updates: Partial<ProjectEcosystem>): void {
+  const existingProject = getProject(id);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const updatedProjectData = {
+    ...existingProject.project,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+
+  const metrics = calculateProjectMetrics(updatedProjectData);
+
+  const updatedProject: SavedProject = {
+    ...existingProject,
+    project: updatedProjectData,
+    metrics,
+    lastActivity: new Date().toISOString()
+  };
+
+  secureStore(`project_${id}`, updatedProject);
+}
+
+export function deleteProject(id: string): void {
+  localStorage.removeItem(`project_${id}`);
+  const projects = getSavedProjects().filter(projectId => projectId !== id);
+  secureStore('project_index', projects);
+}
+
+export function linkRFPToProject(projectId: string, rfpId: string): void {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const rfpIds = existingProject.project.rfpIds || [];
+  if (!rfpIds.includes(rfpId)) {
+    const updatedProject = {
+      ...existingProject.project,
+      rfpIds: [...rfpIds, rfpId],
+      updatedAt: new Date().toISOString()
+    };
+
+    updateProject(projectId, updatedProject);
+  }
+}
+
+export function awardBidToProject(projectId: string, bidData: Omit<AwardedBid, 'id'>): string {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const bidId = `bid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const awardedBid: AwardedBid = {
+    ...bidData,
+    id: bidId
+  };
+
+  const awardedBids = existingProject.project.awardedBids || [];
+  const updatedProject = {
+    ...existingProject.project,
+    awardedBids: [...awardedBids, awardedBid],
+    updatedAt: new Date().toISOString()
+  };
+
+  updateProject(projectId, updatedProject);
+
+  return bidId;
+}
+
+export function updateBidStatus(projectId: string, bidId: string, status: AwardedBid['status']): void {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const awardedBids = existingProject.project.awardedBids.map(bid =>
+    bid.id === bidId ? { ...bid, status } : bid
+  );
+
+  const updatedProject = {
+    ...existingProject.project,
+    awardedBids,
+    updatedAt: new Date().toISOString()
+  };
+
+  updateProject(projectId, updatedProject);
+}
+
+export function addChangeOrder(changeOrder: Omit<ProjectChangeOrder, 'id'>): string {
+  const id = `co_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const fullChangeOrder: ProjectChangeOrder = {
+    ...changeOrder,
+    id
+  };
+
+  // Save individual change order
+  secureStore(`changeorder_${id}`, fullChangeOrder);
+
+  // Update change order index for project
+  const projectChangeOrders = getProjectChangeOrders(changeOrder.projectId);
+  const updatedIndex = [...projectChangeOrders.map(co => co.id), id];
+  secureStore(`project_changeorders_${changeOrder.projectId}`, updatedIndex);
+
+  return id;
+}
+
+export function getProjectChangeOrders(projectId: string): ProjectChangeOrder[] {
+  const index = secureRetrieve(`project_changeorders_${projectId}`);
+  const ids = Array.isArray(index) ? index : [];
+
+  return ids
+    .map(id => secureRetrieve(`changeorder_${id}`))
+    .filter((co): co is ProjectChangeOrder => co !== null)
+    .sort((a, b) => new Date(b.requestedDate).getTime() - new Date(a.requestedDate).getTime());
+}
+
+export function updateChangeOrderStatus(id: string, status: ProjectChangeOrder['status'], approvedDate?: string): void {
+  const changeOrder = secureRetrieve(`changeorder_${id}`) as ProjectChangeOrder;
+  if (!changeOrder) {
+    throw new Error('Change order not found');
+  }
+
+  const updatedChangeOrder = {
+    ...changeOrder,
+    status,
+    ...(approvedDate && { approvedDate })
+  };
+
+  secureStore(`changeorder_${id}`, updatedChangeOrder);
+}
+
+// Helper function to calculate project metrics
+function calculateProjectMetrics(project: ProjectEcosystem): ProjectDashboardMetrics {
+  const totalBudget = project.totalBudget;
+  const awardedBids = project.awardedBids || [];
+  const rfpIds = project.rfpIds || [];
+
+  const committedBudget = awardedBids.reduce((sum, bid) => sum + bid.awardedAmount, 0);
+  const remainingBudget = totalBudget - committedBudget;
+  const budgetVariance = ((committedBudget - totalBudget) / totalBudget) * 100;
+
+  // Calculate schedule variance (simplified - days from planned end date)
+  const plannedEnd = new Date(project.baselineSchedule.endDate);
+  const currentEnd = new Date(project.currentSchedule.endDate);
+  const scheduleVariance = Math.ceil((currentEnd.getTime() - plannedEnd.getTime()) / (1000 * 60 * 60 * 24));
+
+  const totalRfps = rfpIds.length;
+  // const linkedRfps = new Set(awardedBids.map(bid => bid.rfpId)).size;
+  const completedRfps = awardedBids.filter(bid => bid.status === 'completed').length;
+  const activeRfps = totalRfps - completedRfps;
+
+  const totalBids = awardedBids.length;
+  const awardedBidsCount = awardedBids.filter(bid => bid.status !== 'awarded').length;
+
+  // Simple risk scoring based on budget and schedule variance
+  let riskScore = 0;
+  if (Math.abs(budgetVariance) > 10) riskScore += 30;
+  if (Math.abs(scheduleVariance) > 30) riskScore += 30;
+  if (awardedBidsCount / Math.max(totalBids, 1) < 0.5) riskScore += 20;
+  if (activeRfps > totalRfps * 0.8) riskScore += 20;
+
+  // Calculate completion percentage based on completed milestones
+  const totalMilestones = project.currentSchedule.milestones.length;
+  const completedMilestones = project.currentSchedule.milestones.filter(m => m.status === 'completed').length;
+  const completionPercentage = totalMilestones > 0 ? (completedMilestones / totalMilestones) * 100 : 0;
+
+  return {
+    totalBudget,
+    committedBudget,
+    remainingBudget,
+    budgetVariance,
+    scheduleVariance,
+    totalRfps,
+    completedRfps,
+    activeRfps,
+    totalBids,
+    awardedBids: awardedBidsCount,
+    riskScore: Math.min(riskScore, 100),
+    completionPercentage
+  };
+}
+
+// Project intelligence functions
+export function getProjectIntelligence(discipline?: 'construction' | 'design' | 'trade'): {
+  totalProjects: number;
+  averageProjectValue: number;
+  averageDuration: number;
+  disciplineBreakdown: Record<string, number>;
+  budgetVarianceStats: { average: number; min: number; max: number };
+  scheduleVarianceStats: { average: number; min: number; max: number };
+  riskDistribution: Record<string, number>;
+} {
+  const allProjects = getAllProjects();
+
+  // Filter by discipline if specified
+  const targetProjects = discipline
+    ? allProjects.filter(p => p.project.discipline === discipline)
+    : allProjects;
+
+  if (targetProjects.length === 0) {
+    return {
+      totalProjects: 0,
+      averageProjectValue: 0,
+      averageDuration: 0,
+      disciplineBreakdown: {},
+      budgetVarianceStats: { average: 0, min: 0, max: 0 },
+      scheduleVarianceStats: { average: 0, min: 0, max: 0 },
+      riskDistribution: {}
+    };
+  }
+
+  const totalProjects = targetProjects.length;
+  const averageProjectValue = targetProjects.reduce((sum, p) => sum + p.project.totalBudget, 0) / totalProjects;
+
+  // Calculate average duration
+  const durations = targetProjects.map(p => {
+    const start = new Date(p.project.baselineSchedule.startDate);
+    const end = new Date(p.project.baselineSchedule.endDate);
+    return Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+  });
+  const averageDuration = durations.reduce((sum, d) => sum + d, 0) / durations.length;
+
+  // Discipline breakdown
+  const disciplineBreakdown = allProjects.reduce((acc, project) => {
+    const disc = project.project.discipline;
+    acc[disc] = (acc[disc] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  // Budget variance statistics
+  const budgetVariances = targetProjects.map(p => p.metrics.budgetVariance);
+  const budgetVarianceStats = {
+    average: budgetVariances.reduce((sum, v) => sum + v, 0) / budgetVariances.length,
+    min: Math.min(...budgetVariances),
+    max: Math.max(...budgetVariances)
+  };
+
+  // Schedule variance statistics
+  const scheduleVariances = targetProjects.map(p => p.metrics.scheduleVariance);
+  const scheduleVarianceStats = {
+    average: scheduleVariances.reduce((sum, v) => sum + v, 0) / scheduleVariances.length,
+    min: Math.min(...scheduleVariances),
+    max: Math.max(...scheduleVariances)
+  };
+
+  // Risk distribution
+  const riskDistribution = targetProjects.reduce((acc, project) => {
+    const risk = project.metrics.riskScore < 30 ? 'LOW' :
+                 project.metrics.riskScore < 70 ? 'MEDIUM' : 'HIGH';
+    acc[risk] = (acc[risk] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  return {
+    totalProjects,
+    averageProjectValue,
+    averageDuration,
+    disciplineBreakdown,
+    budgetVarianceStats,
+    scheduleVarianceStats,
+    riskDistribution
+  };
+}
+
+export function clearAllProjects(): void {
+  const projects = getSavedProjects();
+  projects.forEach(id => {
+    localStorage.removeItem(`project_${id}`);
+    // Also clean up change orders for this project
+    const changeOrders = getProjectChangeOrders(id);
+    changeOrders.forEach(co => localStorage.removeItem(`changeorder_${co.id}`));
+    localStorage.removeItem(`project_changeorders_${id}`);
+  });
+  localStorage.removeItem('project_index');
 }
