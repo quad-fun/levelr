@@ -328,25 +328,37 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">Project Type *</label>
-        <select
-          value={creationData.basicInfo.projectType}
-          onChange={(e) => {
-            const selectedTemplate = DEFAULT_PROJECT_TEMPLATES.find(t => t.projectType === e.target.value);
-            updateBasicInfo('projectType', e.target.value);
-            if (selectedTemplate) {
-              updateBasicInfo('disciplines', selectedTemplate.disciplines);
-            }
-          }}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-        >
-          <option value="">Select project type...</option>
+        <label className="block text-sm font-medium text-gray-700 mb-4">Project Type *</label>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {DEFAULT_PROJECT_TEMPLATES.map(template => (
-            <option key={template.id} value={template.projectType}>
-              {template.name} - {template.description}
-            </option>
+            <button
+              key={template.id}
+              onClick={() => {
+                updateBasicInfo('projectType', template.projectType);
+                updateBasicInfo('disciplines', template.disciplines);
+              }}
+              className={`p-4 rounded-lg border-2 transition-colors text-left ${
+                creationData.basicInfo.projectType === template.projectType
+                  ? `border-${template.color}-500 bg-${template.color}-50`
+                  : 'border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              <div className="text-3xl mb-3">{template.icon}</div>
+              <h3 className="font-semibold text-gray-900 mb-2">{template.name}</h3>
+              <p className="text-sm text-gray-600 mb-3">{template.description}</p>
+              <div className="flex flex-wrap gap-1">
+                {template.disciplines.map((discipline, index) => (
+                  <span
+                    key={index}
+                    className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-full"
+                  >
+                    {discipline}
+                  </span>
+                ))}
+              </div>
+            </button>
           ))}
-        </select>
+        </div>
       </div>
 
       <div>

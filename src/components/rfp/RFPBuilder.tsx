@@ -18,6 +18,19 @@ interface RFPBuilderProps {
   initialRFPId?: string;
   onComplete?: (rfpId: string) => void;
   onCancel?: () => void;
+  initialProjectData?: {
+    projectName: string;
+    description: string;
+    projectType: string;
+    estimatedValue: number;
+    location?: {
+      address: string;
+      city: string;
+      state: string;
+      zipCode: string;
+    };
+    discipline?: ProjectDiscipline;
+  };
 }
 
 // Helper function to get default delivery method for discipline
@@ -27,26 +40,26 @@ const getDefaultDeliveryMethod = (discipline: ProjectDiscipline): string => {
   return defaultMethod?.value || methods[0]?.value || 'professional_services';
 };
 
-export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBuilderProps) {
+export default function RFPBuilder({ initialRFPId, onComplete, onCancel, initialProjectData }: RFPBuilderProps) {
   const [currentStep, setCurrentStep] = useState(1);
   const [rfpId, setRFPId] = useState<string | null>(initialRFPId || null);
   const [isSaving, setIsSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   
-  // Initialize empty RFP project
+  // Initialize RFP project with optional pre-filled data
   const [project, setProject] = useState<RFPProject>({
     id: '',
-    projectName: '',
-    discipline: 'construction',
-    projectType: '',
+    projectName: initialProjectData?.projectName || '',
+    discipline: initialProjectData?.discipline || 'construction',
+    projectType: initialProjectData?.projectType || '',
     projectSubtype: '',
-    description: '',
-    estimatedValue: 1000000,
+    description: initialProjectData?.description || '',
+    estimatedValue: initialProjectData?.estimatedValue || 1000000,
     location: {
-      address: '',
-      city: '',
-      state: '',
-      zipCode: ''
+      address: initialProjectData?.location?.address || '',
+      city: initialProjectData?.location?.city || '',
+      state: initialProjectData?.location?.state || '',
+      zipCode: initialProjectData?.location?.zipCode || ''
     },
     timeline: {
       rfpIssueDate: new Date().toISOString().split('T')[0],
@@ -59,7 +72,7 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
     scopeDefinition: {
       specialRequirements: [],
       exclusions: [],
-      deliveryMethod: getDefaultDeliveryMethod('construction'),
+      deliveryMethod: getDefaultDeliveryMethod(initialProjectData?.discipline || 'construction'),
       contractType: 'lump_sum',
       // Legacy support
       csiDivisions: {}
@@ -282,6 +295,18 @@ export default function RFPBuilder({ initialRFPId, onComplete, onCancel }: RFPBu
             project={project}
             rfpId={rfpId}
             onComplete={onComplete}
+            onContinueToProject={() => {
+              // Save the RFP first, then navigate to project management
+              let finalRFPId = rfpId;
+              if (!finalRFPId) {
+                finalRFPId = saveRFP(project);
+                setRFPId(finalRFPId);
+              }
+              // Navigate to project management - this will be handled by parent component
+              if (onComplete && finalRFPId) {
+                onComplete(finalRFPId);
+              }
+            }}
           />
         );
       default:

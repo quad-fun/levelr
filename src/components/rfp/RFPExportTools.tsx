@@ -4,18 +4,19 @@ import { useState } from 'react';
 import { RFPProject } from '@/types/rfp';
 import { saveRFP, updateRFPStatus } from '@/lib/storage';
 import { generateRFPDocument, downloadFile, RFPExportOptions } from '@/lib/export/rfp-document-generator';
-import { 
-  Download, FileText, Sheet, Mail, CheckCircle, 
-  AlertCircle, Share2, Printer, Copy
+import {
+  Download, FileText, Sheet, Mail, CheckCircle,
+  AlertCircle, Share2, Printer, Copy, Building2, ArrowRight
 } from 'lucide-react';
 
 interface RFPExportToolsProps {
   project: RFPProject;
   rfpId: string | null;
   onComplete?: (rfpId: string) => void;
+  onContinueToProject?: () => void;
 }
 
-export default function RFPExportTools({ project, rfpId, onComplete }: RFPExportToolsProps) {
+export default function RFPExportTools({ project, rfpId, onComplete, onContinueToProject }: RFPExportToolsProps) {
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const [exportOptions] = useState<RFPExportOptions>({
     format: 'pdf',
@@ -125,6 +126,31 @@ export default function RFPExportTools({ project, rfpId, onComplete }: RFPExport
           </div>
         </div>
       </div>
+
+      {/* Project Management Navigation */}
+      {onContinueToProject && (
+        <div className="mb-8 bg-white border border-gray-200 rounded-lg p-6">
+          <h3 className="text-lg font-medium text-gray-900 mb-4">Project Management</h3>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-gray-600 mb-2">
+                Continue to project management to track bids, manage contractors, and monitor project progress.
+              </p>
+              <p className="text-sm text-gray-500">
+                You can return to export and distribute this RFP at any time from the project dashboard.
+              </p>
+            </div>
+            <button
+              onClick={onContinueToProject}
+              className="flex items-center px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors ml-6"
+            >
+              <Building2 className="h-5 w-5 mr-2" />
+              Continue to Project Management
+              <ArrowRight className="h-4 w-4 ml-2" />
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Export Options */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">

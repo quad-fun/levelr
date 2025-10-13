@@ -1,9 +1,9 @@
 'use client';
 
-import React from 'react';
+import React, { useEffect, useCallback } from 'react';
 import { RFPProject, ScopeSection, ProjectDiscipline, AIA_PHASES, TECHNICAL_SPEC_TEMPLATES } from '@/types/rfp';
-import { 
-  CheckCircle, Circle, FileText, 
+import {
+  CheckCircle, Circle, FileText,
   Wrench, Palette
 } from 'lucide-react';
 import { CSI_DIVISIONS } from '@/lib/rfp/csi-data';
@@ -37,7 +37,7 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
 
   const currentTheme = project.discipline ? getDisciplineTheme(project.discipline) : { primary: 'blue', secondary: 'blue-50', icon: '🔧' };
 
-  const updateScopeFramework = (frameworkType: 'csi' | 'aia' | 'technical', sections: Record<string, ScopeSection>) => {
+  const updateScopeFramework = useCallback((frameworkType: 'csi' | 'aia' | 'technical', sections: Record<string, ScopeSection>) => {
     onUpdate({
       scopeDefinition: {
         ...project.scopeDefinition,
@@ -47,7 +47,74 @@ export default function ScopeFrameworkBuilder({ project, onUpdate }: ScopeFramew
         }
       }
     });
-  };
+  }, [onUpdate, project.scopeDefinition]);
+
+  // Auto-select appropriate scopes based on discipline and project type
+  useEffect(() => {
+    // Only auto-select if no framework is defined yet
+    if (!project.scopeDefinition.framework?.sections || Object.keys(project.scopeDefinition.framework.sections).length === 0) {
+      const framework = getDefaultFramework(project.discipline);
+      const autoSelectedSections: Record<string, ScopeSection> = {};
+
+      if (framework === 'aia') {
+        // Auto-select all AIA phases for design projects
+        Object.entries(AIA_PHASES).forEach(([phaseKey, phase]) => {
+          autoSelectedSections[phaseKey] = {
+            code: phaseKey,
+            title: phase.phase.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            description: phase.description,
+            included: true, // Auto-select all AIA phases
+            specifications: [],
+            deliverables: phase.typicalDeliverables,
+            notes: '',
+            estimatedPercentage: phase.percentageOfFee,
+            dependencies: [],
+            riskFactors: []
+          };
+        });
+      } else if (framework === 'technical') {
+        // Auto-select common technical specs based on project type
+        Object.entries(TECHNICAL_SPEC_TEMPLATES).forEach(([category, template]) => {
+          autoSelectedSections[category] = {
+            code: category,
+            title: template.category.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+            description: `${template.category} specifications and requirements`,
+            included: true, // Auto-select common technical categories
+            specifications: template.specifications.slice(0, 3), // Include first 3 specs
+            deliverables: [],
+            notes: '',
+            estimatedPercentage: undefined,
+            dependencies: [],
+            riskFactors: []
+          };
+        });
+      } else {
+        // For CSI construction, auto-select common divisions based on project type
+        const commonDivisions = ['01', '03', '05', '06', '07', '08', '09']; // Common for most projects
+        commonDivisions.forEach(divisionCode => {
+          if (CSI_DIVISIONS[divisionCode]) {
+            const division = CSI_DIVISIONS[divisionCode];
+            autoSelectedSections[divisionCode] = {
+              code: divisionCode,
+              title: division.name,
+              description: division.description,
+              included: true,
+              specifications: division.commonItems.slice(0, 3),
+              deliverables: [],
+              notes: '',
+              estimatedPercentage: undefined,
+              dependencies: [],
+              riskFactors: []
+            };
+          }
+        });
+      }
+
+      if (Object.keys(autoSelectedSections).length > 0) {
+        updateScopeFramework(framework, autoSelectedSections);
+      }
+    }
+  }, [project.discipline, project.scopeDefinition.framework?.sections, updateScopeFramework]); // Re-run when discipline changes
 
   const toggleScopeSection = (sectionCode: string, sectionData: unknown) => {
     const currentSections = project.scopeDefinition.framework?.sections || {};

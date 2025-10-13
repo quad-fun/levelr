@@ -78,19 +78,68 @@ async function generatePDFDocument(project: RFPProject, _options: RFPExportOptio
     doc.addPage();
     yPosition = 20;
   }
-  
+
   doc.setFontSize(14);
   doc.text('SCOPE OF WORK', 20, yPosition);
   yPosition += 10;
-  
+
   doc.setFontSize(10);
-  if (project.scopeDefinition.csiDivisions) {
+
+  // Handle new framework-based scope (AIA phases, technical specs)
+  if (project.scopeDefinition.framework?.sections) {
+    const frameworkType = project.scopeDefinition.framework.type;
+    const sections = project.scopeDefinition.framework.sections;
+
+    if (frameworkType === 'aia') {
+      doc.setFont('helvetica', 'bold');
+      doc.text('AIA Project Phases:', 20, yPosition);
+      yPosition += 7;
+      doc.setFont('helvetica', 'normal');
+    } else if (frameworkType === 'technical') {
+      doc.setFont('helvetica', 'bold');
+      doc.text('Technical Specifications:', 20, yPosition);
+      yPosition += 7;
+      doc.setFont('helvetica', 'normal');
+    }
+
+    Object.entries(sections).forEach(([sectionKey, section]) => {
+      if (section.included) {
+        doc.setFont('helvetica', 'bold');
+        const sectionTitle = section.title || sectionKey.replace(/_/g, ' ').toUpperCase();
+        doc.text(`${sectionTitle}`, 20, yPosition);
+        yPosition += 7;
+
+        doc.setFont('helvetica', 'normal');
+        if (section.description) {
+          const descLines = doc.splitTextToSize(section.description, 170);
+          doc.text(descLines, 25, yPosition);
+          yPosition += descLines.length * 5;
+        }
+
+        if (section.deliverables && section.deliverables.length > 0) {
+          section.deliverables.forEach((deliverable) => {
+            const deliverableText = `• ${deliverable}`;
+            doc.text(deliverableText, 25, yPosition);
+            yPosition += 5;
+          });
+        }
+        yPosition += 5;
+
+        if (yPosition > 270) {
+          doc.addPage();
+          yPosition = 20;
+        }
+      }
+    });
+  }
+  // Handle legacy CSI divisions for backward compatibility
+  else if (project.scopeDefinition.csiDivisions) {
     Object.entries(project.scopeDefinition.csiDivisions).forEach(([divisionCode, division]) => {
       doc.setFont('helvetica', 'bold');
       const divisionText = `${divisionCode}: CSI Division`;
       doc.text(divisionText, 20, yPosition);
       yPosition += 7;
-      
+
       doc.setFont('helvetica', 'normal');
       division.specifications.forEach((spec) => {
         const specText = `• ${spec}`;
@@ -98,12 +147,18 @@ async function generatePDFDocument(project: RFPProject, _options: RFPExportOptio
         yPosition += 5;
       });
       yPosition += 5;
-      
+
       if (yPosition > 270) {
         doc.addPage();
         yPosition = 20;
       }
     });
+  }
+  // Show message if no scope is defined
+  else {
+    doc.setFont('helvetica', 'italic');
+    doc.text('Scope of work to be defined during RFP process.', 20, yPosition);
+    yPosition += 10;
   }
   
   // Commercial Terms

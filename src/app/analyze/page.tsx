@@ -27,6 +27,19 @@ export default function AnalyzePage() {
   const [marketVariance, setMarketVariance] = useState<MarketVariance | null>(null);
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null);
   const [useMultiDisciplineAnalysis] = useState(true); // Default to true now, no longer toggleable
+  const [selectedProjectForRFP, setSelectedProjectForRFP] = useState<{
+    projectName: string;
+    description: string;
+    projectType: string;
+    estimatedValue: number;
+    location?: {
+      address: string;
+      city: string;
+      state: string;
+      zipCode: string;
+    };
+    discipline?: 'construction' | 'design' | 'trade';
+  } | null>(null);
 
   const handleFileSelect = async (file: File, processedDoc: ProcessedDocument) => {
     setIsProcessing(true);
@@ -241,10 +254,17 @@ export default function AnalyzePage() {
         ) : activeTab === 'leveling' ? (
           <BidLeveling />
         ) : activeTab === 'rfp' ? (
-          <RFPBuilder onCancel={() => setActiveTab('upload')} />
+          <RFPBuilder
+            onCancel={() => setActiveTab('upload')}
+            onComplete={() => setActiveTab('ecosystem')}
+            initialProjectData={selectedProjectForRFP || undefined}
+          />
         ) : activeTab === 'ecosystem' ? (
           <ProjectManager
-            onCreateRFP={() => setActiveTab('rfp')}
+            onCreateRFP={(projectData) => {
+              setSelectedProjectForRFP(projectData || null);
+              setActiveTab('rfp');
+            }}
             onAnalyzeProposal={() => setActiveTab('upload')}
           />
         ) : !analysisResult ? (

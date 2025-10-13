@@ -165,6 +165,8 @@ export interface ProjectTemplate {
   projectType: string;
   disciplines: ProjectDiscipline[]; // Multiple disciplines for complete projects
   estimatedDuration: number; // days
+  icon: string; // Emoji icon for visual selection
+  color: string; // Color theme for visual selection
 }
 
 // Saved project for storage
@@ -268,66 +270,66 @@ export const DISCIPLINE_TEMPLATES: Record<ProjectDiscipline, DisciplineTemplate[
   ],
   design: [
     {
-      id: 'architectural_design',
-      name: 'Architectural Design Services',
-      description: 'Complete architectural design using AIA phases',
+      id: 'comprehensive_design',
+      name: 'Comprehensive Design Services',
+      description: 'Complete architectural and MEP engineering design using AIA phases',
       discipline: 'design',
       defaultBudgetAllocations: [
-        { name: 'Schematic Design', discipline: 'design', category: 'schematic_design', allocatedAmount: 0.15, committedAmount: 0, status: 'open', notes: 'Conceptual design phase' },
-        { name: 'Design Development', discipline: 'design', category: 'design_development', allocatedAmount: 0.20, committedAmount: 0, status: 'open', notes: 'Design refinement' },
-        { name: 'Construction Documents', discipline: 'design', category: 'construction_documents', allocatedAmount: 0.40, committedAmount: 0, status: 'open', notes: 'Final drawings and specs' },
-        { name: 'Bidding Support', discipline: 'design', category: 'bidding', allocatedAmount: 0.05, committedAmount: 0, status: 'open', notes: 'Contractor selection' },
-        { name: 'Construction Administration', discipline: 'design', category: 'construction_administration', allocatedAmount: 0.20, committedAmount: 0, status: 'open', notes: 'Construction oversight' }
+        { name: 'Architectural Design', discipline: 'design', category: 'architectural', allocatedAmount: 0.40, committedAmount: 0, status: 'open', notes: 'Architectural design services' },
+        { name: 'Structural Engineering', discipline: 'design', category: 'structural', allocatedAmount: 0.15, committedAmount: 0, status: 'open', notes: 'Structural engineering design' },
+        { name: 'MEP Engineering', discipline: 'design', category: 'mep_engineering', allocatedAmount: 0.30, committedAmount: 0, status: 'open', notes: 'Mechanical, electrical, plumbing engineering' },
+        { name: 'Civil Engineering', discipline: 'design', category: 'civil', allocatedAmount: 0.10, committedAmount: 0, status: 'open', notes: 'Site and civil engineering' },
+        { name: 'Construction Administration', discipline: 'design', category: 'construction_administration', allocatedAmount: 0.05, committedAmount: 0, status: 'open', notes: 'Construction oversight' }
       ],
       defaultPhases: [
-        { name: 'Programming', description: 'Project requirements definition', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.05, milestoneIds: [] },
-        { name: 'Schematic Design', description: 'Conceptual design development', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] },
-        { name: 'Design Development', description: 'Design refinement and coordination', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.20, milestoneIds: [] },
-        { name: 'Construction Documents', description: 'Final documentation', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.40, milestoneIds: [] },
-        { name: 'Construction Administration', description: 'Construction oversight', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.20, milestoneIds: [] }
+        { name: 'Programming & Site Analysis', description: 'Project requirements and site analysis', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.05, milestoneIds: [] },
+        { name: 'Schematic Design', description: 'Conceptual architectural and MEP design', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] },
+        { name: 'Design Development', description: 'Detailed design coordination and MEP sizing', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.25, milestoneIds: [] },
+        { name: 'Construction Documents', description: 'Final drawings, specifications, and MEP details', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.45, milestoneIds: [] },
+        { name: 'Construction Administration', description: 'Construction oversight and MEP coordination', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.10, milestoneIds: [] }
       ],
       defaultMilestones: [
-        { name: 'Programming Complete', description: 'Requirements finalized', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'SD Submittal', description: 'Schematic design submitted', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'DD Submittal', description: 'Design development submitted', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'CD Submittal', description: 'Construction documents submitted', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Permit Submission', description: 'Permits submitted to authorities', date: '', status: 'upcoming', dependencies: [] }
+        { name: 'Programming Complete', description: 'Requirements and MEP loads finalized', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'SD Submittal', description: 'Schematic design and MEP concepts submitted', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'DD Submittal', description: 'Design development and MEP sizing submitted', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'CD Submittal', description: 'Construction documents and MEP details submitted', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'Permit Submission', description: 'Building and MEP permits submitted', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'MEP Coordination Complete', description: 'All MEP systems coordinated', date: '', status: 'upcoming', dependencies: [] }
       ],
       estimatedDuration: 180,
-      budgetPercentage: 0.12 // 12% of total project budget typically
+      budgetPercentage: 0.15 // 15% of total project budget for comprehensive design including MEP
     }
   ],
   trade: [
     {
-      id: 'electrical_systems',
-      name: 'Electrical Systems',
-      description: 'Electrical design and installation services',
+      id: 'specialty_trades',
+      name: 'Specialty Trade Services',
+      description: 'Individual trade contractors and specialty installations',
       discipline: 'trade',
       defaultBudgetAllocations: [
-        { name: 'Design & Engineering', discipline: 'trade', category: 'design', allocatedAmount: 0.15, committedAmount: 0, status: 'open', notes: 'Electrical design services' },
-        { name: 'Power Distribution', discipline: 'trade', category: 'power_distribution', allocatedAmount: 0.30, committedAmount: 0, status: 'open', notes: 'Main distribution equipment' },
-        { name: 'Branch Circuits', discipline: 'trade', category: 'branch_circuits', allocatedAmount: 0.25, committedAmount: 0, status: 'open', notes: 'Wiring and devices' },
-        { name: 'Lighting Systems', discipline: 'trade', category: 'lighting', allocatedAmount: 0.15, committedAmount: 0, status: 'open', notes: 'Lighting fixtures and controls' },
-        { name: 'Fire Alarm', discipline: 'trade', category: 'fire_alarm', allocatedAmount: 0.10, committedAmount: 0, status: 'open', notes: 'Life safety systems' },
-        { name: 'Testing & Commissioning', discipline: 'trade', category: 'testing', allocatedAmount: 0.05, committedAmount: 0, status: 'open', notes: 'System testing and startup' }
+        { name: 'Electrical Installation', discipline: 'trade', category: 'electrical_install', allocatedAmount: 0.35, committedAmount: 0, status: 'open', notes: 'Electrical contractor installation' },
+        { name: 'Plumbing Installation', discipline: 'trade', category: 'plumbing_install', allocatedAmount: 0.20, committedAmount: 0, status: 'open', notes: 'Plumbing contractor installation' },
+        { name: 'HVAC Installation', discipline: 'trade', category: 'hvac_install', allocatedAmount: 0.25, committedAmount: 0, status: 'open', notes: 'HVAC contractor installation' },
+        { name: 'Fire Protection', discipline: 'trade', category: 'fire_protection', allocatedAmount: 0.10, committedAmount: 0, status: 'open', notes: 'Sprinkler and fire alarm installation' },
+        { name: 'Specialty Systems', discipline: 'trade', category: 'specialty_systems', allocatedAmount: 0.10, committedAmount: 0, status: 'open', notes: 'Security, AV, telecom installations' }
       ],
       defaultPhases: [
-        { name: 'Design Phase', description: 'Electrical system design', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] },
-        { name: 'Rough-in', description: 'Conduit and cable installation', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.40, milestoneIds: [] },
-        { name: 'Equipment Installation', description: 'Panels and major equipment', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.25, milestoneIds: [] },
-        { name: 'Trim-out', description: 'Devices and final connections', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.15, milestoneIds: [] },
-        { name: 'Testing', description: 'System testing and commissioning', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.05, milestoneIds: [] }
+        { name: 'Trade Coordination', description: 'Multi-trade coordination and planning', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.05, milestoneIds: [] },
+        { name: 'Rough-in Phase', description: 'All rough-in installations', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.45, milestoneIds: [] },
+        { name: 'Equipment Setting', description: 'Major equipment installation', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.25, milestoneIds: [] },
+        { name: 'Trim & Testing', description: 'Final connections and system testing', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.20, milestoneIds: [] },
+        { name: 'Commissioning', description: 'System commissioning and training', startDate: '', endDate: '', status: 'not-started', budgetAllocated: 0.05, milestoneIds: [] }
       ],
       defaultMilestones: [
-        { name: 'Design Complete', description: 'Electrical design approved', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Material Delivery', description: 'Major materials on site', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Rough-in Complete', description: 'All conduit and cable installed', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Equipment Set', description: 'All electrical equipment installed', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Energization', description: 'System energized and operational', date: '', status: 'upcoming', dependencies: [] },
-        { name: 'Final Testing', description: 'All testing completed', date: '', status: 'upcoming', dependencies: [] }
+        { name: 'Trade Contracts Awarded', description: 'All major trade contracts in place', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'Coordination Meeting', description: 'Multi-trade coordination complete', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'Rough-in Complete', description: 'All trade rough-in work finished', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'Equipment Operational', description: 'All systems operational', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'Final Inspections', description: 'All trade inspections passed', date: '', status: 'upcoming', dependencies: [] },
+        { name: 'Commissioning Complete', description: 'All systems commissioned and training complete', date: '', status: 'upcoming', dependencies: [] }
       ],
       estimatedDuration: 120,
-      budgetPercentage: 0.23 // 23% of total project budget typically
+      budgetPercentage: 0.20 // 20% of total project budget for trade installations
     }
   ]
 };
@@ -340,7 +342,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Multi-story commercial office development with full MEP systems',
     projectType: 'commercial_office',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 450
+    estimatedDuration: 450,
+    icon: '🏢',
+    color: 'blue'
   },
   {
     id: 'retail_development',
@@ -348,7 +352,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Shopping centers, strip malls, and retail facilities',
     projectType: 'retail',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 365
+    estimatedDuration: 365,
+    icon: '🛍️',
+    color: 'purple'
   },
   {
     id: 'industrial_facility',
@@ -356,7 +362,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Manufacturing, warehouse, and distribution facilities',
     projectType: 'industrial',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 400
+    estimatedDuration: 400,
+    icon: '🏭',
+    color: 'gray'
   },
   {
     id: 'residential_multifamily',
@@ -364,7 +372,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Apartment complexes, condominiums, and residential communities',
     projectType: 'residential_multifamily',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 420
+    estimatedDuration: 420,
+    icon: '🏠',
+    color: 'green'
   },
   {
     id: 'residential_single_family',
@@ -372,7 +382,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Custom homes and single-family residential development',
     projectType: 'residential_single_family',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 300
+    estimatedDuration: 300,
+    icon: '🏡',
+    color: 'emerald'
   },
   {
     id: 'mixed_use',
@@ -380,7 +392,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Combined residential, commercial, and retail development',
     projectType: 'mixed_use',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 600
+    estimatedDuration: 600,
+    icon: '🏗️',
+    color: 'orange'
   },
   {
     id: 'hospitality',
@@ -388,7 +402,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Hotels, resorts, and hospitality facilities',
     projectType: 'hospitality',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 480
+    estimatedDuration: 480,
+    icon: '🏨',
+    color: 'pink'
   },
   {
     id: 'healthcare',
@@ -396,7 +412,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Medical offices, clinics, and healthcare facilities',
     projectType: 'healthcare',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 540
+    estimatedDuration: 540,
+    icon: '🏥',
+    color: 'red'
   },
   {
     id: 'educational',
@@ -404,7 +422,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Schools, universities, and educational buildings',
     projectType: 'educational',
     disciplines: ['design', 'construction', 'trade'],
-    estimatedDuration: 500
+    estimatedDuration: 500,
+    icon: '🏫',
+    color: 'indigo'
   },
   {
     id: 'design_only',
@@ -412,7 +432,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Architectural and MEP engineering design services',
     projectType: 'design_services',
     disciplines: ['design'],
-    estimatedDuration: 180
+    estimatedDuration: 180,
+    icon: '📐',
+    color: 'teal'
   },
   {
     id: 'construction_only',
@@ -420,7 +442,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'General contracting and construction management',
     projectType: 'construction_services',
     disciplines: ['construction'],
-    estimatedDuration: 300
+    estimatedDuration: 300,
+    icon: '🔨',
+    color: 'yellow'
   },
   {
     id: 'tenant_improvement',
@@ -428,7 +452,9 @@ export const DEFAULT_PROJECT_TEMPLATES: ProjectTemplate[] = [
     description: 'Interior renovation and improvement project',
     projectType: 'tenant_improvement',
     disciplines: ['design', 'construction'],
-    estimatedDuration: 120
+    estimatedDuration: 120,
+    icon: '🔧',
+    color: 'cyan'
   }
 ];
 

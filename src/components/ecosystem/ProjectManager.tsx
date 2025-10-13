@@ -17,7 +17,19 @@ import {
 } from 'lucide-react';
 
 interface ProjectManagerProps {
-  onCreateRFP?: () => void;
+  onCreateRFP?: (projectData?: {
+    projectName: string;
+    description: string;
+    projectType: string;
+    estimatedValue: number;
+    location?: {
+      address: string;
+      city: string;
+      state: string;
+      zipCode: string;
+    };
+    discipline?: 'construction' | 'design' | 'trade';
+  }) => void;
   onAnalyzeProposal?: () => void;
 }
 
@@ -154,7 +166,24 @@ export default function ProjectManager({ onCreateRFP, onAnalyzeProposal }: Proje
         project={selectedProject}
         onBack={() => setSelectedProject(null)}
         onUpdate={handleProjectUpdate}
-        onCreateRFP={onCreateRFP}
+        onCreateRFP={onCreateRFP ? () => {
+          // Convert project data to RFP format and pass to callback
+          const projectData = {
+            projectName: selectedProject.project.name,
+            description: selectedProject.project.description,
+            projectType: selectedProject.project.projectType,
+            estimatedValue: selectedProject.project.totalBudget,
+            location: selectedProject.project.location ? {
+              address: selectedProject.project.location.address,
+              city: selectedProject.project.location.city,
+              state: selectedProject.project.location.state,
+              zipCode: selectedProject.project.location.zipCode
+            } : undefined,
+            discipline: selectedProject.project.disciplines.length > 0 ?
+              selectedProject.project.disciplines[0] as 'construction' | 'design' | 'trade' : 'construction'
+          };
+          onCreateRFP(projectData);
+        } : undefined}
         onAnalyzeProposal={onAnalyzeProposal}
       />
     );
