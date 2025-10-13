@@ -7,13 +7,14 @@ import {
   deleteProject,
   getProjectIntelligence
 } from '@/lib/storage';
+import { toggleMockData, isMockDataEnabled } from '@/lib/mock-data';
 import { SavedProject, PROJECT_STATUS_COLORS } from '@/types/project';
 import ProjectCreator from './ProjectCreator';
 import ProjectDashboard from './ProjectDashboard';
 import {
   Plus, Search, Building2, DollarSign,
   TrendingUp, Eye, Trash2,
-  Clock, Palette, Zap
+  Clock, Palette, Zap, TestTube, RotateCcw
 } from 'lucide-react';
 
 interface ProjectManagerProps {
@@ -47,9 +48,11 @@ export default function ProjectManager({ onCreateRFP, onAnalyzeProposal }: Proje
     disciplineBreakdown: Record<string, number>;
   } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mockDataEnabled, setMockDataEnabled] = useState(false);
 
   useEffect(() => {
     loadData();
+    setMockDataEnabled(isMockDataEnabled());
   }, []);
 
   const loadData = async () => {
@@ -88,6 +91,13 @@ export default function ProjectManager({ onCreateRFP, onAnalyzeProposal }: Proje
         setSelectedProject(null);
       }
     }
+  };
+
+  const handleToggleMockData = () => {
+    const newState = toggleMockData();
+    setMockDataEnabled(newState);
+    // Reload data after toggling
+    loadData();
   };
 
   const handleProjectUpdate = () => {
@@ -193,10 +203,36 @@ export default function ProjectManager({ onCreateRFP, onAnalyzeProposal }: Proje
     <div className="p-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Project Management</h1>
-        <p className="text-gray-600">
-          Manage your complete pre-construction project lifecycle with integrated RFP and bid management.
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">Project Management</h1>
+            <p className="text-gray-600">
+              Manage your complete pre-construction project lifecycle with integrated RFP and bid management.
+            </p>
+          </div>
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={handleToggleMockData}
+              className={`flex items-center px-4 py-2 rounded-lg border font-medium transition-colors ${
+                mockDataEnabled
+                  ? 'bg-orange-50 border-orange-300 text-orange-700 hover:bg-orange-100'
+                  : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
+              }`}
+            >
+              {mockDataEnabled ? (
+                <>
+                  <RotateCcw className="h-4 w-4 mr-2" />
+                  Clear Test Data
+                </>
+              ) : (
+                <>
+                  <TestTube className="h-4 w-4 mr-2" />
+                  Load Test Data
+                </>
+              )}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Stats Cards */}
