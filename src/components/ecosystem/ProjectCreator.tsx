@@ -240,6 +240,7 @@ export default function ProjectCreator({ onProjectCreated, onCancel }: ProjectCr
         },
         status: 'planning',
         rfpIds: [],
+        bids: [],
         awardedBids: [],
         budgetAllocations: creationData.budget.allocations.map((a, index) => ({
           ...a,

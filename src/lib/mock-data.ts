@@ -1,6 +1,6 @@
 // src/lib/mock-data.ts
 
-import { ProjectEcosystem, ProjectDiscipline } from '@/types/project';
+import { ProjectEcosystem, ProjectDiscipline, ProjectBid } from '@/types/project';
 import { RFPProject } from '@/types/rfp';
 import { saveProject, saveRFP, linkRFPToProject } from '@/lib/storage';
 
@@ -398,6 +398,7 @@ function generateCompleteProject(mockProject: Partial<ProjectEcosystem>): Projec
     },
     status: mockProject.status || 'planning',
     rfpIds: [],
+    bids: generateMockBids(mockProject),
     awardedBids: [],
     budgetAllocations: budgetAllocations,
     createdAt: now,
@@ -581,6 +582,81 @@ export function clearMockData(): void {
 
 export function isMockDataEnabled(): boolean {
   return localStorage.getItem('mock_data_enabled') === 'true';
+}
+
+function generateMockBids(mockProject: Partial<ProjectEcosystem>): ProjectBid[] {
+  if (!mockProject.status || ['planning'].includes(mockProject.status)) {
+    return []; // No bids yet for early stage projects
+  }
+
+  const budget = mockProject.totalBudget || 1000000;
+  const baseAmount = budget * 0.65; // Assuming construction portion
+  const bidCount = mockProject.status === 'bidding' ? Math.floor(Math.random() * 3) + 2 : // 2-4 bids
+                   mockProject.status === 'active' || mockProject.status === 'pre-construction' ? Math.floor(Math.random() * 2) + 3 : // 3-4 bids
+                   Math.floor(Math.random() * 4) + 3; // 3-6 bids for completed projects
+
+  const contractors = [
+    'ABC Construction Co.',
+    'BuildRight Partners',
+    'Elite Builders LLC',
+    'Metro Construction Group',
+    'Premier General Contractors',
+    'Skyline Construction Inc.',
+    'United Building Solutions'
+  ];
+
+  const capabilities = [
+    ['LEED Certified', 'Fast Track Construction'],
+    ['Union Labor', 'Historic Renovation'],
+    ['Healthcare Specialization', 'BIM/VDC'],
+    ['Retail Experience', 'Design-Build'],
+    ['Educational Projects', 'Sustainable Construction'],
+    ['High-Rise Experience', 'Prefab Construction'],
+    ['MEP Self-Perform', 'Concrete Specialization']
+  ];
+
+  const bids: ProjectBid[] = [];
+  const selectedContractors = contractors.sort(() => 0.5 - Math.random()).slice(0, bidCount);
+
+  selectedContractors.forEach((contractorName, index) => {
+    const variance = (Math.random() - 0.5) * 0.3; // ±15% variance
+    const bidAmount = Math.round(baseAmount * (1 + variance));
+    const submissionDate = new Date();
+    submissionDate.setDate(submissionDate.getDate() - Math.floor(Math.random() * 30));
+
+    const status: ProjectBid['status'] =
+      mockProject.status === 'bidding' ?
+        (index === 0 ? 'under-review' : 'submitted') :
+      mockProject.status === 'active' || mockProject.status === 'pre-construction' ?
+        (index === 0 ? 'awarded' : index === 1 ? 'shortlisted' : 'rejected') :
+      mockProject.status === 'completed' ?
+        (index === 0 ? 'awarded' : 'rejected') :
+        'submitted';
+
+    bids.push({
+      id: `bid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}_${index}`,
+      contractorName,
+      bidAmount,
+      submissionDate: submissionDate.toISOString().split('T')[0],
+      status,
+      bondingCapacity: bidAmount * (1.5 + Math.random() * 0.5), // 150-200% of bid
+      yearsExperience: Math.floor(Math.random() * 20) + 10, // 10-30 years
+      similarProjectsCount: Math.floor(Math.random() * 15) + 5, // 5-20 projects
+      proposedDuration: Math.floor(Math.random() * 60) + 180, // 180-240 days
+      specialCapabilities: capabilities[index % capabilities.length],
+      notes: index === 0 && status === 'awarded' ? 'Selected for competitive pricing and strong qualifications' :
+             status === 'rejected' ? 'Did not meet technical requirements' :
+             status === 'shortlisted' ? 'Strong candidate, under final review' :
+             'Bid under evaluation',
+      evaluationScore: status === 'awarded' ? Math.floor(Math.random() * 10) + 90 :
+                      status === 'shortlisted' ? Math.floor(Math.random() * 15) + 75 :
+                      status === 'rejected' ? Math.floor(Math.random() * 30) + 40 :
+                      Math.floor(Math.random() * 40) + 60
+    });
+  });
+
+  // Sort bids by amount (lowest first)
+  return bids.sort((a, b) => a.bidAmount - b.bidAmount);
 }
 
 export function toggleMockData(): boolean {

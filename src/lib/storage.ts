@@ -6,7 +6,11 @@ import {
   SavedProject,
   ProjectDashboardMetrics,
   AwardedBid,
-  ProjectChangeOrder
+  ProjectChangeOrder,
+  ProjectMilestone,
+  ProjectPhase,
+  ProjectBid,
+  BudgetAllocation
 } from '@/types/project';
 
 // MVP: Simple localStorage utilities with optional encryption
@@ -825,6 +829,26 @@ export function updateBidStatus(projectId: string, bidId: string, status: Awarde
   updateProject(projectId, updatedProject);
 }
 
+// New function for ProjectBid status updates
+export function updateProjectBidStatus(projectId: string, bidId: string, status: ProjectBid['status']): void {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const updatedBids = existingProject.project.bids?.map(bid =>
+    bid.id === bidId ? { ...bid, status } : bid
+  ) || [];
+
+  const updatedProject = {
+    ...existingProject.project,
+    bids: updatedBids,
+    updatedAt: new Date().toISOString()
+  };
+
+  updateProject(projectId, updatedProject);
+}
+
 export function addChangeOrder(changeOrder: Omit<ProjectChangeOrder, 'id'>): string {
   const id = `co_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const fullChangeOrder: ProjectChangeOrder = {
@@ -1012,4 +1036,123 @@ export function clearAllProjects(): void {
     localStorage.removeItem(`project_changeorders_${id}`);
   });
   localStorage.removeItem('project_index');
+}
+
+// Phase and Milestone Management Functions
+export function updateMilestoneStatus(projectId: string, milestoneId: string, status: ProjectMilestone['status']): void {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const updatedMilestones = existingProject.project.currentSchedule.milestones.map(milestone =>
+    milestone.id === milestoneId
+      ? {
+          ...milestone,
+          status,
+          actualDate: status === 'completed' ? new Date().toISOString().split('T')[0] : milestone.actualDate
+        }
+      : milestone
+  );
+
+  const updatedSchedule = {
+    ...existingProject.project.currentSchedule,
+    milestones: updatedMilestones
+  };
+
+  // Check for automatic phase advancement
+  const updatedProject = checkPhaseAdvancement({
+    ...existingProject.project,
+    currentSchedule: updatedSchedule
+  });
+
+  updateProject(projectId, { currentSchedule: updatedProject.currentSchedule });
+}
+
+export function updatePhaseStatus(projectId: string, phaseId: string, status: ProjectPhase['status']): void {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const updatedPhases = existingProject.project.currentSchedule.phases.map(phase =>
+    phase.id === phaseId
+      ? {
+          ...phase,
+          status,
+          actualStartDate: status === 'in-progress' && !phase.actualStartDate ? new Date().toISOString().split('T')[0] : phase.actualStartDate,
+          actualEndDate: status === 'completed' ? new Date().toISOString().split('T')[0] : phase.actualEndDate
+        }
+      : phase
+  );
+
+  const updatedSchedule = {
+    ...existingProject.project.currentSchedule,
+    phases: updatedPhases
+  };
+
+  updateProject(projectId, { currentSchedule: updatedSchedule });
+}
+
+export function updateBudgetAllocation(projectId: string, allocationId: string, updates: Partial<BudgetAllocation>): void {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const updatedAllocations = existingProject.project.budgetAllocations.map(allocation =>
+    allocation.id === allocationId
+      ? { ...allocation, ...updates, variance: (updates.actualAmount || allocation.actualAmount) - allocation.allocatedAmount }
+      : allocation
+  );
+
+  updateProject(projectId, { budgetAllocations: updatedAllocations });
+}
+
+// Helper function to check for automatic phase advancement
+function checkPhaseAdvancement(project: ProjectEcosystem): ProjectEcosystem {
+  const updatedPhases = project.currentSchedule.phases.map(phase => {
+    // Get milestones for this phase
+    const phaseMilestones = project.currentSchedule.milestones.filter(m =>
+      phase.milestoneIds.includes(m.id)
+    );
+
+    if (phaseMilestones.length > 0) {
+      const completedCount = phaseMilestones.filter(m => m.status === 'completed').length;
+      const completionRate = completedCount / phaseMilestones.length;
+
+      // Auto-advance phase when all milestones are complete
+      if (completionRate === 1 && phase.status === 'in-progress') {
+        return {
+          ...phase,
+          status: 'completed' as const,
+          actualEndDate: new Date().toISOString().split('T')[0]
+        };
+      }
+
+      // Auto-start phase when previous phase completes
+      if (completionRate > 0 && phase.status === 'not-started') {
+        const phaseIndex = project.currentSchedule.phases.findIndex(p => p.id === phase.id);
+        const previousPhase = phaseIndex > 0 ? project.currentSchedule.phases[phaseIndex - 1] : null;
+
+        if (!previousPhase || previousPhase.status === 'completed') {
+          return {
+            ...phase,
+            status: 'in-progress' as const,
+            actualStartDate: new Date().toISOString().split('T')[0]
+          };
+        }
+      }
+    }
+
+    return phase;
+  });
+
+  return {
+    ...project,
+    currentSchedule: {
+      ...project.currentSchedule,
+      phases: updatedPhases
+    }
+  };
 }

@@ -17,6 +17,7 @@ export interface ProjectEcosystem {
   currentSchedule: ProjectSchedule;
   status: 'planning' | 'bidding' | 'pre-construction' | 'active' | 'completed';
   rfpIds: string[]; // RFPs are discipline-specific but linked to project
+  bids: ProjectBid[]; // All bids received for this project
   awardedBids: AwardedBid[];
   budgetAllocations: BudgetAllocation[]; // Budget allocated by discipline
   location?: {
@@ -86,7 +87,7 @@ export interface BudgetAllocation {
   committedAmount: number;
   actualAmount: number;
   variance: number;
-  status: 'open' | 'committed' | 'completed';
+  status: 'open' | 'committed' | 'completed' | 'over-budget';
   linkedRfpIds: string[];
   notes?: string;
 }
@@ -114,12 +115,15 @@ export interface ProjectChangeOrder {
   description: string;
   budgetImpact: number;
   scheduleImpact: number; // days
-  status: 'proposed' | 'approved' | 'rejected' | 'implemented';
+  status: 'proposed' | 'pending' | 'approved' | 'rejected' | 'implemented';
   requestedBy: string;
   requestedDate: string;
   approvedDate?: string;
   reason: string;
   discipline: ProjectDiscipline;
+  amount: number; // Alias for budgetImpact
+  category: string;
+  priority: 'low' | 'medium' | 'high';
 }
 
 // Gantt chart specific types
@@ -231,6 +235,23 @@ export interface ProjectRiskFactor {
   impact: 'LOW' | 'MEDIUM' | 'HIGH';
   probability: 'LOW' | 'MEDIUM' | 'HIGH';
   mitigation: string;
+}
+
+// Project bid tracking
+export interface ProjectBid {
+  id: string;
+  contractorName: string;
+  bidAmount: number;
+  submissionDate: string;
+  status: 'submitted' | 'under-review' | 'shortlisted' | 'awarded' | 'rejected';
+  bondingCapacity?: number;
+  yearsExperience: number;
+  similarProjectsCount: number;
+  proposedDuration: number; // in days
+  specialCapabilities: string[];
+  notes?: string;
+  evaluationScore?: number; // 0-100
+  rfpId?: string; // Link to RFP if applicable
 }
 
 // Discipline-specific templates that can be combined into multi-discipline projects

@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useState } from 'react';
-import { SavedProject, PHASE_STATUS_COLORS, MILESTONE_STATUS_COLORS } from '@/types/project';
+import { SavedProject, PHASE_STATUS_COLORS, MILESTONE_STATUS_COLORS, ProjectMilestone, ProjectPhase } from '@/types/project';
+import { updateMilestoneStatus, updatePhaseStatus } from '@/lib/storage';
 import {
   Calendar, Clock, Plus, Edit, Trash2, CheckCircle,
-  AlertTriangle, Play
+  AlertTriangle, Play, ArrowRight, RotateCcw
 } from 'lucide-react';
 
 interface TimelineManagerProps {
@@ -12,10 +13,51 @@ interface TimelineManagerProps {
   onUpdate?: () => void;
 }
 
-export default function TimelineManager({ project }: TimelineManagerProps) {
+export default function TimelineManager({ project, onUpdate }: TimelineManagerProps) {
   const [viewMode, setViewMode] = useState<'gantt' | 'list' | 'calendar'>('list');
   const [showAddMilestone, setShowAddMilestone] = useState(false);
   const [showAddPhase, setShowAddPhase] = useState(false);
+
+  // Handle status updates
+  const handleMilestoneStatusUpdate = (milestoneId: string, newStatus: ProjectMilestone['status']) => {
+    updateMilestoneStatus(project.id, milestoneId, newStatus);
+    onUpdate?.();
+  };
+
+  const handlePhaseStatusUpdate = (phaseId: string, newStatus: ProjectPhase['status']) => {
+    updatePhaseStatus(project.id, phaseId, newStatus);
+    onUpdate?.();
+  };
+
+  const getNextStatus = (currentStatus: string): string => {
+    switch (currentStatus) {
+      case 'not-started':
+        return 'in-progress';
+      case 'in-progress':
+        return 'completed';
+      case 'delayed':
+        return 'in-progress';
+      case 'completed':
+        return 'not-started'; // Allow reset
+      default:
+        return 'in-progress';
+    }
+  };
+
+  const getStatusAction = (currentStatus: string): { label: string; icon: React.ComponentType<{ className?: string }>; color: string } => {
+    switch (currentStatus) {
+      case 'not-started':
+        return { label: 'Start', icon: Play, color: 'text-green-600 hover:text-green-700' };
+      case 'in-progress':
+        return { label: 'Complete', icon: CheckCircle, color: 'text-blue-600 hover:text-blue-700' };
+      case 'delayed':
+        return { label: 'Resume', icon: Play, color: 'text-yellow-600 hover:text-yellow-700' };
+      case 'completed':
+        return { label: 'Reset', icon: RotateCcw, color: 'text-gray-600 hover:text-gray-700' };
+      default:
+        return { label: 'Update', icon: ArrowRight, color: 'text-gray-600 hover:text-gray-700' };
+    }
+  };
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -221,6 +263,20 @@ export default function TimelineManager({ project }: TimelineManagerProps) {
                     </div>
 
                     <div className="flex items-center space-x-2">
+                      {(() => {
+                        const action = getStatusAction(phase.status);
+                        const ActionIcon = action.icon;
+                        return (
+                          <button
+                            onClick={() => handlePhaseStatusUpdate(phase.id, getNextStatus(phase.status) as ProjectPhase['status'])}
+                            className={`flex items-center px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${action.color} border border-gray-300 hover:border-gray-400`}
+                            title={`${action.label} this phase`}
+                          >
+                            <ActionIcon className="h-4 w-4 mr-1" />
+                            {action.label}
+                          </button>
+                        );
+                      })()}
                       <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
                         <Edit className="h-4 w-4" />
                       </button>
@@ -307,6 +363,20 @@ export default function TimelineManager({ project }: TimelineManagerProps) {
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${MILESTONE_STATUS_COLORS[milestone.status]}`}>
                         {milestone.status.replace('-', ' ')}
                       </span>
+                      {(() => {
+                        const action = getStatusAction(milestone.status);
+                        const ActionIcon = action.icon;
+                        return (
+                          <button
+                            onClick={() => handleMilestoneStatusUpdate(milestone.id, getNextStatus(milestone.status) as ProjectMilestone['status'])}
+                            className={`flex items-center px-2 py-1 text-xs font-medium rounded-md transition-colors ${action.color} border border-gray-300 hover:border-gray-400`}
+                            title={`${action.label} this milestone`}
+                          >
+                            <ActionIcon className="h-3 w-3 mr-1" />
+                            {action.label}
+                          </button>
+                        );
+                      })()}
                       <div className="flex items-center space-x-1">
                         <button className="p-1 text-gray-400 hover:text-blue-600 transition-colors">
                           <Edit className="h-4 w-4" />
