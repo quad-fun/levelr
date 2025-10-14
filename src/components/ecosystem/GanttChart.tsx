@@ -19,6 +19,13 @@ export default function GanttChart({ project }: GanttChartProps) {
   const projectEnd = useMemo(() => new Date(project.project.baselineSchedule.endDate), [project.project.baselineSchedule.endDate]);
   const totalDays = Math.ceil((projectEnd.getTime() - projectStart.getTime()) / (1000 * 60 * 60 * 24));
 
+  // Helper function for week number calculation
+  const getWeekNumber = (date: Date) => {
+    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
+    const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
+    return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
+  };
+
   // Generate timeline columns based on view mode
   const timelineColumns = useMemo(() => {
     const columns = [];
@@ -50,12 +57,6 @@ export default function GanttChart({ project }: GanttChartProps) {
     }
     return columns;
   }, [projectStart, projectEnd, viewMode]);
-
-  const getWeekNumber = (date: Date) => {
-    const firstDayOfYear = new Date(date.getFullYear(), 0, 1);
-    const pastDaysOfYear = (date.getTime() - firstDayOfYear.getTime()) / 86400000;
-    return Math.ceil((pastDaysOfYear + firstDayOfYear.getDay() + 1) / 7);
-  };
 
   const calculateBarPosition = (itemStart: string, itemEnd: string) => {
     const start = new Date(itemStart);
