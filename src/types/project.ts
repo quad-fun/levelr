@@ -252,6 +252,8 @@ export interface ProjectBid {
   notes?: string;
   evaluationScore?: number; // 0-100
   rfpId?: string; // Link to RFP if applicable
+  contactEmail?: string;
+  contactPhone?: string;
 }
 
 // Discipline-specific templates that can be combined into multi-discipline projects

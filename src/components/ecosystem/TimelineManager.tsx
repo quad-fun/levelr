@@ -3,6 +3,7 @@
 import React, { useState } from 'react';
 import { SavedProject, PHASE_STATUS_COLORS, MILESTONE_STATUS_COLORS, ProjectMilestone, ProjectPhase } from '@/types/project';
 import { updateMilestoneStatus, updatePhaseStatus } from '@/lib/storage';
+import GanttChart from './GanttChart';
 import {
   Calendar, Clock, Plus, Edit, Trash2, CheckCircle,
   AlertTriangle, Play, ArrowRight, RotateCcw
@@ -456,10 +457,7 @@ export default function TimelineManager({ project, onUpdate }: TimelineManagerPr
       {viewMode === 'list' && renderListView()}
 
       {viewMode === 'gantt' && (
-        <div className="bg-white rounded-lg shadow-sm border p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Gantt Chart View</h3>
-          <p className="text-gray-600">Interactive Gantt chart coming soon...</p>
-        </div>
+        <GanttChart project={project} onUpdate={onUpdate} />
       )}
 
       {viewMode === 'calendar' && (

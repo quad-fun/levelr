@@ -849,6 +849,30 @@ export function updateProjectBidStatus(projectId: string, bidId: string, status:
   updateProject(projectId, updatedProject);
 }
 
+// Function to add a new ProjectBid
+export function addProjectBid(projectId: string, bidData: Omit<ProjectBid, 'id'>): string {
+  const existingProject = getProject(projectId);
+  if (!existingProject) {
+    throw new Error('Project not found');
+  }
+
+  const bidId = `bid_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  const newBid: ProjectBid = {
+    ...bidData,
+    id: bidId
+  };
+
+  const bids = existingProject.project.bids || [];
+  const updatedProject = {
+    ...existingProject.project,
+    bids: [...bids, newBid],
+    updatedAt: new Date().toISOString()
+  };
+
+  updateProject(projectId, updatedProject);
+  return bidId;
+}
+
 export function addChangeOrder(changeOrder: Omit<ProjectChangeOrder, 'id'>): string {
   const id = `co_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   const fullChangeOrder: ProjectChangeOrder = {
