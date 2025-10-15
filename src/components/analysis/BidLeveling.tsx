@@ -224,13 +224,22 @@ function ExplainCell({
   );
 }
 
-export default function BidLeveling() {
+interface BidLevelingProps {
+  projectContext?: {
+    projectId: string;
+    projectName: string;
+    discipline: 'construction' | 'design' | 'trade';
+    preselectedBids?: string[];
+  };
+}
+
+export default function BidLeveling({ projectContext }: BidLevelingProps = {}) {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
-  const [selectedBids, setSelectedBids] = useState<string[]>([]);
+  const [selectedBids, setSelectedBids] = useState<string[]>(projectContext?.preselectedBids || []);
   const [sortBy, setSortBy] = useState<'price' | 'risk' | 'date'>('price');
   const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
   const [exportFormat, setExportFormat] = useState<'excel' | 'pdf'>('excel');
-  const [activeDiscipline, setActiveDiscipline] = useState<'construction' | 'design' | 'trade'>('construction');
+  const [activeDiscipline, setActiveDiscipline] = useState<'construction' | 'design' | 'trade'>(projectContext?.discipline || 'construction');
   const [comparativeAnalysis] = useState<ComparativeAnalysis | null>(null);
   const [isLoadingComparison, setIsLoadingComparison] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
@@ -1105,6 +1114,20 @@ export default function BidLeveling() {
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white rounded-lg shadow-md p-6">
+        {projectContext && (
+          <div className="mb-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="flex items-center space-x-2 mb-2">
+              <div className="w-3 h-3 bg-blue-600 rounded-full"></div>
+              <h4 className="font-semibold text-blue-900">Project Context</h4>
+            </div>
+            <p className="text-blue-800">
+              Comparing {projectContext.preselectedBids?.length || 0} bids from project: <strong>{projectContext.projectName}</strong>
+            </p>
+            <p className="text-sm text-blue-600 mt-1">
+              Discipline: {projectContext.discipline} • Bids pre-selected from project management
+            </p>
+          </div>
+        )}
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-xl font-bold text-gray-900 flex items-center">
             <BarChart3 className="h-5 w-5 mr-2" />

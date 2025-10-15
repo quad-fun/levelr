@@ -26,6 +26,7 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
   const [showAwardModal, setShowAwardModal] = useState(false);
   const [analyzedBids, setAnalyzedBids] = useState<SavedAnalysis[]>([]);
   const [bidToAward, setBidToAward] = useState<ProjectBid | null>(null);
+  const [selectedBidsForLeveling, setSelectedBidsForLeveling] = useState<Set<string>>(new Set());
   const [awardDetails, setAwardDetails] = useState({
     contractType: 'lump_sum' as AwardedBid['contractType'],
     phaseId: '',
@@ -174,6 +175,31 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
     });
 
     onUpdate?.();
+  };
+
+  // Handle bid selection for leveling
+  const handleBidSelectionForLeveling = (bidId: string) => {
+    const newSelection = new Set(selectedBidsForLeveling);
+    if (newSelection.has(bidId)) {
+      newSelection.delete(bidId);
+    } else {
+      newSelection.add(bidId);
+    }
+    setSelectedBidsForLeveling(newSelection);
+  };
+
+  // Navigate to bid leveling with selected bids
+  const handleLevelSelectedBids = () => {
+    if (selectedBidsForLeveling.size < 2) return;
+
+    const selectedBidIds = Array.from(selectedBidsForLeveling);
+    const params = new URLSearchParams({
+      project: project.id,
+      bids: selectedBidIds.join(',')
+    });
+
+    // Navigate to analyze page with context
+    window.location.href = `/analyze?${params.toString()}`;
   };
 
   // Import analyzed bid into project
@@ -334,6 +360,20 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
         <div className="flex justify-between items-center">
           <h3 className="text-lg font-semibold text-gray-900">Submitted Bids</h3>
           <div className="flex items-center space-x-3">
+            {selectedBidsForLeveling.size >= 2 ? (
+              <button
+                onClick={handleLevelSelectedBids}
+                className="flex items-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-colors"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
+                Level Selected Bids ({selectedBidsForLeveling.size})
+              </button>
+            ) : (
+              <div className="flex items-center px-4 py-2 bg-gray-100 text-gray-500 rounded-lg font-medium">
+                <TrendingUp className="h-4 w-4 mr-2 opacity-50" />
+                Select 2+ bids to compare
+              </div>
+            )}
             <button
               onClick={() => setShowAnalyzedBids(true)}
               className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
@@ -363,7 +403,14 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
                 <div key={bid.id} className="p-6 hover:bg-gray-50">
                   <div className="flex items-start justify-between">
                     <div className="flex items-start space-x-4">
-                      <div className="flex-shrink-0 mt-1">
+                      <div className="flex-shrink-0 mt-1 flex flex-col items-center space-y-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedBidsForLeveling.has(bid.id)}
+                          onChange={() => handleBidSelectionForLeveling(bid.id)}
+                          className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
+                          title="Select for bid leveling comparison"
+                        />
                         {getBidStatusIcon(bid.status)}
                       </div>
                       <div className="flex-1">

@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, Suspense } from 'react';
+import { useSearchParams } from 'next/navigation';
 import DocumentUpload from '@/components/analysis/DocumentUpload';
 import AnalysisResults from '@/components/analysis/AnalysisResults';
 import MultiDisciplineAnalysisResults from '@/components/analysis/MultiDisciplineAnalysisResults';
@@ -13,11 +14,12 @@ import { analyzeDocument } from '@/lib/claude-client';
 import { MultiDisciplineAnalyzer } from '@/lib/analysis/multi-discipline-analyzer';
 import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
 import { AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
-import { saveAnalysis } from '@/lib/storage';
+import { saveAnalysis, getProject } from '@/lib/storage';
 import { ProcessedDocument } from '@/lib/document-processor';
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 
-export default function AnalyzePage() {
+function AnalyzePageContent() {
+  const searchParams = useSearchParams();
   const [isProcessing, setIsProcessing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -27,6 +29,12 @@ export default function AnalyzePage() {
   const [marketVariance, setMarketVariance] = useState<MarketVariance | null>(null);
   const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null);
   const [useMultiDisciplineAnalysis] = useState(true); // Default to true now, no longer toggleable
+  const [projectContext, setProjectContext] = useState<{
+    projectId: string;
+    projectName: string;
+    discipline: 'construction' | 'design' | 'trade';
+    preselectedBids: string[];
+  } | null>(null);
   const [selectedProjectForRFP, setSelectedProjectForRFP] = useState<{
     projectName: string;
     description: string;
@@ -40,6 +48,30 @@ export default function AnalyzePage() {
     };
     discipline?: 'construction' | 'design' | 'trade';
   } | null>(null);
+
+  // Handle URL parameters for project context
+  useEffect(() => {
+    const projectId = searchParams?.get('project');
+    const bidsParam = searchParams?.get('bids');
+
+    if (projectId && bidsParam) {
+      try {
+        const project = getProject(projectId);
+        if (project) {
+          const preselectedBids = bidsParam.split(',');
+          setProjectContext({
+            projectId,
+            projectName: project.project.name,
+            discipline: project.project.disciplines[0], // Use first discipline
+            preselectedBids
+          });
+          setActiveTab('leveling'); // Auto-switch to leveling tab
+        }
+      } catch (error) {
+        console.error('Error loading project context:', error);
+      }
+    }
+  }, [searchParams]);
 
   const handleFileSelect = async (file: File, processedDoc: ProcessedDocument) => {
     setIsProcessing(true);
@@ -252,7 +284,7 @@ export default function AnalyzePage() {
         {activeTab === 'history' ? (
           <AnalysisHistory />
         ) : activeTab === 'leveling' ? (
-          <BidLeveling />
+          <BidLeveling projectContext={projectContext || undefined} />
         ) : activeTab === 'rfp' ? (
           <RFPBuilder
             onCancel={() => setActiveTab('upload')}
@@ -487,5 +519,13 @@ export default function AnalyzePage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function AnalyzePage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="text-lg">Loading...</div></div>}>
+      <AnalyzePageContent />
+    </Suspense>
   );
 }
