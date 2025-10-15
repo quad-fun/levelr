@@ -61,22 +61,59 @@ export default function AnalysisHistory() {
   };
 
   const calculateCoveragePercentage = (analysis: SavedAnalysis) => {
-    const csiTotal = Object.values(analysis.result.csi_divisions).reduce((sum, div) => sum + div.cost, 0);
+    const discipline = analysis.result.discipline || 'construction';
+    let mainCategoriesTotal = 0;
+
+    if (discipline === 'design' && analysis.result.aia_phases) {
+      mainCategoriesTotal = Object.values(analysis.result.aia_phases).reduce((sum, phase) => {
+        return sum + (phase.fee_amount || 0);
+      }, 0);
+    } else if (discipline === 'trade' && analysis.result.technical_systems) {
+      mainCategoriesTotal = Object.values(analysis.result.technical_systems).reduce((sum, system) => {
+        return sum + (system.total_cost || 0);
+      }, 0);
+    } else {
+      // Construction or fallback
+      mainCategoriesTotal = Object.values(analysis.result.csi_divisions).reduce((sum, div) => sum + div.cost, 0);
+    }
+
     const softCostsTotal = analysis.result.softCostsTotal || 0;
     const uncategorizedTotal = analysis.result.uncategorizedTotal || 0;
-    const totalCovered = csiTotal + softCostsTotal + uncategorizedTotal;
+    const totalCovered = mainCategoriesTotal + softCostsTotal + uncategorizedTotal;
     return (totalCovered / analysis.result.total_amount) * 100;
   };
 
   const getTop5CostCategories = (analysis: SavedAnalysis) => {
-    const categories = Object.entries(analysis.result.csi_divisions)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([code, data]) => ({
-      code,
-      name: `Division ${code}`,
-      cost: data.cost,
-      percentage: (data.cost / analysis.result.total_amount) * 100
-    }));
+    const discipline = analysis.result.discipline || 'construction';
+    let categories: Array<{code: string, name: string, cost: number, percentage: number}> = [];
+
+    if (discipline === 'design' && analysis.result.aia_phases) {
+      categories = Object.entries(analysis.result.aia_phases)
+        .map(([code, phase]) => ({
+          code,
+          name: phase.phase_name,
+          cost: phase.fee_amount,
+          percentage: phase.percentage_of_total
+        }));
+    } else if (discipline === 'trade' && analysis.result.technical_systems) {
+      categories = Object.entries(analysis.result.technical_systems)
+        .map(([code, system]) => ({
+          code,
+          name: system.system_name,
+          cost: system.total_cost,
+          percentage: (system.total_cost / analysis.result.total_amount) * 100
+        }));
+    } else {
+      // Construction or fallback
+      categories = Object.entries(analysis.result.csi_divisions)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([code, data]) => ({
+          code,
+          name: `Division ${code}`,
+          cost: data.cost,
+          percentage: (data.cost / analysis.result.total_amount) * 100
+        }));
+    }
     
     // Add soft costs if present
     if (analysis.result.softCostsTotal && analysis.result.softCostsTotal > 0) {
@@ -218,8 +255,27 @@ export default function AnalysisHistory() {
           const coveragePercentage = calculateCoveragePercentage(analysis);
           const top5Categories = getTop5CostCategories(analysis);
           const subSummary = getSubcontractorSummary(analysis);
+          // Create discipline-appropriate categories for risk analysis
+          const discipline = analysis.result.discipline || 'construction';
+          let categoriesForRisk: Record<string, number> = {};
+
+          if (discipline === 'design' && analysis.result.aia_phases) {
+            categoriesForRisk = Object.fromEntries(
+              Object.entries(analysis.result.aia_phases).map(([code, phase]) => [code, phase.fee_amount])
+            );
+          } else if (discipline === 'trade' && analysis.result.technical_systems) {
+            categoriesForRisk = Object.fromEntries(
+              Object.entries(analysis.result.technical_systems).map(([code, system]) => [code, system.total_cost])
+            );
+          } else {
+            // Construction or fallback
+            categoriesForRisk = Object.fromEntries(
+              Object.entries(analysis.result.csi_divisions).map(([code, data]) => [code, data.cost])
+            );
+          }
+
           const riskData = calculateProjectRisk(
-            Object.fromEntries(Object.entries(analysis.result.csi_divisions).map(([code, data]) => [code, data.cost])),
+            categoriesForRisk,
             analysis.result.total_amount,
             analysis.result.uncategorizedTotal || 0,
             analysis.result

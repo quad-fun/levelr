@@ -236,7 +236,7 @@ function AnalyzePageContent() {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              New Analysis
+              Bid Analysis
             </button>
             <button
               onClick={() => setActiveTab('rfp')}

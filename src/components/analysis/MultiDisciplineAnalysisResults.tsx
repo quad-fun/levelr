@@ -91,7 +91,7 @@ export default function MultiDisciplineAnalysisResults({
   const tabs = [
     { id: 'overview', name: 'Overview', icon: FileText },
     { id: 'scope', name: disciplineConfig.scopeLabel, icon: disciplineConfig.icon },
-    { id: 'soft-costs', name: 'Soft Costs', icon: Building },
+    { id: 'soft-costs', name: analysis.discipline === 'design' ? 'Uncategorized' : 'Soft Costs', icon: Building },
     { id: 'commercial', name: 'Commercial', icon: DollarSign },
     { id: 'risk', name: 'Risk Analysis', icon: Shield }
   ];
