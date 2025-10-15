@@ -409,7 +409,7 @@ export default function AnalysisHistory() {
                             <span className="text-sm text-gray-600">Total Trades:</span>
                             <span className="font-medium">{subSummary.count}</span>
                           </div>
-                          {subSummary.largestSub && (
+                          {subSummary.largestSub && subSummary.largestSub.total_amount && (
                             <div className="space-y-1">
                               <div className="flex justify-between items-center">
                                 <span className="text-sm text-gray-600">Largest Sub:</span>
@@ -484,14 +484,14 @@ export default function AnalysisHistory() {
                                   )}
                                 </div>
                                 <div className="text-right">
-                                  <span className="font-medium">${data.cost.toLocaleString()}</span>
-                                  {analysis.result.gross_sqft && (
+                                  <span className="font-medium">${(data.cost || 0).toLocaleString()}</span>
+                                  {analysis.result.gross_sqft && data.cost && (
                                     <span className="text-xs text-gray-600 block">
                                       ${(data.cost / analysis.result.gross_sqft).toFixed(2)}/SF
                                     </span>
                                   )}
                                   <span className="text-xs text-gray-500 block">
-                                    {((data.cost / analysis.result.total_amount) * 100).toFixed(1)}%
+                                    {(((data.cost || 0) / analysis.result.total_amount) * 100).toFixed(1)}%
                                   </span>
                                 </div>
                               </div>
@@ -527,9 +527,9 @@ export default function AnalysisHistory() {
                                     <p className="text-sm text-gray-600">{sub.trade}</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="font-bold">${sub.total_amount.toLocaleString()}</p>
+                                    <p className="font-bold">${(sub.total_amount || 0).toLocaleString()}</p>
                                     <p className="text-xs text-gray-500">
-                                      {((sub.total_amount / analysis.result.total_amount) * 100).toFixed(1)}%
+                                      {(((sub.total_amount || 0) / analysis.result.total_amount) * 100).toFixed(1)}%
                                     </p>
                                   </div>
                                 </div>
@@ -572,14 +572,14 @@ export default function AnalysisHistory() {
                               <div key={index} className="flex justify-between items-center py-2 px-3 bg-purple-50 rounded">
                                 <span className="text-sm">{cost.description}</span>
                                 <div className="text-right">
-                                  <span className="font-medium">${cost.cost.toLocaleString()}</span>
-                                  {analysis.result.gross_sqft && (
+                                  <span className="font-medium">${(cost.cost || 0).toLocaleString()}</span>
+                                  {analysis.result.gross_sqft && cost.cost && (
                                     <span className="text-xs text-gray-600 block">
                                       ${(cost.cost / analysis.result.gross_sqft).toFixed(2)}/SF
                                     </span>
                                   )}
                                   <span className="text-xs text-gray-500 block">
-                                    {((cost.cost / analysis.result.total_amount) * 100).toFixed(1)}%
+                                    {(((cost.cost || 0) / analysis.result.total_amount) * 100).toFixed(1)}%
                                   </span>
                                 </div>
                               </div>
@@ -620,8 +620,8 @@ export default function AnalysisHistory() {
                                     {allowance.scope_description}
                                   </span>
                                   <div className="text-right">
-                                    <span className="font-bold">${allowance.amount.toLocaleString()}</span>
-                                    {analysis.result.gross_sqft && (
+                                    <span className="font-bold">${(allowance.amount || 0).toLocaleString()}</span>
+                                    {analysis.result.gross_sqft && allowance.amount && (
                                       <span className="text-xs text-gray-600 block">
                                         ${(allowance.amount / analysis.result.gross_sqft).toFixed(2)}/SF
                                       </span>
