@@ -10,6 +10,7 @@ import { SavedProject, PHASE_STATUS_COLORS, MILESTONE_STATUS_COLORS } from '@/ty
 import { SavedRFP } from '@/types/rfp';
 import BudgetTracker from './BudgetTracker';
 import TimelineManager from './TimelineManager';
+import BidManager from './BidManager';
 import {
   ArrowLeft, Calendar, DollarSign, TrendingUp,
   FileText, Award, Plus, Settings, BarChart3,
@@ -648,10 +649,10 @@ export default function ProjectDashboard({
         )}
         {activeTab === 'rfps' && renderRFPsTab()}
         {activeTab === 'bids' && (
-          <div className="bg-white rounded-lg shadow-sm border p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Bid Management</h3>
-            <p className="text-gray-600">Bid management interface coming soon...</p>
-          </div>
+          <BidManager
+            project={project}
+            onUpdate={onUpdate}
+          />
         )}
         {activeTab === 'reports' && (
           <div className="bg-white rounded-lg shadow-sm border p-6">

@@ -2,14 +2,16 @@
 
 import React, { useState } from 'react';
 import { SavedProject, ProjectBid } from '@/types/project';
-import { updateProjectBidStatus, addProjectBid, getAllAnalyses } from '@/lib/storage';
+import { updateProjectBidStatus, addProjectBid, getAllAnalyses, updateProject } from '@/lib/storage';
 import type { SavedAnalysis } from '@/lib/storage';
+import { AwardedBid } from '@/types/project';
 import {
   TrendingUp, DollarSign, AlertTriangle,
   CheckCircle, Clock, Plus, Edit, FileText,
   Award, Users, MessageCircle, X, Star,
   Calendar, Phone, Mail, Building, Gavel,
-  Download, Search
+  Download, Search, FileCheck,
+  Target, Briefcase, FileSignature
 } from 'lucide-react';
 
 interface BidManagerProps {
@@ -21,7 +23,15 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
   const [selectedBid, setSelectedBid] = useState<ProjectBid | null>(null);
   const [showAddBid, setShowAddBid] = useState(false);
   const [showAnalyzedBids, setShowAnalyzedBids] = useState(false);
+  const [showAwardModal, setShowAwardModal] = useState(false);
   const [analyzedBids, setAnalyzedBids] = useState<SavedAnalysis[]>([]);
+  const [bidToAward, setBidToAward] = useState<ProjectBid | null>(null);
+  const [awardDetails, setAwardDetails] = useState({
+    contractType: 'lump_sum' as AwardedBid['contractType'],
+    phaseId: '',
+    notes: '',
+    adjustedAmount: ''
+  });
   const [newBid, setNewBid] = useState({
     contractorName: '',
     bidAmount: '',
@@ -106,6 +116,64 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
       ...newBid,
       specialCapabilities: newBid.specialCapabilities.filter((_, i) => i !== index)
     });
+  };
+
+  // Award bid to project
+  const handleAwardBid = (bid: ProjectBid) => {
+    setBidToAward(bid);
+    setAwardDetails({
+      contractType: 'lump_sum',
+      phaseId: '',
+      notes: '',
+      adjustedAmount: bid.bidAmount.toString()
+    });
+    setShowAwardModal(true);
+  };
+
+  // Confirm bid award
+  const confirmBidAward = () => {
+    if (!bidToAward) return;
+
+    const adjustedAmount = parseFloat(awardDetails.adjustedAmount) || bidToAward.bidAmount;
+
+    // Create awarded bid record
+    const awardedBid: AwardedBid = {
+      id: `award_${bidToAward.id}_${Date.now()}`,
+      rfpId: bidToAward.rfpId || '',
+      analysisId: '', // Could be linked if imported from analysis
+      contractorName: bidToAward.contractorName,
+      originalBudget: bidToAward.bidAmount,
+      awardedAmount: adjustedAmount,
+      awardDate: new Date().toISOString(),
+      discipline: project.project.disciplines[0], // Default to first discipline
+      status: 'awarded',
+      contractType: awardDetails.contractType,
+      phaseId: awardDetails.phaseId || undefined,
+      notes: awardDetails.notes || undefined
+    };
+
+    // Update project with awarded bid
+    const updatedProject = {
+      ...project.project,
+      awardedBids: [...project.project.awardedBids, awardedBid]
+    };
+
+    updateProject(project.id, updatedProject);
+
+    // Update bid status to awarded
+    handleBidStatusUpdate(bidToAward.id, 'awarded');
+
+    // Reset states
+    setBidToAward(null);
+    setShowAwardModal(false);
+    setAwardDetails({
+      contractType: 'lump_sum',
+      phaseId: '',
+      notes: '',
+      adjustedAmount: ''
+    });
+
+    onUpdate?.();
   };
 
   // Import analyzed bid into project
@@ -209,11 +277,11 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
   };
 
   const bids = project.project.bids || [];
+  const awardedContracts = project.project.awardedBids || [];
   const totalBidValue = bids.reduce((sum, bid) => sum + bid.bidAmount, 0);
   const averageBid = bids.length > 0 ? totalBidValue / bids.length : 0;
   const lowestBid = bids.length > 0 ? Math.min(...bids.map(b => b.bidAmount)) : 0;
-  const awardedBids = bids.filter(bid => bid.status === 'awarded');
-  const totalAwardedValue = awardedBids.reduce((sum, bid) => sum + bid.bidAmount, 0);
+  const totalAwardedValue = awardedContracts.reduce((sum, award) => sum + award.awardedAmount, 0);
 
   return (
     <div className="space-y-6">
@@ -365,13 +433,24 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
                     </div>
 
                     <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleBidStatusUpdate(bid.id, getNextBidStatus(bid.status))}
-                        className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-300 hover:border-blue-400 rounded-md transition-colors"
-                        title={`${getStatusActionLabel(bid.status)} this bid`}
-                      >
-                        {getStatusActionLabel(bid.status)}
-                      </button>
+                      {bid.status === 'shortlisted' ? (
+                        <button
+                          onClick={() => handleAwardBid(bid)}
+                          className="flex items-center px-3 py-1.5 text-sm font-medium text-green-600 hover:text-green-700 border border-green-300 hover:border-green-400 rounded-md transition-colors"
+                          title="Award this bid"
+                        >
+                          <Award className="h-3 w-3 mr-1" />
+                          Award Contract
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleBidStatusUpdate(bid.id, getNextBidStatus(bid.status))}
+                          className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-300 hover:border-blue-400 rounded-md transition-colors"
+                          title={`${getStatusActionLabel(bid.status)} this bid`}
+                        >
+                          {getStatusActionLabel(bid.status)}
+                        </button>
+                      )}
 
                       <button
                         onClick={() => setSelectedBid(bid)}
@@ -405,6 +484,241 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
             <Plus className="h-4 w-4 mr-2" />
             Add First Bid
           </button>
+        </div>
+      )}
+
+      {/* Awarded Contracts */}
+      {awardedContracts.length > 0 && (
+        <div className="bg-white rounded-lg shadow-sm border">
+          <div className="p-6 border-b border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Awarded Contracts</h3>
+                <p className="text-sm text-gray-600 mt-1">
+                  {awardedContracts.length} contract{awardedContracts.length !== 1 ? 's' : ''} • {formatCurrency(totalAwardedValue)} total value
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Target className="h-5 w-5 text-green-600" />
+                <span className="text-sm font-medium text-green-600">
+                  {((totalAwardedValue / project.metrics.totalBudget) * 100).toFixed(1)}% of budget
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="divide-y divide-gray-200">
+            {awardedContracts.map((award) => {
+              const variance = award.awardedAmount - award.originalBudget;
+              const variancePercent = (variance / award.originalBudget) * 100;
+
+              return (
+                <div key={award.id} className="p-6 hover:bg-gray-50">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0 mt-1">
+                        <div className="p-2 bg-green-100 rounded-lg">
+                          <FileSignature className="h-5 w-5 text-green-600" />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center space-x-3 mb-2">
+                          <h4 className="text-lg font-medium text-gray-900">{award.contractorName}</h4>
+                          <span className="px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-800">
+                            {award.status.replace('-', ' ')}
+                          </span>
+                          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+                            award.discipline === 'construction' ? 'bg-blue-100 text-blue-800' :
+                            award.discipline === 'design' ? 'bg-purple-100 text-purple-800' :
+                            'bg-green-100 text-green-800'
+                          }`}>
+                            {award.discipline}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm mb-3">
+                          <div>
+                            <span className="text-gray-500">Contract Value:</span>
+                            <p className="font-bold text-lg text-gray-900">
+                              {formatCurrency(award.awardedAmount)}
+                            </p>
+                            {variance !== 0 && (
+                              <p className={`text-xs ${variance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                {variance > 0 ? '+' : ''}{formatCurrency(variance)} ({variancePercent > 0 ? '+' : ''}{variancePercent.toFixed(1)}%)
+                              </p>
+                            )}
+                          </div>
+
+                          <div>
+                            <span className="text-gray-500">Awarded:</span>
+                            <p className="font-medium">
+                              {formatDate(award.awardDate)}
+                            </p>
+                            <p className="text-xs text-gray-600 capitalize">
+                              {award.contractType.replace('_', ' ')}
+                            </p>
+                          </div>
+
+                          <div>
+                            <span className="text-gray-500">Original Bid:</span>
+                            <p className="font-medium">
+                              {formatCurrency(award.originalBudget)}
+                            </p>
+                            <p className="text-xs text-gray-600">
+                              {award.phaseId ? `Phase: ${award.phaseId}` : 'No phase assigned'}
+                            </p>
+                          </div>
+
+                          <div>
+                            <span className="text-gray-500">Status:</span>
+                            <p className="font-medium capitalize">
+                              {award.status.replace('-', ' ')}
+                            </p>
+                            {award.notes && (
+                              <p className="text-xs text-gray-600 truncate" title={award.notes}>
+                                {award.notes}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center space-x-2">
+                      <button className="flex items-center px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 border border-blue-300 hover:border-blue-400 rounded-md transition-colors">
+                        <FileCheck className="h-3 w-3 mr-1" />
+                        Contract
+                      </button>
+                      <button className="p-2 text-gray-400 hover:text-blue-600 transition-colors">
+                        <Edit className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Award Bid Modal */}
+      {showAwardModal && bidToAward && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">Award Contract</h3>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Award contract to {bidToAward.contractorName}
+                  </p>
+                </div>
+                <button
+                  onClick={() => setShowAwardModal(false)}
+                  className="p-2 text-gray-400 hover:text-gray-600 transition-colors"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="bg-blue-50 rounded-lg p-4 mb-6">
+                <div className="flex items-center space-x-3 mb-2">
+                  <Briefcase className="h-5 w-5 text-blue-600" />
+                  <h4 className="font-medium text-blue-900">{bidToAward.contractorName}</h4>
+                </div>
+                <div className="grid grid-cols-2 gap-4 text-sm">
+                  <div>
+                    <span className="text-blue-600">Original Bid:</span>
+                    <p className="font-bold text-blue-900">{formatCurrency(bidToAward.bidAmount)}</p>
+                  </div>
+                  <div>
+                    <span className="text-blue-600">Duration:</span>
+                    <p className="font-medium text-blue-900">{bidToAward.proposedDuration} days</p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={(e) => { e.preventDefault(); confirmBidAward(); }} className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Contract Type
+                    </label>
+                    <select
+                      value={awardDetails.contractType}
+                      onChange={(e) => setAwardDetails({ ...awardDetails, contractType: e.target.value as AwardedBid['contractType'] })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="lump_sum">Lump Sum</option>
+                      <option value="unit_price">Unit Price</option>
+                      <option value="cost_plus">Cost Plus</option>
+                      <option value="hourly">Hourly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Final Contract Amount ($)
+                    </label>
+                    <input
+                      type="number"
+                      value={awardDetails.adjustedAmount}
+                      onChange={(e) => setAwardDetails({ ...awardDetails, adjustedAmount: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder={bidToAward.bidAmount.toString()}
+                      min="0"
+                      step="0.01"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Project Phase (Optional)
+                  </label>
+                  <select
+                    value={awardDetails.phaseId}
+                    onChange={(e) => setAwardDetails({ ...awardDetails, phaseId: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Phase</option>
+                    {project.project.currentSchedule.phases.map(phase => (
+                      <option key={phase.id} value={phase.id}>{phase.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Award Notes
+                  </label>
+                  <textarea
+                    value={awardDetails.notes}
+                    onChange={(e) => setAwardDetails({ ...awardDetails, notes: e.target.value })}
+                    rows={3}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="Contract terms, special conditions, etc..."
+                  />
+                </div>
+
+                <div className="flex justify-end space-x-3 pt-6 border-t">
+                  <button
+                    type="button"
+                    onClick={() => setShowAwardModal(false)}
+                    className="px-4 py-2 text-gray-700 hover:text-gray-900 border border-gray-300 rounded-lg transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
+                  >
+                    <Award className="h-4 w-4 mr-2" />
+                    Award Contract
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
         </div>
       )}
 
@@ -920,8 +1234,8 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
                   <div className="flex items-center space-x-4">
                     <button
                       onClick={() => {
-                        handleBidStatusUpdate(selectedBid.id, 'awarded');
                         setSelectedBid(null);
+                        handleAwardBid(selectedBid);
                       }}
                       className="flex items-center px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors"
                     >
