@@ -204,16 +204,43 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
 
   // Import analyzed bid into project
   const handleImportAnalyzedBid = (analysis: SavedAnalysis) => {
+    // Extract timeline in days from analysis (parse common formats)
+    const extractTimelineDays = (timeline?: string): number => {
+      if (!timeline) return 90; // Default fallback
+
+      // Parse common timeline formats: "12 weeks", "90 days", "3 months"
+      const timelineStr = timeline.toLowerCase();
+
+      if (timelineStr.includes('week')) {
+        const weeks = parseInt(timelineStr.match(/\d+/)?.[0] || '12');
+        return weeks * 7; // Convert weeks to days
+      }
+
+      if (timelineStr.includes('month')) {
+        const months = parseInt(timelineStr.match(/\d+/)?.[0] || '3');
+        return months * 30; // Convert months to days (rough estimate)
+      }
+
+      if (timelineStr.includes('day')) {
+        const days = parseInt(timelineStr.match(/\d+/)?.[0] || '90');
+        return days;
+      }
+
+      // Try to extract any number and assume days
+      const numberMatch = timelineStr.match(/\d+/);
+      return numberMatch ? parseInt(numberMatch[0]) : 90;
+    };
+
     const bidData: Omit<ProjectBid, 'id'> = {
       contractorName: analysis.result.contractor_name,
       bidAmount: analysis.result.total_amount,
-      proposedDuration: 90, // Default duration, could be enhanced with AI estimation
+      proposedDuration: extractTimelineDays(analysis.result.timeline),
       yearsExperience: 5, // Default, could be enhanced with contractor database
       similarProjectsCount: 3, // Default, could be enhanced with contractor database
       submissionDate: analysis.timestamp.split('T')[0],
       status: 'submitted',
-      specialCapabilities: [],
-      notes: `Imported from analysis on ${new Date(analysis.timestamp).toLocaleDateString()}. Discipline: ${analysis.result.discipline}.`
+      specialCapabilities: analysis.result.gross_sqft ? [`${analysis.result.gross_sqft.toLocaleString()} sq ft project`] : [],
+      notes: `Imported from analysis on ${new Date(analysis.timestamp).toLocaleDateString()}. Discipline: ${analysis.result.discipline}.${analysis.result.timeline ? ` Timeline: ${analysis.result.timeline}.` : ''}${analysis.result.gross_sqft ? ` Cost/SF: $${(analysis.result.total_amount / analysis.result.gross_sqft).toFixed(2)}.` : ''}`
     };
 
     addProjectBid(project.id, bidData);
@@ -445,23 +472,28 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
                           </div>
 
                           <div>
-                            <span className="text-gray-500">Experience:</span>
-                            <p className="font-medium">
-                              {bid.yearsExperience} years
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              {bid.similarProjectsCount} similar projects
-                            </p>
-                          </div>
-
-                          <div>
                             <span className="text-gray-500">Timeline:</span>
                             <p className="font-medium">
                               {bid.proposedDuration} days
                             </p>
+                            {/* Extract and display cost/sqft from notes if available */}
+                            {bid.notes && bid.notes.includes('Cost/SF:') && (
+                              <p className="text-xs text-blue-600">
+                                {bid.notes.match(/Cost\/SF: \$[\d.]+/)?.[0] || ''}
+                              </p>
+                            )}
+                          </div>
+
+                          <div>
+                            <span className="text-gray-500">Project Details:</span>
+                            {bid.specialCapabilities && bid.specialCapabilities.length > 0 && (
+                              <p className="font-medium">
+                                {bid.specialCapabilities[0]}
+                              </p>
+                            )}
                             {bid.notes && (
                               <p className="text-xs text-gray-600 truncate" title={bid.notes}>
-                                {bid.notes}
+                                {bid.notes.split('.')[0]}...
                               </p>
                             )}
                           </div>
@@ -1184,13 +1216,24 @@ export default function BidManager({ project, onUpdate }: BidManagerProps) {
                 <div className="bg-purple-50 rounded-lg p-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-medium text-purple-600">Experience</p>
-                      <p className="text-2xl font-bold text-purple-900">{selectedBid.yearsExperience} years</p>
+                      <p className="text-sm font-medium text-purple-600">
+                        {selectedBid.notes && selectedBid.notes.includes('Cost/SF:') ? 'Cost/SF' : 'Experience'}
+                      </p>
+                      {selectedBid.notes && selectedBid.notes.includes('Cost/SF:') ? (
+                        <p className="text-2xl font-bold text-purple-900">
+                          {selectedBid.notes.match(/Cost\/SF: \$[\d.]+/)?.[0]?.replace('Cost/SF: ', '') || 'N/A'}
+                        </p>
+                      ) : (
+                        <p className="text-2xl font-bold text-purple-900">{selectedBid.yearsExperience} years</p>
+                      )}
                     </div>
                     <Building className="h-8 w-8 text-purple-600" />
                   </div>
                   <p className="text-xs text-purple-700 mt-1">
-                    {selectedBid.similarProjectsCount} similar projects
+                    {selectedBid.specialCapabilities && selectedBid.specialCapabilities.length > 0
+                      ? selectedBid.specialCapabilities[0]
+                      : `${selectedBid.similarProjectsCount} similar projects`
+                    }
                   </p>
                 </div>
               </div>
