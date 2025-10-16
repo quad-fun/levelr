@@ -1,8 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-const isAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true';
-
-// Define protected routes that require authentication
+// Define protected routes that require authentication when auth is enabled
 const isProtectedRoute = createRouteMatcher([
   '/analyze(.*)',
   '/projects(.*)',
@@ -12,18 +10,15 @@ const isProtectedRoute = createRouteMatcher([
   '/api/rfp(.*)'
 ]);
 
-// Conditionally export the middleware
-export default isAuthEnabled
-  ? clerkMiddleware(async (auth, req) => {
-      // Protect specific routes when auth is enabled
-      if (isProtectedRoute(req)) {
-        await auth.protect();
-      }
-    })
-  : function middleware() {
-      // No protection when auth is disabled (MVP mode)
-      return;
-    };
+// Always export clerkMiddleware to satisfy Clerk's detection
+export default clerkMiddleware(async (auth, req) => {
+  const isAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true';
+
+  // Only protect routes when auth is enabled
+  if (isAuthEnabled && isProtectedRoute(req)) {
+    await auth.protect();
+  }
+});
 
 export const config = {
   matcher: [

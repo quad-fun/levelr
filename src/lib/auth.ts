@@ -24,49 +24,77 @@ export interface UserAccess {
 }
 
 export async function getUserAccess(): Promise<UserAccess> {
-  const { userId, sessionClaims } = await auth();
+  const isAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true';
 
-  if (!userId || !sessionClaims) {
+  if (!isAuthEnabled) {
+    // When auth is disabled, return full access (MVP mode)
+    return {
+      isAdmin: true,
+      hasFullAccess: true,
+      isAuthenticated: false,
+      userId: 'mvp-user',
+      email: 'mvp@levelr.app'
+    };
+  }
+
+  try {
+    const { userId, sessionClaims } = await auth();
+
+    if (!userId || !sessionClaims) {
+      return {
+        isAdmin: false,
+        hasFullAccess: false,
+        isAuthenticated: false
+      };
+    }
+
+    const email = sessionClaims.email as string;
+    const emailDomain = email?.split('@')[1]?.toLowerCase();
+
+    const isAdmin = ADMIN_USER_IDS.has(userId);
+    const hasFullAccess = isAdmin ||
+                         WHITELISTED_EMAILS.has(email?.toLowerCase() || '') ||
+                         WHITELISTED_DOMAINS.has(emailDomain || '');
+
+    return {
+      isAdmin,
+      hasFullAccess,
+      isAuthenticated: true,
+      userId,
+      email
+    };
+  } catch (error) {
+    console.warn('Auth check failed:', error);
     return {
       isAdmin: false,
       hasFullAccess: false,
       isAuthenticated: false
     };
   }
-
-  const email = sessionClaims.email as string;
-  const emailDomain = email?.split('@')[1]?.toLowerCase();
-
-  const isAdmin = ADMIN_USER_IDS.has(userId);
-  const hasFullAccess = isAdmin ||
-                       WHITELISTED_EMAILS.has(email?.toLowerCase() || '') ||
-                       WHITELISTED_DOMAINS.has(emailDomain || '');
-
-  return {
-    isAdmin,
-    hasFullAccess,
-    isAuthenticated: true,
-    userId,
-    email
-  };
 }
 
 export async function requireAuth() {
-  const { userId } = await auth();
+  const isAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true';
 
-  if (!userId) {
-    throw new Error('Authentication required');
+  if (!isAuthEnabled) {
+    return 'mvp-user'; // MVP mode - always allow
   }
 
-  return userId;
+  try {
+    const { userId } = await auth();
+
+    if (!userId) {
+      throw new Error('Authentication required');
+    }
+
+    return userId;
+  } catch {
+    throw new Error('Authentication required');
+  }
 }
 
 export async function requireFullAccess() {
   const access = await getUserAccess();
-
-  if (!access.isAuthenticated) {
-    throw new Error('Authentication required');
-  }
 
   if (!access.hasFullAccess) {
     throw new Error('Full access required. Contact admin@shorewoodgrp.com for access.');
