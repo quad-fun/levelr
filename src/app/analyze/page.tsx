@@ -7,7 +7,7 @@ import AnalyzePageClient from "./AnalyzePageClient";
 
 export default async function AnalyzePage() {
   const { userId } = await auth();
-  const headersList = headers();
+  const headersList = await headers();
   const request = new Request('http://localhost', { headers: headersList });
 
   // Get user tier if authenticated
@@ -17,7 +17,7 @@ export default async function AnalyzePage() {
   }
 
   // Resolve flags
-  const flags = await getFlags({ userId, tier, request });
+  const flags = await getFlags({ userId: userId || undefined, tier, request });
   const clientFlags = toClientFlags(flags);
 
   return (

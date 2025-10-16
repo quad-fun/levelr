@@ -99,7 +99,8 @@ import type { UserTier } from "./flags";
 
 export async function getUserTier(userId: string): Promise<UserTier> {
   try {
-    const user = await clerkClient().users.getUser(userId);
+    const client = await clerkClient();
+    const user = await client.users.getUser(userId);
     const tier = user.publicMetadata?.tier as UserTier;
     return tier || "starter";
   } catch (error) {
@@ -110,7 +111,8 @@ export async function getUserTier(userId: string): Promise<UserTier> {
 
 export async function setUserTier(userId: string, tier: UserTier): Promise<void> {
   try {
-    await clerkClient().users.updateUserMetadata(userId, {
+    const client = await clerkClient();
+    await client.users.updateUserMetadata(userId, {
       publicMetadata: {
         tier
       }

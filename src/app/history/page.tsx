@@ -1,23 +1,22 @@
-import { auth } from "@clerk/nextjs/server";
-import { getUserTier } from "@/lib/pricing";
-import { getFlags } from "@/lib/flags";
-import { headers } from "next/headers";
+// import { auth } from "@clerk/nextjs/server";
+// import { getUserTier } from "@/lib/pricing";
+// import { getFlags } from "@/lib/flags";
+// import { headers } from "next/headers";
 import { GatedRoute } from "@/components/auth/GatedRoute";
 import AnalysisHistory from "@/components/analysis/AnalysisHistory";
 
 export default async function HistoryPage() {
-  const { userId } = await auth();
-  const headersList = headers();
-  const request = new Request('http://localhost', { headers: headersList });
+  // Future implementation:
+  // const { userId } = await auth();
+  // const headersList = await headers();
+  // const request = new Request('http://localhost', { headers: headersList });
+  // let tier;
+  // if (userId) {
+  //   tier = await getUserTier(userId);
+  // }
 
-  // Get user tier if authenticated
-  let tier;
-  if (userId) {
-    tier = await getUserTier(userId);
-  }
-
-  // Resolve flags
-  const flags = await getFlags({ userId, tier, request });
+  // Resolve flags (for future use)
+  // const flags = await getFlags({ userId: userId || undefined, tier, request });
 
   return (
     <GatedRoute requiredFlag="analysisHistory">

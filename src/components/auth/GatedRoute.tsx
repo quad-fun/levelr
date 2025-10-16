@@ -15,7 +15,7 @@ export async function GatedRoute({
   fallback
 }: GatedRouteProps) {
   const { userId } = await auth();
-  const headersList = headers();
+  const headersList = await headers();
   const request = new Request('http://localhost', { headers: headersList });
 
   // Get user tier if authenticated
@@ -25,7 +25,7 @@ export async function GatedRoute({
   }
 
   // Resolve flags
-  const flags = await getFlags({ userId, tier, request });
+  const flags = await getFlags({ userId: userId || undefined, tier, request });
 
   // Check if feature is enabled
   if (!flags[requiredFlag]) {

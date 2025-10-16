@@ -16,7 +16,8 @@ export async function POST(req: NextRequest) {
     return gateResult; // Return error response
   }
 
-  const { userId: _userId, tier: _tier, flags } = gateResult;
+  const { flags } = gateResult;
+  // userId and tier available but not used in this endpoint
 
   // Check if variance explanation subfeature is enabled
   if (!checkSubfeature(flags, 'blVarianceExplanation')) {

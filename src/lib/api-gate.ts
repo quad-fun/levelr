@@ -34,7 +34,7 @@ export async function withApiGate(
     }
 
     // Resolve flags
-    const flags = await getFlags({ userId, tier, request });
+    const flags = await getFlags({ userId: userId || undefined, tier, request });
 
     // Check if auth is enabled
     if (flags.auth && !userId) {

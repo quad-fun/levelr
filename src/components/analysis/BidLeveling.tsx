@@ -7,6 +7,7 @@ import { CSI_DIVISIONS, LEVELING_LABELS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
 import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
 import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle, HelpCircle, Loader2 } from 'lucide-react';
+import type { Flags } from '@/lib/flags';
 
 interface BidComparison {
   analysis: SavedAnalysis;
@@ -231,9 +232,10 @@ interface BidLevelingProps {
     discipline: 'construction' | 'design' | 'trade';
     preselectedBids?: string[];
   };
+  flags?: Flags;
 }
 
-export default function BidLeveling({ projectContext }: BidLevelingProps = {}) {
+export default function BidLeveling({ projectContext, flags: _flags }: BidLevelingProps = {}) {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [selectedBids, setSelectedBids] = useState<string[]>(projectContext?.preselectedBids || []);
   const [sortBy, setSortBy] = useState<'price' | 'risk' | 'date'>('price');

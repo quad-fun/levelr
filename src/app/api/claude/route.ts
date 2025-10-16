@@ -35,7 +35,8 @@ export async function POST(request: NextRequest) {
     return gateResult; // Return error response
   }
 
-  const { userId: _userId, tier: _tier, flags: _flags } = gateResult;
+  // Auth context available but not used in this endpoint
+  // const { userId, tier, flags } = gateResult;
 
   let blobUrl: string | null = null;
 
