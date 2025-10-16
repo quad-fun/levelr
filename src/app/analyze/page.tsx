@@ -17,6 +17,7 @@ import { AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis
 import { saveAnalysis, getProject } from '@/lib/storage';
 import { ProcessedDocument } from '@/lib/document-processor';
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
+import { AccessIndicator } from '@/components/auth/AccessControl';
 
 function AnalyzePageContent() {
   const searchParams = useSearchParams();
@@ -212,6 +213,9 @@ function AnalyzePageContent() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              {process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true' && (
+                <AccessIndicator />
+              )}
               <a
                 href="/docs"
                 className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
