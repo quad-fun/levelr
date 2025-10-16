@@ -92,3 +92,31 @@ export const FEATURE_FLAGS = {
   ENABLE_PAYMENTS: process.env.NEXT_PUBLIC_ENABLE_PAYMENTS === 'true',
   ENABLE_TEAM_FEATURES: process.env.NEXT_PUBLIC_ENABLE_TEAMS === 'true'
 } as const;
+
+// Tier helpers for Clerk integration
+import { clerkClient } from "@clerk/nextjs/server";
+import type { UserTier } from "./flags";
+
+export async function getUserTier(userId: string): Promise<UserTier> {
+  try {
+    const user = await clerkClient().users.getUser(userId);
+    const tier = user.publicMetadata?.tier as UserTier;
+    return tier || "starter";
+  } catch (error) {
+    console.warn('Failed to get user tier:', error);
+    return "starter";
+  }
+}
+
+export async function setUserTier(userId: string, tier: UserTier): Promise<void> {
+  try {
+    await clerkClient().users.updateUserMetadata(userId, {
+      publicMetadata: {
+        tier
+      }
+    });
+  } catch (error) {
+    console.error('Failed to set user tier:', error);
+    throw error;
+  }
+}

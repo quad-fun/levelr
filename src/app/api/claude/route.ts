@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
 import { ProcessedDocument } from '@/lib/document-processor';
+import { withApiGate } from '@/lib/api-gate';
 
 // Route configuration for Vercel Pro large file handling
 export const config = {
@@ -23,8 +24,21 @@ function safeLog(message: string, data?: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+  // API gating for bid analysis
+  const gateResult = await withApiGate(request, {
+    requiredFlag: 'bidAnalysis',
+    requireAuth: true,
+    enforceUsageLimits: true
+  });
+
+  if ('status' in gateResult) {
+    return gateResult; // Return error response
+  }
+
+  const { userId: _userId, tier: _tier, flags: _flags } = gateResult;
+
   let blobUrl: string | null = null;
-  
+
   try {
     // Log request size for debugging
     const contentLength = request.headers.get('content-length');

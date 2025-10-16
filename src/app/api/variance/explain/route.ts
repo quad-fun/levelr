@@ -2,8 +2,34 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { explainVariance } from '@/lib/varianceExplain';
+import { withApiGate, checkSubfeature } from '@/lib/api-gate';
 
 export async function POST(req: NextRequest) {
+  // API gating for variance explanation
+  const gateResult = await withApiGate(req, {
+    requiredFlag: 'bidLeveling',
+    requireAuth: true,
+    enforceUsageLimits: true
+  });
+
+  if ('status' in gateResult) {
+    return gateResult; // Return error response
+  }
+
+  const { userId: _userId, tier: _tier, flags } = gateResult;
+
+  // Check if variance explanation subfeature is enabled
+  if (!checkSubfeature(flags, 'blVarianceExplanation')) {
+    return NextResponse.json(
+      {
+        reason: "feature_disabled",
+        feature: "blVarianceExplanation",
+        message: "Variance explanation feature is not available on your current plan"
+      },
+      { status: 403 }
+    );
+  }
+
   try {
     const { rows, selectedBids, maxChars } = await req.json();
 
@@ -19,15 +45,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json(
         { error: 'At least 2 selected bids required' },
         { status: 400 }
-      );
-    }
-
-    // Check feature flag
-    const enableInlineExplanations = process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false';
-    if (!enableInlineExplanations) {
-      return NextResponse.json(
-        { error: 'Inline explanations feature is disabled' },
-        { status: 403 }
       );
     }
 
