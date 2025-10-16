@@ -3,6 +3,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { compareDetailedBids } from '@/lib/analysis/comparative-analyzer';
 import { BidComparisonRequest, AnalysisResult } from '@/types/analysis';
+import { withApiGate, checkSubfeature } from '@/lib/api-gate';
 
 // Route configuration
 export const config = {
@@ -11,6 +12,32 @@ export const config = {
 };
 
 export async function POST(request: NextRequest) {
+  // API gating for comparative analysis
+  const gateResult = await withApiGate(request, {
+    requiredFlag: 'bidLeveling',
+    requireAuth: true,
+    enforceUsageLimits: true
+  });
+
+  if ('status' in gateResult) {
+    return gateResult; // Return error response
+  }
+
+  const { flags } = gateResult;
+  // userId and tier available but not used in this endpoint
+
+  // Check if comparative analysis subfeature is enabled
+  if (!checkSubfeature(flags, 'blComparativeAnalysis')) {
+    return NextResponse.json(
+      {
+        reason: "feature_disabled",
+        feature: "blComparativeAnalysis",
+        message: "Comparative analysis feature is not available on your current plan"
+      },
+      { status: 403 }
+    );
+  }
+
   try {
     // Parse the request body
     const body: BidComparisonRequest = await request.json();

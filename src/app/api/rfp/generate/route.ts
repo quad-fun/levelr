@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { RFPGenerationRequest } from '@/types/rfp';
+import { withApiGate } from '@/lib/api-gate';
 
 export async function POST(request: NextRequest) {
+  // API gating for RFP generation
+  const gateResult = await withApiGate(request, {
+    requiredFlag: 'generateRfp',
+    requireAuth: true,
+    enforceUsageLimits: true
+  });
+
+  if ('status' in gateResult) {
+    return gateResult; // Return error response
+  }
+
+  // Auth context available but not used in this endpoint
+  // const { userId, tier, flags } = gateResult;
+
   try {
     // Parse the request body
     const body: RFPGenerationRequest = await request.json();

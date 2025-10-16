@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
+import { withApiGate } from '@/lib/api-gate';
 
 export async function POST(request: NextRequest) {
+  // API gating for blob storage
+  const gateResult = await withApiGate(request, {
+    requiredFlag: 'blobStorage',
+    requireAuth: true,
+    enforceUsageLimits: false // File cleanup doesn't count against analysis limits
+  });
+
+  if ('status' in gateResult) {
+    return gateResult; // Return error response
+  }
+
+  // Auth context available but not used in this endpoint
+  // const { userId, tier, flags } = gateResult;
+
   try {
     const { blobUrl } = await request.json();
     

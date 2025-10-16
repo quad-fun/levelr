@@ -6,8 +6,13 @@ export type Flags = {
   payments: boolean;
   usageLimits: boolean;
 
-  // modules
+  // core analysis modules
   bidAnalysis: boolean;
+  designAnalysis: boolean;
+  tradeAnalysis: boolean;
+  summaryGeneration: boolean;
+
+  // advanced modules
   generateRfp: boolean;
   projectManagement: boolean;
   analysisHistory: boolean;
@@ -16,10 +21,15 @@ export type Flags = {
   // bid leveling subfeatures
   blVarianceExplanation: boolean;
   blVarianceAnalysis: boolean;
+  blComparativeAnalysis: boolean;
 
   // exports
   exportBidAnalysis: boolean;
   exportBidLeveling: boolean;
+  exportRfp: boolean;
+
+  // file management
+  blobStorage: boolean;
 };
 
 // Environment variable defaults
@@ -30,8 +40,13 @@ function getEnvDefaults(): Flags {
     payments: process.env.NEXT_PUBLIC_ENABLE_PAYMENTS === 'true',
     usageLimits: process.env.NEXT_PUBLIC_ENABLE_USAGE_LIMITS === 'true',
 
-    // modules - core modules ready for launch default true
+    // core analysis modules - all default true for MVP
     bidAnalysis: process.env.NEXT_PUBLIC_ENABLE_BID_ANALYSIS !== 'false', // default true
+    designAnalysis: process.env.NEXT_PUBLIC_ENABLE_DESIGN_ANALYSIS !== 'false', // default true
+    tradeAnalysis: process.env.NEXT_PUBLIC_ENABLE_TRADE_ANALYSIS !== 'false', // default true
+    summaryGeneration: process.env.NEXT_PUBLIC_ENABLE_SUMMARY_GENERATION !== 'false', // default true
+
+    // advanced modules
     generateRfp: process.env.NEXT_PUBLIC_ENABLE_GENERATE_RFP !== 'false', // default true
     projectManagement: process.env.NEXT_PUBLIC_ENABLE_PROJECT_MANAGEMENT === 'true', // default false
     analysisHistory: process.env.NEXT_PUBLIC_ENABLE_ANALYSIS_HISTORY !== 'false', // default true
@@ -40,10 +55,15 @@ function getEnvDefaults(): Flags {
     // bid leveling subfeatures
     blVarianceExplanation: process.env.NEXT_PUBLIC_ENABLE_BL_VARIANCE_EXPLANATION !== 'false', // default true
     blVarianceAnalysis: process.env.NEXT_PUBLIC_ENABLE_BL_VARIANCE_ANALYSIS !== 'false', // default true
+    blComparativeAnalysis: process.env.NEXT_PUBLIC_ENABLE_BL_COMPARATIVE_ANALYSIS !== 'false', // default true
 
     // exports
     exportBidAnalysis: process.env.NEXT_PUBLIC_ENABLE_EXPORT_BID_ANALYSIS !== 'false', // default true
     exportBidLeveling: process.env.NEXT_PUBLIC_ENABLE_EXPORT_BID_LEVELING !== 'false', // default true
+    exportRfp: process.env.NEXT_PUBLIC_ENABLE_EXPORT_RFP !== 'false', // default true
+
+    // file management
+    blobStorage: process.env.NEXT_PUBLIC_ENABLE_BLOB_STORAGE !== 'false', // default true
   };
 }
 
@@ -55,14 +75,20 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         payments: true,
         usageLimits: true,
         bidAnalysis: true,
+        designAnalysis: false,
+        tradeAnalysis: false,
+        summaryGeneration: true,
         bidLeveling: true,
         blVarianceExplanation: false,
         blVarianceAnalysis: true,
+        blComparativeAnalysis: false,
         exportBidAnalysis: false,
         exportBidLeveling: false,
+        exportRfp: false,
         generateRfp: true,
         projectManagement: false,
         analysisHistory: true,
+        blobStorage: true,
       };
 
     case "pro":
@@ -70,14 +96,20 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         payments: true,
         usageLimits: false,
         bidAnalysis: true,
+        designAnalysis: true,
+        tradeAnalysis: true,
+        summaryGeneration: true,
         bidLeveling: true,
         blVarianceExplanation: true,
         blVarianceAnalysis: true,
+        blComparativeAnalysis: true,
         exportBidAnalysis: true,
         exportBidLeveling: true,
+        exportRfp: true,
         generateRfp: true,
         projectManagement: false,
         analysisHistory: true,
+        blobStorage: true,
       };
 
     case "team":
@@ -92,14 +124,20 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         payments: true,
         usageLimits: false,
         bidAnalysis: true,
+        designAnalysis: true,
+        tradeAnalysis: true,
+        summaryGeneration: true,
         generateRfp: true,
         projectManagement: true,
         analysisHistory: true,
         bidLeveling: true,
         blVarianceExplanation: true,
         blVarianceAnalysis: true,
+        blComparativeAnalysis: true,
         exportBidAnalysis: true,
         exportBidLeveling: true,
+        exportRfp: true,
+        blobStorage: true,
       };
 
     default:

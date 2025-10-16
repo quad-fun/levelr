@@ -155,15 +155,69 @@ src/lib/analysis/exports/
 
 ## Feature Flags & Growth Rails
 
-The MVP is built with growth rails that can be activated via environment variables:
+The MVP is built with comprehensive feature flags for granular control over all platform capabilities:
 
+### **Core Platform Features**
 ```bash
-# MVP Configuration (all disabled initially)
-NEXT_PUBLIC_ENABLE_AUTH=false           # Clerk authentication
-NEXT_PUBLIC_ENABLE_USAGE_LIMITS=false  # Analysis limits
-NEXT_PUBLIC_ENABLE_PAYMENTS=false      # Stripe billing
-NEXT_PUBLIC_ENABLE_TEAMS=false         # Team features
-NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS=true  # Inline variance explanations (default enabled)
+# Authentication & Authorization
+NEXT_PUBLIC_ENABLE_AUTH=true                    # Clerk authentication system
+NEXT_PUBLIC_ENABLE_PAYMENTS=false               # Stripe billing integration
+NEXT_PUBLIC_ENABLE_USAGE_LIMITS=true           # Analysis count restrictions
+
+# File Management
+NEXT_PUBLIC_ENABLE_BLOB_STORAGE=true           # Vercel blob storage for large files
+```
+
+### **Core Analysis Modules**
+```bash
+# Multi-Discipline Analysis (default enabled for MVP)
+NEXT_PUBLIC_ENABLE_BID_ANALYSIS=true           # Construction CSI division analysis
+NEXT_PUBLIC_ENABLE_DESIGN_ANALYSIS=true        # AIA phase analysis (Pro+ only)
+NEXT_PUBLIC_ENABLE_TRADE_ANALYSIS=true         # Technical systems analysis (Pro+ only)
+NEXT_PUBLIC_ENABLE_SUMMARY_GENERATION=true     # Analysis summarization
+
+# Advanced Analysis
+NEXT_PUBLIC_ENABLE_GENERATE_RFP=true           # RFP generation tools
+NEXT_PUBLIC_ENABLE_PROJECT_MANAGEMENT=false    # Project ecosystem (Team+ only)
+NEXT_PUBLIC_ENABLE_ANALYSIS_HISTORY=true       # Saved analysis tracking
+NEXT_PUBLIC_ENABLE_BID_LEVELING=true           # Comparative bid analysis
+```
+
+### **Bid Leveling Subfeatures**
+```bash
+# Enhanced Bid Comparison Features
+NEXT_PUBLIC_ENABLE_BL_VARIANCE_EXPLANATION=true    # Inline "Why?" tooltips
+NEXT_PUBLIC_ENABLE_BL_VARIANCE_ANALYSIS=true       # Advanced variance metrics
+NEXT_PUBLIC_ENABLE_BL_COMPARATIVE_ANALYSIS=true    # Multi-bid comparison engine
+```
+
+### **Export Capabilities**
+```bash
+# Document Export Features
+NEXT_PUBLIC_ENABLE_EXPORT_BID_ANALYSIS=true    # PDF/Excel analysis exports
+NEXT_PUBLIC_ENABLE_EXPORT_BID_LEVELING=true    # PDF/Excel leveling exports
+NEXT_PUBLIC_ENABLE_EXPORT_RFP=true             # RFP document exports
+```
+
+### **Tier-Based Access Control**
+
+Feature access is automatically managed by user tiers:
+
+| Feature | Starter | Pro | Team | Enterprise |
+|---------|---------|-----|------|------------|
+| **Core Analysis** | ✅ Construction only | ✅ All disciplines | ✅ All | ✅ All |
+| **Design Analysis** | ❌ | ✅ | ✅ | ✅ |
+| **Trade Analysis** | ❌ | ✅ | ✅ | ✅ |
+| **Variance Explanations** | ❌ | ✅ | ✅ | ✅ |
+| **Export Features** | ❌ | ✅ | ✅ | ✅ |
+| **Project Management** | ❌ | ❌ | ✅ | ✅ |
+| **Usage Limits** | 10/month | Unlimited | Unlimited | Unlimited |
+
+### **Dev Flag Overrides**
+
+For testing and development, override any feature via URL parameters:
+```
+?devFlags=designAnalysis:true,projectManagement:true,exportRfp:true
 ```
 
 ## Environment Setup

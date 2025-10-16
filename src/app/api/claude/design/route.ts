@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
 import { ProcessedDocument } from '@/lib/document-processor';
+import { withApiGate } from '@/lib/api-gate';
 
 // Route configuration for Vercel Pro large file handling
 export const config = {
@@ -23,6 +24,20 @@ function safeLog(message: string, data?: unknown) {
 }
 
 export async function POST(request: NextRequest) {
+  // API gating for design analysis
+  const gateResult = await withApiGate(request, {
+    requiredFlag: 'designAnalysis',
+    requireAuth: true,
+    enforceUsageLimits: true
+  });
+
+  if ('status' in gateResult) {
+    return gateResult; // Return error response
+  }
+
+  // Auth context available but not used in this endpoint
+  // const { userId, tier, flags } = gateResult;
+
   let blobUrl: string | null = null;
 
   try {

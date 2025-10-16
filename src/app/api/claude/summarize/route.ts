@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { AnalysisResult } from '@/types/analysis';
+import { withApiGate } from '@/lib/api-gate';
 
 // Route configuration for Vercel
 export const config = {
@@ -33,6 +34,20 @@ const DEFAULT_SECTIONS = [
 ];
 
 export async function POST(request: NextRequest) {
+  // API gating for summary generation
+  const gateResult = await withApiGate(request, {
+    requiredFlag: 'summaryGeneration',
+    requireAuth: true,
+    enforceUsageLimits: true
+  });
+
+  if ('status' in gateResult) {
+    return gateResult; // Return error response
+  }
+
+  // Auth context available but not used in this endpoint
+  // const { userId, tier, flags } = gateResult;
+
   const startTime = Date.now();
 
   try {

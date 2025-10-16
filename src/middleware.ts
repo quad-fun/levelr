@@ -22,7 +22,7 @@ export default clerkMiddleware(async (auth, req) => {
   if (flagsParam) {
     try {
       // Validate that it's valid JSON
-      const flagsObj = JSON.parse(flagsParam);
+      JSON.parse(flagsParam);
       const base64Flags = btoa(flagsParam);
 
       // Create response with headers and cookies
