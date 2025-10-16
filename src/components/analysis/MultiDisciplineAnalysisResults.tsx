@@ -769,6 +769,61 @@ function SoftCostsTab({
   const formatCurrency = (amount: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 0 }).format(amount);
 
+  const isDesign = analysis.discipline === 'design';
+
+  // Get discipline-specific content
+  const getContent = () => {
+    if (isDesign) {
+      return {
+        title: 'Uncategorized Items',
+        subtitle: 'Items not categorized into standard AIA phases',
+        emptyTitle: 'No Uncategorized Items',
+        emptyDescription: 'All proposal items have been categorized into standard AIA phases (SD, DD, CD, CA).',
+        itemsLabel: 'Uncategorized Items',
+        guidelines: {
+          title: 'Uncategorized Guidelines',
+          typical: [
+            '• Additional services beyond base scope',
+            '• Optional or alternate items',
+            '• Specialty consulting services',
+            '• Technology or software licenses'
+          ],
+          benchmarks: [
+            '• Typical range: 0-10% of design fee',
+            '• Should be clearly defined',
+            '• Often billable as extra services',
+            `• Your project: ${((analysis.softCostsTotal || 0) / analysis.total_amount * 100).toFixed(1)}%`
+          ]
+        }
+      };
+    } else {
+      return {
+        title: 'Soft Costs Summary',
+        subtitle: 'Administrative, professional, and non-construction expenses',
+        emptyTitle: 'No Soft Costs Identified',
+        emptyDescription: 'This analysis did not identify any soft costs such as design fees, permits, bonds, or professional services.',
+        itemsLabel: 'Soft Cost Items',
+        guidelines: {
+          title: 'Soft Costs Guidelines',
+          typical: [
+            '• Design and engineering fees',
+            '• Permits and approvals',
+            '• Legal and professional services',
+            '• Insurance and bonds'
+          ],
+          benchmarks: [
+            '• Residential: 8-15% of total cost',
+            '• Commercial: 10-20% of total cost',
+            '• Infrastructure: 15-25% of total cost',
+            `• Your project: ${((analysis.softCostsTotal || 0) / analysis.total_amount * 100).toFixed(1)}%`
+          ]
+        }
+      };
+    }
+  };
+
+  const content = getContent();
+
   // Debug logging to understand soft costs data
   console.log('🔍 SoftCostsTab Debug:', {
     softCosts: analysis.softCosts,
@@ -776,7 +831,8 @@ function SoftCostsTab({
     isArray: Array.isArray(analysis.softCosts),
     length: analysis.softCosts?.length,
     softCostsTotal: analysis.softCostsTotal,
-    hasTotal: (analysis.softCostsTotal || 0) > 0
+    hasTotal: (analysis.softCostsTotal || 0) > 0,
+    isDesign
   });
 
   // Show soft costs section if we have either items or a total > 0
@@ -787,12 +843,12 @@ function SoftCostsTab({
     return (
       <div className="text-center text-gray-500 py-12">
         <Building className="h-16 w-16 mx-auto mb-4 opacity-30" />
-        <h3 className="text-lg font-medium mb-2">No Soft Costs Identified</h3>
+        <h3 className="text-lg font-medium mb-2">{content.emptyTitle}</h3>
         <p className="text-sm">
-          This analysis did not identify any soft costs such as design fees, permits, bonds, or professional services.
+          {content.emptyDescription}
         </p>
         <div className="mt-4 text-xs text-gray-400">
-          <p>Soft costs typically represent 3-15% of total project cost</p>
+          <p>{isDesign ? 'Well-organized proposals minimize uncategorized items' : 'Soft costs typically represent 3-15% of total project cost'}</p>
         </div>
       </div>
     );
@@ -803,17 +859,17 @@ function SoftCostsTab({
 
   return (
     <div className="space-y-6">
-      {/* Soft Costs Overview */}
+      {/* Overview Section */}
       <div className="bg-purple-50 border border-purple-200 rounded-lg p-6">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center">
             <Building className="h-6 w-6 text-purple-600 mr-3" />
             <div>
               <h3 className="text-xl font-bold text-gray-900">
-                Soft Costs Summary
+                {content.title}
               </h3>
               <p className="text-sm text-purple-800">
-                Administrative, professional, and non-construction expenses
+                {content.subtitle}
               </p>
             </div>
           </div>
@@ -822,7 +878,7 @@ function SoftCostsTab({
               {formatCurrency(softCostsTotal)}
             </p>
             <p className="text-sm text-purple-700">
-              {softCostsPercentage}% of total project cost
+              {softCostsPercentage}% of total {isDesign ? 'design fee' : 'project cost'}
             </p>
           </div>
         </div>
@@ -832,7 +888,7 @@ function SoftCostsTab({
             <p className="text-2xl font-bold text-purple-900">
               {(analysis.softCosts && Array.isArray(analysis.softCosts)) ? analysis.softCosts.length : 0}
             </p>
-            <p className="text-sm text-purple-700">Soft Cost Items</p>
+            <p className="text-sm text-purple-700">{content.itemsLabel}</p>
           </div>
           <div className="text-center">
             <p className="text-2xl font-bold text-purple-900">
@@ -854,9 +910,9 @@ function SoftCostsTab({
         </div>
       </div>
 
-      {/* Detailed Soft Costs Breakdown */}
+      {/* Detailed Breakdown */}
       <div>
-        <h4 className="text-lg font-semibold text-gray-900 mb-4">Itemized Soft Costs</h4>
+        <h4 className="text-lg font-semibold text-gray-900 mb-4">{isDesign ? 'Itemized Uncategorized Items' : 'Itemized Soft Costs'}</h4>
         {analysis.softCosts && Array.isArray(analysis.softCosts) && analysis.softCosts.length > 0 ? (
           <div className="space-y-3">
             {analysis.softCosts.map((item, index) => (
@@ -865,7 +921,10 @@ function SoftCostsTab({
                   <div className="flex-1">
                     <h5 className="font-medium text-gray-900 mb-1">{item.description}</h5>
                     <p className="text-sm text-gray-600">
-                      {((item.cost / analysis.total_amount) * 100).toFixed(1)}% of total project cost
+                      {item.cost && analysis.total_amount && !isNaN(item.cost) && !isNaN(analysis.total_amount)
+                        ? `${((item.cost / analysis.total_amount) * 100).toFixed(1)}% of total ${isDesign ? 'design fee' : 'project cost'}`
+                        : `Part of total ${isDesign ? 'design fee' : 'project cost'}`
+                      }
                     </p>
                   </div>
                   <div className="text-right ml-4">
@@ -892,26 +951,29 @@ function SoftCostsTab({
         )}
       </div>
 
-      {/* Soft Costs Guidelines */}
+      {/* Guidelines */}
       <div className="bg-gray-50 border border-gray-200 rounded-lg p-6">
-        <h4 className="font-medium text-gray-900 mb-3">Soft Costs Guidelines</h4>
+        <h4 className="font-medium text-gray-900 mb-3">{content.guidelines.title}</h4>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-gray-700">
           <div>
-            <p className="font-medium mb-2">Typical Soft Costs Include:</p>
+            <p className="font-medium mb-2">{isDesign ? 'Typical Uncategorized Items Include:' : 'Typical Soft Costs Include:'}</p>
             <ul className="space-y-1">
-              <li>• Design and engineering fees</li>
-              <li>• Permits and approvals</li>
-              <li>• Legal and professional services</li>
-              <li>• Insurance and bonds</li>
+              {content.guidelines.typical.map((item, index) => (
+                <li key={index}>{item}</li>
+              ))}
             </ul>
           </div>
           <div>
-            <p className="font-medium mb-2">Industry Benchmarks:</p>
+            <p className="font-medium mb-2">{isDesign ? 'Guidelines:' : 'Industry Benchmarks:'}</p>
             <ul className="space-y-1">
-              <li>• Residential: 8-15% of total cost</li>
-              <li>• Commercial: 10-20% of total cost</li>
-              <li>• Infrastructure: 15-25% of total cost</li>
-              <li>• Your project: <strong>{softCostsPercentage}%</strong></li>
+              {content.guidelines.benchmarks.map((item, index) => (
+                <li key={index} dangerouslySetInnerHTML={{
+                  __html: item.includes('Your project:') ? item.replace(
+                    /Your project: ([\d.]+)%/,
+                    'Your project: <strong>$1%</strong>'
+                  ) : item
+                }} />
+              ))}
             </ul>
           </div>
         </div>
