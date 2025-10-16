@@ -18,7 +18,7 @@
   },
   "build": {
     "env": {
-      "NEXT_PUBLIC_ENABLE_AUTH": "false",
+      "NEXT_PUBLIC_ENABLE_AUTH": "true",
       "NEXT_PUBLIC_ENABLE_USAGE_LIMITS": "false",
       "NEXT_PUBLIC_ENABLE_PAYMENTS": "false",
       "NEXT_PUBLIC_ENABLE_TEAMS": "false"
