@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.60.0",
-    "@clerk/nextjs": "^6.31.1",
+    "@clerk/nextjs": "^6.33.6",
     "@vercel/blob": "^1.1.1",
     "crypto-js": "^4.2.0",
     "date-fns": "^4.1.0",
