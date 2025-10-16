@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { getAllAnalyses, getMarketIntelligence, deleteAnalysis, SavedAnalysis } from '@/lib/storage';
-import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
+import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import { formatDistanceToNow } from 'date-fns';
 import { 
@@ -115,11 +115,11 @@ export default function AnalysisHistory() {
         }));
     }
     
-    // Add soft costs if present
+    // Add soft costs/uncategorized if present
     if (analysis.result.softCostsTotal && analysis.result.softCostsTotal > 0) {
       categories.push({
         code: 'SOFT',
-        name: 'Soft Costs',
+        name: discipline === 'design' ? 'Uncategorized' : 'Soft Costs',
         cost: analysis.result.softCostsTotal,
         percentage: (analysis.result.softCostsTotal / analysis.result.total_amount) * 100
       });
@@ -255,31 +255,8 @@ export default function AnalysisHistory() {
           const coveragePercentage = calculateCoveragePercentage(analysis);
           const top5Categories = getTop5CostCategories(analysis);
           const subSummary = getSubcontractorSummary(analysis);
-          // Create discipline-appropriate categories for risk analysis
-          const discipline = analysis.result.discipline || 'construction';
-          let categoriesForRisk: Record<string, number> = {};
-
-          if (discipline === 'design' && analysis.result.aia_phases) {
-            categoriesForRisk = Object.fromEntries(
-              Object.entries(analysis.result.aia_phases).map(([code, phase]) => [code, phase.fee_amount])
-            );
-          } else if (discipline === 'trade' && analysis.result.technical_systems) {
-            categoriesForRisk = Object.fromEntries(
-              Object.entries(analysis.result.technical_systems).map(([code, system]) => [code, system.total_cost])
-            );
-          } else {
-            // Construction or fallback
-            categoriesForRisk = Object.fromEntries(
-              Object.entries(analysis.result.csi_divisions).map(([code, data]) => [code, data.cost])
-            );
-          }
-
-          const riskData = calculateProjectRisk(
-            categoriesForRisk,
-            analysis.result.total_amount,
-            analysis.result.uncategorizedTotal || 0,
-            analysis.result
-          );
+          // Use discipline-aware risk calculation
+          const riskData = calculateMultiDisciplineRisk(analysis.result);
 
           return (
             <div key={analysis.id} className="bg-white rounded-lg shadow-md overflow-hidden">
@@ -615,7 +592,7 @@ export default function AnalysisHistory() {
                         >
                           <span className="font-medium flex items-center">
                             <FileText className="h-4 w-4 mr-2" />
-                            Soft Costs Breakdown (${(analysis.result.softCostsTotal || 0).toLocaleString()})
+                            {analysis.result.discipline === 'design' ? 'Uncategorized Items' : 'Soft Costs'} Breakdown (${(analysis.result.softCostsTotal || 0).toLocaleString()})
                           </span>
                           {expandedSection === 'softCosts' ? 
                             <ChevronUp className="h-4 w-4" /> : 
