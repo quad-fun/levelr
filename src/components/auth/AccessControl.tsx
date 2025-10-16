@@ -17,10 +17,10 @@ export function AccessIndicator() {
   const emailDomain = email?.split('@')[1]?.toLowerCase();
 
   // Check if user has full access
-  const hasFullAccess = emailDomain === 'shorewoodgrp.com';
+  const hasFullAccess = emailDomain === 'shorewoodgrp.com' || email === 'johnny@quadfund.io';
 
-  // In the future, check ADMIN_USER_IDS here
-  const isAdmin = false; // Will be set based on user ID
+  // Check if user is admin (using GitHub username as Clerk user ID)
+  const isAdmin = user.username === 'quad-fun' || email === 'johnny@quadfund.io';
 
   return (
     <div className="flex items-center space-x-4 text-sm">
@@ -76,8 +76,8 @@ export function AccessGuard({
   const email = user.emailAddresses[0]?.emailAddress;
   const emailDomain = email?.split('@')[1]?.toLowerCase();
 
-  const hasFullAccess = emailDomain === 'shorewoodgrp.com';
-  const isAdmin = false; // Will be set based on user ID in the future
+  const hasFullAccess = emailDomain === 'shorewoodgrp.com' || email === 'johnny@quadfund.io';
+  const isAdmin = user?.username === 'quad-fun' || email === 'johnny@quadfund.io';
 
   if (requireAdmin && !isAdmin) {
     return fallback || (

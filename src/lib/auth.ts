@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 
 // Admin user IDs - add your Clerk user ID here
 const ADMIN_USER_IDS = new Set<string>([
-  // Add your Clerk user ID after you sign up
+  "quad-fun" // Johnny - quadfund.io admin
 ]);
 
 // Whitelisted email domains for full feature access
@@ -12,7 +12,7 @@ const WHITELISTED_DOMAINS = new Set<string>([
 
 // Whitelisted individual emails for full access
 const WHITELISTED_EMAILS = new Set<string>([
-  // Add specific emails here if needed
+  "johnny@quadfund.io" // Admin email
 ]);
 
 export interface UserAccess {
