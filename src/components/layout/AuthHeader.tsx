@@ -7,6 +7,7 @@ import {
   SignedOut,
   UserButton
 } from "@clerk/nextjs";
+import { AccessIndicator } from "@/components/auth/AccessControl";
 
 export function AuthHeader() {
   const isAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true';
@@ -14,13 +15,24 @@ export function AuthHeader() {
   if (!isAuthEnabled) return null;
 
   return (
-    <header className="border-b bg-white">
+    <header className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between items-center h-16">
+        <div className="flex justify-between items-center py-6">
           <div className="flex items-center">
-            <h1 className="text-xl font-semibold text-gray-900">Levelr</h1>
+            <a href="/" className="text-2xl font-bold text-blue-600 hover:text-blue-700 transition-colors">
+              Levelr
+            </a>
           </div>
           <div className="flex items-center space-x-4">
+            <SignedIn>
+              <AccessIndicator />
+            </SignedIn>
+            <a
+              href="/docs"
+              className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
+            >
+              How To Guide
+            </a>
             <SignedOut>
               <SignInButton mode="modal">
                 <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
