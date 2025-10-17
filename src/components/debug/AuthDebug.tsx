@@ -5,7 +5,7 @@ import { useState, useEffect } from 'react';
 
 export function AuthDebug() {
   const { user, isLoaded } = useUser();
-  const [flags, setFlags] = useState<any>(null);
+  const [flags, setFlags] = useState<Record<string, boolean> | null>(null);
 
   useEffect(() => {
     if (user) {

@@ -1,6 +1,5 @@
 // src/components/common/FeatureGate.tsx
 
-import { Upsell } from "./Upsell";
 import { Lock } from 'lucide-react';
 
 interface FeatureGateProps {

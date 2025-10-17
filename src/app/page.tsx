@@ -1,5 +1,5 @@
 import { auth } from "@clerk/nextjs/server";
-import { CheckCircle, Shield, Clock, TrendingUp, FileText, Users, Zap, BarChart3, Building2, DollarSign, Target, Award, ArrowRight, Play, Star } from 'lucide-react';
+import { CheckCircle, Shield, Clock, TrendingUp, FileText, Zap, BarChart3, Building2, DollarSign, Target, ArrowRight, Play, Star } from 'lucide-react';
 
 export default async function LandingPage() {
   const { userId } = await auth();
