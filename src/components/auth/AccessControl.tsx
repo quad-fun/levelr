@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
 
 export function AccessIndicator() {
@@ -25,13 +24,6 @@ export function AccessIndicator() {
           <span className="text-purple-700 font-medium">Admin</span>
         </div>
       )}
-
-      <Link
-        href="/profile"
-        className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
-      >
-        Profile
-      </Link>
     </div>
   );
 }

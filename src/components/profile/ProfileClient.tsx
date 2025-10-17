@@ -3,10 +3,17 @@
 import { User, CreditCard, Shield, ArrowRight } from 'lucide-react';
 import { UpgradeButton } from '@/components/billing/UpgradeButton';
 import { ManageSubscription } from '@/components/billing/ManageSubscription';
-import type { User as ClerkUser } from '@clerk/nextjs/server';
+
+interface UserData {
+  id?: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  emailAddresses?: { emailAddress: string }[];
+  createdAt?: Date | number;
+}
 
 interface ProfileClientProps {
-  user: ClerkUser | null;
+  user: UserData | null;
   tier: 'starter' | 'pro' | 'team' | 'enterprise';
 }
 

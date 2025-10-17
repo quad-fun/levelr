@@ -13,6 +13,17 @@ export default async function ProfilePage() {
   const user = await currentUser();
   const currentTier = await getUserTier(userId);
 
+  // Extract only the data we need to avoid serialization issues
+  const userData = {
+    id: user?.id,
+    firstName: user?.firstName,
+    lastName: user?.lastName,
+    emailAddresses: user?.emailAddresses?.map(email => ({
+      emailAddress: email.emailAddress
+    })),
+    createdAt: user?.createdAt
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -23,7 +34,7 @@ export default async function ProfilePage() {
           </p>
         </div>
 
-        <ProfileClient user={user} tier={currentTier} />
+        <ProfileClient user={userData} tier={currentTier} />
       </main>
     </div>
   );

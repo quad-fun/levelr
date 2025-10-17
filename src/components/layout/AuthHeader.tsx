@@ -55,7 +55,16 @@ export function AuthHeader() {
                   }
                 }}
                 userProfileMode="modal"
-              />
+              >
+                <UserButton.MenuItems>
+                  <UserButton.Link
+                    label="Profile & Billing"
+                    labelIcon={<span>👤</span>}
+                    href="/profile"
+                  />
+                  <UserButton.Action label="manageAccount" />
+                </UserButton.MenuItems>
+              </UserButton>
             </SignedIn>
           </div>
         </div>
