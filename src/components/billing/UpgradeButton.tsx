@@ -15,8 +15,8 @@ export function UpgradeButton() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          successUrl: `${window.location.origin}/billing?success=true`,
-          cancelUrl: `${window.location.origin}/billing?cancelled=true`,
+          successUrl: `${window.location.origin}/profile?success=true`,
+          cancelUrl: `${window.location.origin}/profile?cancelled=true`,
         }),
       });
 

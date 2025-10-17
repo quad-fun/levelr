@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useUser } from "@clerk/nextjs";
 
 export function AccessIndicator() {
@@ -10,42 +11,27 @@ export function AccessIndicator() {
   }
 
   if (!user) {
-    return <div className="text-sm text-red-600">Not authenticated</div>;
+    return null;
   }
 
   const email = user.emailAddresses[0]?.emailAddress;
-  const emailDomain = email?.split('@')[1]?.toLowerCase();
-
-  // Check if user has full access
-  const hasFullAccess = emailDomain === 'shorewoodgrp.com' || email === 'johnny@quadfund.io';
-
-  // Check if user is admin (using GitHub username as Clerk user ID)
-  const isAdmin = user.username === 'quad-fun' || email === 'johnny@quadfund.io';
+  const isAdmin = email === 'johnny@quadfund.io';
 
   return (
-    <div className="flex items-center space-x-4 text-sm">
-      <div className="flex items-center space-x-2">
-        <div className="w-2 h-2 rounded-full bg-green-500"></div>
-        <span className="text-green-700">Authenticated</span>
-      </div>
-
-      {hasFullAccess && (
-        <div className="flex items-center space-x-2">
-          <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-          <span className="text-blue-700">Full Access (@shorewoodgrp.com)</span>
-        </div>
-      )}
-
+    <div className="flex items-center space-x-3 text-sm">
       {isAdmin && (
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1">
           <div className="w-2 h-2 rounded-full bg-purple-500"></div>
-          <span className="text-purple-700">Admin</span>
+          <span className="text-purple-700 font-medium">Admin</span>
         </div>
       )}
 
-      <div className="text-gray-600">
-        {email}
-      </div>
+      <Link
+        href="/profile"
+        className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
+      >
+        Profile
+      </Link>
     </div>
   );
 }

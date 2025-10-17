@@ -51,8 +51,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'subscription',
-      success_url: successUrl || `${request.nextUrl.origin}/billing?success=true`,
-      cancel_url: cancelUrl || `${request.nextUrl.origin}/billing?cancelled=true`,
+      success_url: successUrl || `${request.nextUrl.origin}/profile?success=true`,
+      cancel_url: cancelUrl || `${request.nextUrl.origin}/profile?cancelled=true`,
       customer_email: userEmail,
       metadata: {
         userId,

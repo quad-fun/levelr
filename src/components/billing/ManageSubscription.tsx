@@ -15,7 +15,7 @@ export function ManageSubscription() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          returnUrl: `${window.location.origin}/billing`,
+          returnUrl: `${window.location.origin}/profile`,
         }),
       });
 
