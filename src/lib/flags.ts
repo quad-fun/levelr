@@ -178,15 +178,62 @@ function getDevOverrides(request?: Request): Partial<Flags> {
   return {};
 }
 
+// Admin user whitelist
+const ADMIN_USERS = [
+  'johnny@quadfund.io'
+];
+
+// Check if user is admin
+function isAdminUser(email?: string): boolean {
+  if (!email) return false;
+  return ADMIN_USERS.includes(email.toLowerCase());
+}
+
+// Admin preset - all features enabled
+function getAdminPreset(): Flags {
+  return {
+    auth: true,
+    payments: true,
+    usageLimits: false,
+    bidAnalysis: true,
+    designAnalysis: true,
+    tradeAnalysis: true,
+    summaryGeneration: true,
+    generateRfp: true,
+    projectManagement: true,
+    analysisHistory: true,
+    bidLeveling: true,
+    blVarianceExplanation: true,
+    blVarianceAnalysis: true,
+    blComparativeAnalysis: true,
+    exportBidAnalysis: true,
+    exportBidLeveling: true,
+    exportRfp: true,
+    blobStorage: true,
+  };
+}
+
 export async function getFlags({
-  userId: _userId,
+  userId,
+  userEmail,
   tier,
   request
 }: {
   userId?: string;
+  userEmail?: string;
   tier?: UserTier;
   request?: Request;
 } = {}): Promise<Flags> {
+  // Check if user is admin first
+  if (isAdminUser(userEmail)) {
+    const adminFlags = getAdminPreset();
+    const devOverrides = getDevOverrides(request);
+    return {
+      ...adminFlags,
+      ...devOverrides, // Dev overrides can still override admin settings
+    };
+  }
+
   // Merge in order: env defaults < tier preset < dev overrides
   const envDefaults = getEnvDefaults();
   const tierPreset = tier ? getTierPreset(tier) : {};
