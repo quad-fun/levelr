@@ -1,6 +1,9 @@
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { getUserTier } from "@/lib/pricing";
+import { getFlags } from "@/lib/flags";
 import { redirect } from "next/navigation";
+import { FeatureFlagControls } from "@/components/dev/FeatureFlagControls";
+import { headers } from "next/headers";
 
 export default async function DevPage() {
   // Only allow in development
@@ -16,6 +19,12 @@ export default async function DevPage() {
 
   const user = await currentUser();
   const currentTier = await getUserTier(userId);
+
+  // Get current flags for feature flag controls
+  const headersList = await headers();
+  const request = new Request('http://localhost', { headers: headersList });
+  const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+  const flags = await getFlags({ userId, userEmail, tier: currentTier, request });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -103,6 +112,15 @@ export default async function DevPage() {
               <li>Verify that feature flags update according to the new tier</li>
             </ol>
           </div>
+        </div>
+
+        {/* Feature Flag Controls */}
+        <div className="mt-8">
+          <div className="mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">Feature Flag Controls</h2>
+            <p className="text-gray-600">Override individual feature flags to test specific user experiences.</p>
+          </div>
+          <FeatureFlagControls currentFlags={flags} />
         </div>
       </main>
     </div>
