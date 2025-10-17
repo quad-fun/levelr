@@ -34,5 +34,28 @@ export function FeatureGate({
     );
   }
 
-  return <Upsell title={title} blurb={blurb} ctaHref={ctaHref} />;
+  // Show content with overlay instead of hiding it completely
+  return (
+    <div className="relative">
+      {/* Show the actual content */}
+      <div className="opacity-50 pointer-events-none">
+        {children}
+      </div>
+
+      {/* Upgrade overlay */}
+      <div className="absolute inset-0 bg-white/80 backdrop-blur-sm flex items-center justify-center rounded-lg">
+        <div className="text-center p-6 max-w-md">
+          <Lock className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+          <h3 className="text-lg font-semibold text-gray-900 mb-2">{title}</h3>
+          {blurb && <p className="text-gray-600 mb-4">{blurb}</p>}
+          <a
+            href={ctaHref}
+            className="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+          >
+            Upgrade to Pro
+          </a>
+        </div>
+      </div>
+    </div>
+  );
 }

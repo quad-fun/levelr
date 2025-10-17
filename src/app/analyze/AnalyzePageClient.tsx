@@ -11,6 +11,7 @@ import BidLeveling from '@/components/analysis/BidLeveling';
 import RFPBuilder from '@/components/rfp/RFPBuilder';
 import ProjectManager from '@/components/ecosystem/ProjectManager';
 import { AccessIndicator } from '@/components/auth/AccessControl';
+import { AuthDebug } from '@/components/debug/AuthDebug';
 import { FeatureGate } from '@/components/common/FeatureGate';
 import { analyzeDocument } from '@/lib/claude-client';
 import { MultiDisciplineAnalyzer } from '@/lib/analysis/multi-discipline-analyzer';
@@ -102,6 +103,16 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
         if (selectedDiscipline === 'construction') {
           result = await analyzeDocument(processedDoc);
           result.discipline = 'construction';
+        } else if (selectedDiscipline === 'design' && !flags.designAnalysis) {
+          // Show upgrade prompt but allow the analysis for demo purposes
+          setError('Design analysis requires Pro tier. This is a demo analysis - upgrade to save and export results.');
+          result = await analyzeDocument(processedDoc); // Use construction analysis as fallback
+          result.discipline = 'design';
+        } else if (selectedDiscipline === 'trade' && !flags.tradeAnalysis) {
+          // Show upgrade prompt but allow the analysis for demo purposes
+          setError('Trade analysis requires Pro tier. This is a demo analysis - upgrade to save and export results.');
+          result = await analyzeDocument(processedDoc); // Use construction analysis as fallback
+          result.discipline = 'trade';
         } else {
           result = await MultiDisciplineAnalyzer.analyzeProposal(
             processedDoc,
@@ -226,6 +237,11 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Debug Authentication Status */}
+        <div className="mb-6">
+          <AuthDebug />
+        </div>
+
         {/* Tab Navigation */}
         <div className="flex justify-center mb-8">
           <div className="bg-gray-100 rounded-lg p-1">
@@ -404,8 +420,6 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
                       <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
                         selectedDiscipline === 'design'
                           ? 'border-purple-500 bg-purple-50'
-                          : !flags.designAnalysis
-                          ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}>
                         <input
@@ -414,15 +428,14 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
                           value="design"
                           checked={selectedDiscipline === 'design'}
                           onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
-                          disabled={!flags.designAnalysis}
-                          className="h-4 w-4 text-purple-600 border-gray-300 focus:ring-purple-500 disabled:opacity-60"
+                          className="h-4 w-4 text-purple-600 border-gray-300 focus:ring-purple-500"
                         />
                         <div>
                           <div className="flex items-center space-x-2 mb-1">
                             <span className="text-2xl">📐</span>
                             <h4 className="font-semibold text-gray-900">Design Services</h4>
                             {!flags.designAnalysis && (
-                              <span className="text-xs bg-gray-200 px-1.5 py-0.5 rounded">Pro</span>
+                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Pro</span>
                             )}
                           </div>
                           <p className="text-sm text-gray-600">Architecture and engineering services - AIA Phases</p>
@@ -432,8 +445,6 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
                       <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
                         selectedDiscipline === 'trade'
                           ? 'border-green-500 bg-green-50'
-                          : !flags.tradeAnalysis
-                          ? 'border-gray-200 bg-gray-50 cursor-not-allowed opacity-60'
                           : 'border-gray-200 hover:border-gray-300'
                       }`}>
                         <input
@@ -442,15 +453,14 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
                           value="trade"
                           checked={selectedDiscipline === 'trade'}
                           onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
-                          disabled={!flags.tradeAnalysis}
-                          className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500 disabled:opacity-60"
+                          className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
                         />
                         <div>
                           <div className="flex items-center space-x-2 mb-1">
                             <span className="text-2xl">⚡</span>
                             <h4 className="font-semibold text-gray-900">Trade Services</h4>
                             {!flags.tradeAnalysis && (
-                              <span className="text-xs bg-gray-200 px-1.5 py-0.5 rounded">Pro</span>
+                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Pro</span>
                             )}
                           </div>
                           <p className="text-sm text-gray-600">Specialty trade services - Technical Systems</p>
