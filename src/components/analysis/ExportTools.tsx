@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { AnalysisResult } from '@/types/analysis';
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import { Download, FileText, Sheet, Lock } from 'lucide-react';
+import { LockedButton } from '@/components/common/LockedButton';
 import type { Flags } from '@/lib/flags';
 
 interface ExportToolsProps {
@@ -80,15 +81,15 @@ export default function ExportTools({ analysis, flags }: ExportToolsProps) {
           </>
         ) : (
           <>
-            <div className="flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-500 rounded-lg font-semibold border-2 border-dashed border-gray-300">
-              <Lock className="h-5 w-5 mr-2" />
-              PDF Export (Pro)
-            </div>
+            <LockedButton className="w-full justify-center px-6 py-3 font-semibold">
+              <FileText className="h-5 w-5 mr-2" />
+              PDF Export
+            </LockedButton>
 
-            <div className="flex items-center justify-center px-6 py-3 bg-gray-100 text-gray-500 rounded-lg font-semibold border-2 border-dashed border-gray-300">
-              <Lock className="h-5 w-5 mr-2" />
-              Excel Export (Pro)
-            </div>
+            <LockedButton className="w-full justify-center px-6 py-3 font-semibold">
+              <Sheet className="h-5 w-5 mr-2" />
+              Excel Export
+            </LockedButton>
           </>
         )}
       </div>

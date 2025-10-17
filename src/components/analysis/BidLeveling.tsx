@@ -7,6 +7,7 @@ import { CSI_DIVISIONS, LEVELING_LABELS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
 import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
 import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle, HelpCircle, Loader2 } from 'lucide-react';
+import { LockedButton } from '@/components/common/LockedButton';
 import type { Flags } from '@/lib/flags';
 
 interface BidComparison {
@@ -1156,21 +1157,30 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
                   )}
                 </button>
               )}
-              <select
-                value={exportFormat}
-                onChange={(e) => setExportFormat(e.target.value as 'excel' | 'pdf')}
-                className="border border-gray-300 rounded px-3 py-2 text-sm"
-              >
-                <option value="excel">Excel Report</option>
-                <option value="pdf">PDF Report</option>
-              </select>
-              <button
-                onClick={handleExportLeveling}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
-              >
-                <Download className="h-4 w-4 mr-2" />
-                Export {exportFormat.toUpperCase()}
-              </button>
+              {_flags?.exportBidLeveling ? (
+                <>
+                  <select
+                    value={exportFormat}
+                    onChange={(e) => setExportFormat(e.target.value as 'excel' | 'pdf')}
+                    className="border border-gray-300 rounded px-3 py-2 text-sm"
+                  >
+                    <option value="excel">Excel Report</option>
+                    <option value="pdf">PDF Report</option>
+                  </select>
+                  <button
+                    onClick={handleExportLeveling}
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Export {exportFormat.toUpperCase()}
+                  </button>
+                </>
+              ) : (
+                <LockedButton>
+                  <Download className="h-4 w-4 mr-2" />
+                  Export Reports
+                </LockedButton>
+              )}
             </div>
           )}
         </div>
