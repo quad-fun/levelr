@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@clerk/nextjs/server';
+import { auth, currentUser } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
 
 // Only initialize Stripe if the secret key is provided (growth rails)
@@ -28,6 +28,10 @@ export async function POST(request: NextRequest) {
 
     const { successUrl, cancelUrl } = await request.json();
 
+    // Get user info for customer creation
+    const user = await currentUser();
+    const userEmail = user?.emailAddresses?.[0]?.emailAddress;
+
     // Get Pro price ID from environment
     const priceId = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PRO;
     if (!priceId) {
@@ -49,6 +53,7 @@ export async function POST(request: NextRequest) {
       mode: 'subscription',
       success_url: successUrl || `${request.nextUrl.origin}/billing?success=true`,
       cancel_url: cancelUrl || `${request.nextUrl.origin}/billing?cancelled=true`,
+      customer_email: userEmail,
       metadata: {
         userId,
         source: 'levelr_pro_upgrade'
@@ -58,7 +63,8 @@ export async function POST(request: NextRequest) {
           userId,
           source: 'levelr_pro_upgrade'
         }
-      }
+      },
+      customer_creation: 'always'
     });
 
     return NextResponse.json({ url: session.url });

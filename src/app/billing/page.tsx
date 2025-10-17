@@ -2,6 +2,8 @@ import { auth } from "@clerk/nextjs/server";
 import { getUserTier } from "@/lib/pricing";
 import { redirect } from "next/navigation";
 import { CheckCircle, CreditCard, Calendar, Zap } from 'lucide-react';
+import { UpgradeButton } from '@/components/billing/UpgradeButton';
+import { ManageSubscription } from '@/components/billing/ManageSubscription';
 
 export default async function BillingPage() {
   const { userId } = await auth();
@@ -17,33 +19,6 @@ export default async function BillingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-6">
-            <div className="flex items-center">
-              <div className="text-2xl font-bold text-blue-600">
-                Levelr
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <a
-                href="/dashboard"
-                className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
-              >
-                Dashboard
-              </a>
-              <a
-                href="/analyze"
-                className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
-              >
-                Analysis
-              </a>
-            </div>
-          </div>
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
@@ -121,9 +96,10 @@ export default async function BillingPage() {
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-green-200">
-                    <p className="text-sm text-green-600">
-                      Manage your subscription through the Stripe customer portal.
+                    <p className="text-sm text-green-600 mb-3">
+                      Manage your subscription, update payment methods, and view billing history.
                     </p>
+                    <ManageSubscription />
                   </div>
                 </div>
               </div>
@@ -178,8 +154,9 @@ export default async function BillingPage() {
 
                 <div className="text-center">
                   <div className="mb-6">
-                    <div className="text-3xl font-bold text-gray-900">$49</div>
+                    <div className="text-3xl font-bold text-gray-900">$299</div>
                     <div className="text-gray-600">/month</div>
+                    <div className="text-xs text-gray-500 mt-1">Beta pricing: $99/month</div>
                   </div>
 
                   <UpgradeButton />
@@ -209,7 +186,7 @@ export default async function BillingPage() {
               <tbody className="divide-y divide-gray-200">
                 <tr>
                   <td className="py-3 text-gray-900">Monthly Analyses</td>
-                  <td className="py-3 text-center text-gray-600">3</td>
+                  <td className="py-3 text-center text-gray-600">10</td>
                   <td className="py-3 text-center text-blue-600 font-semibold">Unlimited</td>
                 </tr>
                 <tr>
@@ -238,42 +215,5 @@ export default async function BillingPage() {
         </div>
       </main>
     </div>
-  );
-}
-
-// Client component for upgrade button
-function UpgradeButton() {
-  const handleUpgrade = async () => {
-    try {
-      const response = await fetch('/api/stripe/checkout', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          successUrl: `${window.location.origin}/billing?success=true`,
-          cancelUrl: `${window.location.origin}/billing?cancelled=true`,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to create checkout session');
-      }
-
-      const { url } = await response.json();
-      window.location.href = url;
-    } catch (error) {
-      console.error('Upgrade error:', error);
-      alert('Failed to start upgrade process. Please try again.');
-    }
-  };
-
-  return (
-    <button
-      onClick={handleUpgrade}
-      className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-    >
-      Upgrade to Pro
-    </button>
   );
 }

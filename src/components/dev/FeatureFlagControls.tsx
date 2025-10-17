@@ -144,7 +144,15 @@ export function FeatureFlagControls({ currentFlags }: FeatureFlagControlsProps) 
 
     const presetFlags = presets[preset];
     if (presetFlags) {
-      setFlags(prev => ({ ...prev, ...presetFlags }));
+      setFlags(prev => {
+        const updated = { ...prev };
+        Object.entries(presetFlags).forEach(([key, value]) => {
+          if (value !== undefined) {
+            updated[key] = value;
+          }
+        });
+        return updated;
+      });
     }
   };
 

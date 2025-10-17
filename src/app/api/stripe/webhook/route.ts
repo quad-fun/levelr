@@ -63,6 +63,16 @@ export async function POST(request: NextRequest) {
           );
         }
 
+        // Update customer metadata with userId if customer was created
+        if (session.customer && stripe) {
+          await stripe.customers.update(session.customer as string, {
+            metadata: {
+              userId,
+              source: 'levelr_pro_upgrade'
+            }
+          });
+        }
+
         // Update user tier to "pro"
         await setUserTier(userId, 'pro');
 
