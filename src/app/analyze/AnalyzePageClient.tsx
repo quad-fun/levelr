@@ -10,7 +10,6 @@ import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
 import RFPBuilder from '@/components/rfp/RFPBuilder';
 import ProjectManager from '@/components/ecosystem/ProjectManager';
-import { AccessIndicator } from '@/components/auth/AccessControl';
 import { AuthDebug } from '@/components/debug/AuthDebug';
 import { FeatureGate } from '@/components/common/FeatureGate';
 import { analyzeDocument } from '@/lib/claude-client';

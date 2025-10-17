@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { SubscriptionStatus } from '@/components/billing/SubscriptionStatus';
 import type { User } from '@clerk/nextjs/server';
 
@@ -11,10 +10,7 @@ interface DashboardClientProps {
 }
 
 export function DashboardClient({ user, tier, flags }: DashboardClientProps) {
-  const [isUpgrading, setIsUpgrading] = useState(false);
-
   const handleUpgrade = async () => {
-    setIsUpgrading(true);
     try {
       const response = await fetch('/api/stripe/checkout', {
         method: 'POST',
@@ -38,8 +34,6 @@ export function DashboardClient({ user, tier, flags }: DashboardClientProps) {
     } catch (error) {
       console.error('Upgrade error:', error);
       alert('Failed to start upgrade process. Please try again.');
-    } finally {
-      setIsUpgrading(false);
     }
   };
 

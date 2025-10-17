@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useUser } from '@clerk/nextjs';
-import { CreditCard, CheckCircle, XCircle, AlertCircle } from 'lucide-react';
+import { CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
 
 interface SubscriptionStatusProps {
   tier: 'starter' | 'pro' | 'team' | 'enterprise';
@@ -10,7 +9,6 @@ interface SubscriptionStatusProps {
 }
 
 export function SubscriptionStatus({ tier, onUpgrade }: SubscriptionStatusProps) {
-  const { user } = useUser();
   const [isLoading, setIsLoading] = useState(false);
 
   const handleUpgrade = async () => {
