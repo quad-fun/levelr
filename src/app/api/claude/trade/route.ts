@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { del } from '@vercel/blob';
 import { ProcessedDocument } from '@/lib/document-processor';
-import { withApiGate } from '@/lib/api-gate';
+import { withApiGate, recordAnalysisUsage } from '@/lib/api-gate';
 
 // Route configuration for Vercel Pro large file handling
 export const config = {
@@ -28,15 +28,15 @@ export async function POST(request: NextRequest) {
   const gateResult = await withApiGate(request, {
     requiredFlag: 'tradeAnalysis',
     requireAuth: true,
-    enforceUsageLimits: true
+    enforceUsageLimits: true,
+    isAnalysisEndpoint: true
   });
 
   if ('status' in gateResult) {
     return gateResult; // Return error response
   }
 
-  // Auth context available but not used in this endpoint
-  // const { userId, tier, flags } = gateResult;
+  const { userId } = gateResult;
 
   let blobUrl: string | null = null;
 
@@ -176,6 +176,9 @@ export async function POST(request: NextRequest) {
         console.error('Blob cleanup failed (non-critical):', cleanupError);
       }
     }
+
+    // Record usage for analysis tracking
+    await recordAnalysisUsage(userId);
 
     return NextResponse.json({ analysis });
 

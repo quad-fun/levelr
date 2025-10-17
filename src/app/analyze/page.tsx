@@ -31,7 +31,7 @@ export default async function AnalyzePage() {
 
   return (
     <GatedRoute requiredFlag="bidAnalysis">
-      <AnalyzePageClient flags={clientFlags} />
+      <AnalyzePageClient flags={clientFlags} userId={userId || undefined} userTier={tier} />
     </GatedRoute>
   );
 }

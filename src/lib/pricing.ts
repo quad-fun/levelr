@@ -97,6 +97,9 @@ export const FEATURE_FLAGS = {
 import { clerkClient } from "@clerk/nextjs/server";
 import type { UserTier } from "./flags";
 
+// Re-export UserTier for convenience
+export type { UserTier } from "./flags";
+
 export async function getUserTier(userId: string): Promise<UserTier> {
   try {
     const client = await clerkClient();

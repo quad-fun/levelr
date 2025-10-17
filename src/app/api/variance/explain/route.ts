@@ -2,12 +2,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { explainVariance } from '@/lib/varianceExplain';
-import { withApiGate, checkSubfeature } from '@/lib/api-gate';
+import { withApiGate } from '@/lib/api-gate';
 
 export async function POST(req: NextRequest) {
-  // API gating for variance explanation
+  // API gating for inline explanations
   const gateResult = await withApiGate(req, {
-    requiredFlag: 'bidLeveling',
+    requiredFlag: 'inlineExplanations',
     requireAuth: true,
     enforceUsageLimits: true
   });
@@ -19,13 +19,13 @@ export async function POST(req: NextRequest) {
   const { flags } = gateResult;
   // userId and tier available but not used in this endpoint
 
-  // Check if variance explanation subfeature is enabled
-  if (!checkSubfeature(flags, 'blVarianceExplanation')) {
+  // Additional check for bid leveling since this is a leveling feature
+  if (!flags.bidLeveling) {
     return NextResponse.json(
       {
         reason: "feature_disabled",
-        feature: "blVarianceExplanation",
-        message: "Variance explanation feature is not available on your current plan"
+        feature: "bidLeveling",
+        message: "Bid leveling feature is required for variance explanations"
       },
       { status: 403 }
     );

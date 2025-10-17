@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
+import DocumentAnalyzer from '@/components/analysis/DocumentAnalyzer';
 import ProjectManager from '@/components/ecosystem/ProjectManager';
 import { AccessIndicator } from '@/components/auth/AccessControl';
 import { FeatureGate } from '@/components/common/FeatureGate';
@@ -11,9 +12,11 @@ import type { Flags } from '@/lib/flags';
 
 interface AnalyzePageClientProps {
   flags: Flags;
+  userId?: string;
+  userTier?: string;
 }
 
-function AnalyzePageContent({ flags }: AnalyzePageClientProps) {
+function AnalyzePageContent({ flags, userId, userTier }: AnalyzePageClientProps) {
   const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'leveling' | 'rfp' | 'ecosystem'>('upload');
 
   // Same useEffect and handler logic from the original file...
@@ -145,10 +148,7 @@ function AnalyzePageContent({ flags }: AnalyzePageClientProps) {
       {/* Content Area */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {activeTab === 'upload' && (
-          <div className="space-y-8">
-            {/* Document Upload and Analysis sections... */}
-            <p>Document Analysis Content (implementation needed)</p>
-          </div>
+          <DocumentAnalyzer userId={userId} userTier={userTier} />
         )}
 
         {activeTab === 'history' && (
@@ -198,10 +198,10 @@ function AnalyzePageContent({ flags }: AnalyzePageClientProps) {
   );
 }
 
-export default function AnalyzePageClient({ flags }: AnalyzePageClientProps) {
+export default function AnalyzePageClient({ flags, userId, userTier }: AnalyzePageClientProps) {
   return (
     <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="text-lg">Loading...</div></div>}>
-      <AnalyzePageContent flags={flags} />
+      <AnalyzePageContent flags={flags} userId={userId} userTier={userTier} />
     </Suspense>
   );
 }

@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { auth } from '@clerk/nextjs/server';
 import Stripe from 'stripe';
 
 // Only initialize Stripe if the secret key is provided (growth rails)
-const stripe = process.env.STRIPE_SECRET_KEY 
-  ? new Stripe(process.env.STRIPE_SECRET_KEY) 
+const stripe = process.env.STRIPE_SECRET_KEY
+  ? new Stripe(process.env.STRIPE_SECRET_KEY)
   : null;
 
 export async function POST(request: NextRequest) {
@@ -15,19 +16,29 @@ export async function POST(request: NextRequest) {
         { status: 501 }
       );
     }
-    
-    const { email, priceId, successUrl, cancelUrl } = await request.json();
 
-    if (!email || !priceId) {
+    // Get authenticated user
+    const { userId } = await auth();
+    if (!userId) {
       return NextResponse.json(
-        { error: 'Email and price ID are required' },
-        { status: 400 }
+        { error: 'Authentication required' },
+        { status: 401 }
+      );
+    }
+
+    const { successUrl, cancelUrl } = await request.json();
+
+    // Get Pro price ID from environment
+    const priceId = process.env.NEXT_PUBLIC_STRIPE_PRICE_ID_PRO;
+    if (!priceId) {
+      return NextResponse.json(
+        { error: 'Pro price ID not configured' },
+        { status: 500 }
       );
     }
 
     // Create checkout session
     const session = await stripe.checkout.sessions.create({
-      customer_email: email,
       payment_method_types: ['card'],
       line_items: [
         {
@@ -36,16 +47,16 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: 'subscription',
-      success_url: successUrl || `${request.nextUrl.origin}/analyze?upgraded=true`,
-      cancel_url: cancelUrl || `${request.nextUrl.origin}/pricing?cancelled=true`,
+      success_url: successUrl || `${request.nextUrl.origin}/billing?success=true`,
+      cancel_url: cancelUrl || `${request.nextUrl.origin}/billing?cancelled=true`,
       metadata: {
-        email,
-        source: 'powerbid_mvp'
+        userId,
+        source: 'levelr_pro_upgrade'
       },
       subscription_data: {
         metadata: {
-          email,
-          source: 'powerbid_mvp'
+          userId,
+          source: 'levelr_pro_upgrade'
         }
       }
     });

@@ -1,10 +1,19 @@
 export type UserTier = "starter" | "pro" | "team" | "enterprise";
 
+export type FlagName =
+  | "auth" | "payments" | "usageLimits" | "teams" | "inlineExplanations"
+  | "bidAnalysis" | "designAnalysis" | "tradeAnalysis" | "summaryGeneration"
+  | "generateRfp" | "projectManagement" | "analysisHistory" | "bidLeveling"
+  | "blVarianceExplanation" | "blVarianceAnalysis" | "blComparativeAnalysis"
+  | "exportBidAnalysis" | "exportBidLeveling" | "exportRfp" | "blobStorage";
+
 export type Flags = {
   // platform
   auth: boolean;
   payments: boolean;
   usageLimits: boolean;
+  teams: boolean;
+  inlineExplanations: boolean;
 
   // core analysis modules
   bidAnalysis: boolean;
@@ -39,6 +48,8 @@ function getEnvDefaults(): Flags {
     auth: process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true',
     payments: process.env.NEXT_PUBLIC_ENABLE_PAYMENTS === 'true',
     usageLimits: process.env.NEXT_PUBLIC_ENABLE_USAGE_LIMITS === 'true',
+    teams: process.env.NEXT_PUBLIC_ENABLE_TEAMS === 'true',
+    inlineExplanations: process.env.NEXT_PUBLIC_ENABLE_INLINE_EXPLANATIONS !== 'false', // default true
 
     // core analysis modules - all default true for MVP
     bidAnalysis: process.env.NEXT_PUBLIC_ENABLE_BID_ANALYSIS !== 'false', // default true
@@ -74,6 +85,8 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
       return {
         payments: true,
         usageLimits: true,
+        teams: false,
+        inlineExplanations: false,
         bidAnalysis: true,
         designAnalysis: false,
         tradeAnalysis: false,
@@ -95,6 +108,8 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
       return {
         payments: true,
         usageLimits: false,
+        teams: false,
+        inlineExplanations: true,
         bidAnalysis: true,
         designAnalysis: true,
         tradeAnalysis: true,
@@ -115,6 +130,7 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
     case "team":
       return {
         ...getTierPreset("pro"),
+        teams: true,
         projectManagement: true,
       };
 
@@ -123,6 +139,8 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         auth: true,
         payments: true,
         usageLimits: false,
+        teams: true,
+        inlineExplanations: true,
         bidAnalysis: true,
         designAnalysis: true,
         tradeAnalysis: true,
@@ -195,6 +213,8 @@ function getAdminPreset(): Flags {
     auth: true,
     payments: true,
     usageLimits: false,
+    teams: true,
+    inlineExplanations: true,
     bidAnalysis: true,
     designAnalysis: true,
     tradeAnalysis: true,
@@ -214,7 +234,7 @@ function getAdminPreset(): Flags {
 }
 
 export async function getFlags({
-  userId,
+  userId: _userId,
   userEmail,
   tier,
   request
