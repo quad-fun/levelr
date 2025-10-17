@@ -63,8 +63,7 @@ export async function POST(request: NextRequest) {
           userId,
           source: 'levelr_pro_upgrade'
         }
-      },
-      customer_creation: 'always'
+      }
     });
 
     return NextResponse.json({ url: session.url });
