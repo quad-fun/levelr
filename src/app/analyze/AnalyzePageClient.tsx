@@ -8,6 +8,7 @@ import MultiDisciplineAnalysisResults from '@/components/analysis/MultiDisciplin
 import ExportTools from '@/components/analysis/ExportTools';
 import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
+import RFPBuilder from '@/components/rfp/RFPBuilder';
 import ProjectManager from '@/components/ecosystem/ProjectManager';
 import { AccessIndicator } from '@/components/auth/AccessControl';
 import { FeatureGate } from '@/components/common/FeatureGate';
@@ -335,10 +336,11 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
             title="Generate RFP"
             blurb="Create professional RFPs with AI-assisted scope writing, CSI division templates, and commercial terms."
           >
-            <div className="bg-white rounded-lg shadow p-6">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Generate RFP</h2>
-              <p className="text-gray-600">RFP Builder implementation in progress...</p>
-            </div>
+            <RFPBuilder
+              onCancel={() => setActiveTab('upload')}
+              onComplete={() => setActiveTab('ecosystem')}
+              initialProjectData={selectedProjectForRFP || undefined}
+            />
           </FeatureGate>
         ) : activeTab === 'ecosystem' ? (
           <FeatureGate
