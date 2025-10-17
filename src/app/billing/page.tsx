@@ -1,10 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
-import { clerkClient } from "@clerk/nextjs/server";
 import { getUserTier } from "@/lib/pricing";
-import { getFlags } from "@/lib/flags";
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { CheckCircle, CreditCard, Calendar, Users, Zap } from 'lucide-react';
+import { CheckCircle, CreditCard, Calendar, Zap } from 'lucide-react';
 
 export default async function BillingPage() {
   const { userId } = await auth();
@@ -13,20 +10,8 @@ export default async function BillingPage() {
     redirect("/sign-in");
   }
 
-  // Get user data
-  let userEmail;
-  try {
-    const client = await clerkClient();
-    const user = await client.users.getUser(userId);
-    userEmail = user.emailAddresses?.[0]?.emailAddress;
-  } catch (error) {
-    console.warn('Failed to get user email:', error);
-  }
 
   const tier = await getUserTier(userId);
-  const headersList = await headers();
-  const request = new Request('http://localhost', { headers: headersList });
-  const flags = await getFlags({ userId, userEmail, tier, request });
 
   const isPro = tier === 'pro';
 
