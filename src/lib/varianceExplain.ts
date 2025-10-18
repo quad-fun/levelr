@@ -6,6 +6,7 @@ export type VarianceExplanation = {
   short: string;        // 1–2 sentences (≤ 280 chars)
   long?: string;        // optional detailed text for future use
   recommendation?: string; // actionable advice (≤ 200 chars)
+  bidRecommendation?: string; // which bid to award (≤ 150 chars)
   at: string;           // ISO timestamp
   model?: string;       // provenance
 };
@@ -26,7 +27,7 @@ function generateCacheKey(opts: {
       // Exclude varianceAbs and variancePct as they're calculated values that may differ slightly
     })),
     selectedBids: opts.selectedBids.sort(), // normalize order
-    v: 'v2' // version for cache invalidation
+    v: 'v3' // version for cache invalidation
   };
 
   const key = crypto
@@ -83,7 +84,7 @@ async function callClaudeForVarianceExplanation(
   rows: Record<string, unknown>[],
   selectedBids: string[],
   maxChars: number
-): Promise<{ short: string; long: string; recommendation?: string }> {
+): Promise<{ short: string; long: string; recommendation?: string; bidRecommendation?: string }> {
   if (!process.env.CLAUDE_API_KEY) {
     throw new Error('Claude API key not configured');
   }
@@ -91,16 +92,39 @@ async function callClaudeForVarianceExplanation(
   const bidNames = selectedBids.length > 0 ? selectedBids.join(' vs ') : 'selected bids';
   const rowsData = JSON.stringify(rows, null, 2);
 
-  const prompt = `Analyze why costs differ between ${bidNames}. Provide THREE sections:
+  // Check if this is an overall recommendation request
+  const isOverallRecommendation = rows.some(row => row.division === 'OVERALL_RECOMMENDATION');
+
+  const prompt = isOverallRecommendation ?
+    `Based on complete bid analysis across all divisions/phases/systems, provide a comprehensive award recommendation for ${bidNames}. Provide FOUR sections:
+
+1. SHORT (≤${maxChars} chars): Executive summary of which bid to award and primary reasons
+2. LONG (≤800 chars): Comprehensive analysis considering cost, risk, scope completeness, and contractor qualifications
+3. RECOMMENDATION (≤200 chars): Key decision factors and implementation considerations
+4. BID_RECOMMENDATION (≤150 chars): Clear award recommendation with primary justification
+
+Consider all factors: total cost, risk levels, scope completeness, variance patterns, and contractor capabilities. This is a final award decision recommendation.
+
+Format as:
+SHORT: [executive summary and award decision]
+LONG: [comprehensive analysis of all factors]
+RECOMMENDATION: [key decision factors]
+BID_RECOMMENDATION: [clear award recommendation: "Award to [Contractor] because [primary reason]"]
+
+DATA:
+${rowsData}` :
+    `Analyze why costs differ between ${bidNames}. Provide FOUR sections:
 
 1. SHORT (≤${maxChars} chars): Brief explanation of main variance drivers
 2. LONG (≤800 chars): Detailed analysis including specific scope differences, material choices, allowances
 3. RECOMMENDATION (≤200 chars): Specific actionable advice for decision-making based on this variance
+4. BID_RECOMMENDATION (≤150 chars): Which bid to award and why, considering cost, scope, and risk factors
 
 Format as:
 SHORT: [brief explanation]
 LONG: [detailed analysis]
 RECOMMENDATION: [actionable advice]
+BID_RECOMMENDATION: [award recommendation with brief rationale]
 
 Call out scope adds/substitutions/allowances and likely cost drivers (materials, systems, labor). Use ONLY the provided data.
 
@@ -140,14 +164,16 @@ ${rowsData}`;
 
     const fullText = content.text.trim();
 
-    // Parse the SHORT, LONG, and RECOMMENDATION sections
+    // Parse the SHORT, LONG, RECOMMENDATION, and BID_RECOMMENDATION sections
     const shortMatch = fullText.match(/SHORT:\s*([\s\S]*?)(?=\nLONG:|$)/);
     const longMatch = fullText.match(/LONG:\s*([\s\S]*?)(?=\nRECOMMENDATION:|$)/);
-    const recommendationMatch = fullText.match(/RECOMMENDATION:\s*([\s\S]*?)$/);
+    const recommendationMatch = fullText.match(/RECOMMENDATION:\s*([\s\S]*?)(?=\nBID_RECOMMENDATION:|$)/);
+    const bidRecommendationMatch = fullText.match(/BID_RECOMMENDATION:\s*([\s\S]*?)$/);
 
     let shortExplanation = shortMatch?.[1]?.trim() || fullText.substring(0, maxChars);
     let longExplanation = longMatch?.[1]?.trim() || fullText;
     let recommendation = recommendationMatch?.[1]?.trim();
+    let bidRecommendation = bidRecommendationMatch?.[1]?.trim();
 
     // Ensure length limits
     if (shortExplanation.length > maxChars) {
@@ -162,10 +188,15 @@ ${rowsData}`;
       recommendation = recommendation.substring(0, 197) + '...';
     }
 
+    if (bidRecommendation && bidRecommendation.length > 150) {
+      bidRecommendation = bidRecommendation.substring(0, 147) + '...';
+    }
+
     return {
       short: shortExplanation,
       long: longExplanation,
-      recommendation
+      recommendation,
+      bidRecommendation
     };
   } catch (error) {
     console.error('Error calling Claude for variance explanation:', error);
@@ -209,6 +240,7 @@ export async function explainVariance(opts: {
       short: explanations.short,
       long: explanations.long,
       recommendation: explanations.recommendation,
+      bidRecommendation: explanations.bidRecommendation,
       at: new Date().toISOString(),
       model: 'claude-sonnet-4-20250514'
     };

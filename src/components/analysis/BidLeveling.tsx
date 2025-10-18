@@ -26,6 +26,7 @@ interface VarianceExplanation {
   short: string;
   long?: string;
   recommendation?: string;
+  bidRecommendation?: string;
   at: string;
   model?: string;
 }
@@ -258,6 +259,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
   const [isLoadingComparison, setIsLoadingComparison] = useState(false);
   const [comparisonError, setComparisonError] = useState<string | null>(null);
   const [bulkVarianceExplanations, setBulkVarianceExplanations] = useState<VarianceExplanation[]>([]);
+  const [overallAwardRecommendation, setOverallAwardRecommendation] = useState<VarianceExplanation | null>(null);
 
   const loadAnalyses = () => {
     const savedAnalyses = getAllAnalyses();
@@ -518,6 +520,53 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
 
         setComparisonError(null);
         console.log(`✅ Successfully generated ${successCount} variance explanations. They will be included in Excel exports.`);
+
+        // Generate overall award recommendation
+        console.log('🏆 Generating overall award recommendation based on all analyses...');
+        try {
+          const allVarianceData = selectedComparisons.map(comp => ({
+            contractor: comp.analysis.result.contractor_name,
+            totalAmount: comp.analysis.result.total_amount,
+            riskScore: comp.risk.score,
+            riskLevel: comp.risk.level,
+            rank: comp.rank,
+            varianceFromLow: comp.varianceFromLow
+          }));
+
+          const overallRecommendationResponse = await fetch('/api/variance/explain', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              rows: [{
+                division: 'OVERALL_RECOMMENDATION',
+                scopePath: 'Complete Bid Analysis',
+                discipline: activeDiscipline,
+                bids: Object.fromEntries(
+                  selectedComparisons.map(comp => [
+                    comp.analysis.result.contractor_name,
+                    comp.analysis.result.total_amount
+                  ])
+                ),
+                varianceAbs: Math.max(...selectedComparisons.map(c => c.analysis.result.total_amount)) - Math.min(...selectedComparisons.map(c => c.analysis.result.total_amount)),
+                variancePct: 0,
+                overallRecommendation: true, // Flag to indicate this is an overall recommendation
+                contractorData: allVarianceData
+              }],
+              selectedBids: selectedComparisons.map(comp => comp.analysis.result.contractor_name).sort(),
+              maxChars: 400 // Longer for overall recommendation
+            })
+          });
+
+          if (overallRecommendationResponse.ok) {
+            const overallRec = await overallRecommendationResponse.json();
+            setOverallAwardRecommendation(overallRec);
+            console.log('✅ Generated overall award recommendation');
+          } else {
+            console.warn('❌ Failed to generate overall award recommendation');
+          }
+        } catch (error) {
+          console.warn('❌ Error generating overall award recommendation:', error);
+        }
       } else {
         setComparisonError('Failed to generate variance explanations. Please check the console for details.');
       }
@@ -809,7 +858,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
             ) : (
               <>
                 <Search className="h-3 w-3 mr-2" />
-                Variance Analysis & Recommendation
+                Variance Analysis & Recommendations
               </>
             )}
           </button>
@@ -915,7 +964,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
               ) : (
                 <>
                   <Search className="h-3 w-3 mr-2" />
-                  Variance Analysis & Recommendation
+                  Variance Analysis & Recommendations
                 </>
               )}
             </button>
@@ -1027,7 +1076,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
               ) : (
                 <>
                   <Search className="h-3 w-3 mr-2" />
-                  Variance Analysis & Recommendation
+                  Variance Analysis & Recommendations
                 </>
               )}
             </button>
@@ -1163,7 +1212,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
                   ) : (
                     <>
                       <Search className="h-4 w-4 mr-2" />
-                      Variance Analysis & Recommendation
+                      Variance Analysis & Recommendations
                     </>
                   )}
                 </button>
@@ -1485,6 +1534,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
                           </div>
                         )}
 
+
                         {explanation.long && explanation.long !== explanation.short && (
                           <details className="mt-3">
                             <summary className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer font-medium">
@@ -1505,6 +1555,71 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
                   {bulkVarianceExplanations.filter(exp => exp.model === 'fallback' || exp.short.includes('Unable to')).length} explanations could not be generated due to API limitations.
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Overall Award Recommendation */}
+          {overallAwardRecommendation && (
+            <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-200 rounded-lg shadow-lg p-6">
+              <div className="flex items-center mb-4">
+                <div className="flex-shrink-0 w-10 h-10 bg-green-600 rounded-full flex items-center justify-center mr-4">
+                  <span className="text-white text-lg font-bold">🏆</span>
+                </div>
+                <div>
+                  <h4 className="text-xl font-bold text-green-900">
+                    Award Recommendation
+                  </h4>
+                  <p className="text-sm text-green-700">
+                    Based on comprehensive analysis of all {activeDiscipline === 'construction' ? 'divisions' : activeDiscipline === 'design' ? 'phases' : 'systems'}
+                  </p>
+                </div>
+              </div>
+
+              {overallAwardRecommendation.bidRecommendation && (
+                <div className="bg-white border border-green-200 rounded-lg p-4 mb-4">
+                  <div className="text-lg font-semibold text-green-900 mb-2">
+                    Recommended Award:
+                  </div>
+                  <div className="text-green-800 leading-relaxed">
+                    {overallAwardRecommendation.bidRecommendation}
+                  </div>
+                </div>
+              )}
+
+              <div className="bg-white border border-green-200 rounded-lg p-4">
+                <div className="text-sm font-medium text-green-900 mb-2">
+                  Analysis Summary:
+                </div>
+                <div className="text-green-800 leading-relaxed text-sm">
+                  {overallAwardRecommendation.short}
+                </div>
+
+                {overallAwardRecommendation.recommendation && (
+                  <div className="mt-3 pt-3 border-t border-green-100">
+                    <div className="text-sm font-medium text-green-900 mb-1">
+                      Key Considerations:
+                    </div>
+                    <div className="text-green-800 text-sm">
+                      {overallAwardRecommendation.recommendation}
+                    </div>
+                  </div>
+                )}
+
+                {overallAwardRecommendation.long && overallAwardRecommendation.long !== overallAwardRecommendation.short && (
+                  <details className="mt-3">
+                    <summary className="text-sm text-green-700 hover:text-green-900 cursor-pointer font-medium">
+                      View detailed analysis →
+                    </summary>
+                    <div className="mt-2 text-sm text-green-700 leading-relaxed border-l-2 border-green-200 pl-3">
+                      {overallAwardRecommendation.long}
+                    </div>
+                  </details>
+                )}
+              </div>
+
+              <div className="mt-4 text-xs text-green-600">
+                Generated {new Date(overallAwardRecommendation.at).toLocaleString()} • {overallAwardRecommendation.model}
+              </div>
             </div>
           )}
 
