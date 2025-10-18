@@ -5,6 +5,7 @@ export type VarianceExplanation = {
   key: string;          // hash of {division, scopePath/item, selectedBids, datasetVersion}
   short: string;        // 1–2 sentences (≤ 280 chars)
   long?: string;        // optional detailed text for future use
+  recommendation?: string; // actionable advice (≤ 200 chars)
   at: string;           // ISO timestamp
   model?: string;       // provenance
 };
@@ -25,7 +26,7 @@ function generateCacheKey(opts: {
       // Exclude varianceAbs and variancePct as they're calculated values that may differ slightly
     })),
     selectedBids: opts.selectedBids.sort(), // normalize order
-    v: 'v1' // version for cache invalidation
+    v: 'v2' // version for cache invalidation
   };
 
   const key = crypto
@@ -82,7 +83,7 @@ async function callClaudeForVarianceExplanation(
   rows: Record<string, unknown>[],
   selectedBids: string[],
   maxChars: number
-): Promise<{ short: string; long: string }> {
+): Promise<{ short: string; long: string; recommendation?: string }> {
   if (!process.env.CLAUDE_API_KEY) {
     throw new Error('Claude API key not configured');
   }
@@ -90,14 +91,16 @@ async function callClaudeForVarianceExplanation(
   const bidNames = selectedBids.length > 0 ? selectedBids.join(' vs ') : 'selected bids';
   const rowsData = JSON.stringify(rows, null, 2);
 
-  const prompt = `Analyze why costs differ between ${bidNames}. Provide TWO versions:
+  const prompt = `Analyze why costs differ between ${bidNames}. Provide THREE sections:
 
 1. SHORT (≤${maxChars} chars): Brief explanation of main variance drivers
-2. LONG (≤800 chars): Detailed analysis including specific scope differences, material choices, allowances, and recommendations
+2. LONG (≤800 chars): Detailed analysis including specific scope differences, material choices, allowances
+3. RECOMMENDATION (≤200 chars): Specific actionable advice for decision-making based on this variance
 
 Format as:
 SHORT: [brief explanation]
 LONG: [detailed analysis]
+RECOMMENDATION: [actionable advice]
 
 Call out scope adds/substitutions/allowances and likely cost drivers (materials, systems, labor). Use ONLY the provided data.
 
@@ -137,12 +140,14 @@ ${rowsData}`;
 
     const fullText = content.text.trim();
 
-    // Parse the SHORT and LONG sections
+    // Parse the SHORT, LONG, and RECOMMENDATION sections
     const shortMatch = fullText.match(/SHORT:\s*([\s\S]*?)(?=\nLONG:|$)/);
-    const longMatch = fullText.match(/LONG:\s*([\s\S]*?)$/);
+    const longMatch = fullText.match(/LONG:\s*([\s\S]*?)(?=\nRECOMMENDATION:|$)/);
+    const recommendationMatch = fullText.match(/RECOMMENDATION:\s*([\s\S]*?)$/);
 
     let shortExplanation = shortMatch?.[1]?.trim() || fullText.substring(0, maxChars);
     let longExplanation = longMatch?.[1]?.trim() || fullText;
+    let recommendation = recommendationMatch?.[1]?.trim();
 
     // Ensure length limits
     if (shortExplanation.length > maxChars) {
@@ -153,9 +158,14 @@ ${rowsData}`;
       longExplanation = longExplanation.substring(0, 797) + '...';
     }
 
+    if (recommendation && recommendation.length > 200) {
+      recommendation = recommendation.substring(0, 197) + '...';
+    }
+
     return {
       short: shortExplanation,
-      long: longExplanation
+      long: longExplanation,
+      recommendation
     };
   } catch (error) {
     console.error('Error calling Claude for variance explanation:', error);
@@ -198,6 +208,7 @@ export async function explainVariance(opts: {
       key,
       short: explanations.short,
       long: explanations.long,
+      recommendation: explanations.recommendation,
       at: new Date().toISOString(),
       model: 'claude-sonnet-4-20250514'
     };

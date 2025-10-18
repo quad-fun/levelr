@@ -25,6 +25,7 @@ interface VarianceExplanation {
   key: string;
   short: string;
   long?: string;
+  recommendation?: string;
   at: string;
   model?: string;
 }
@@ -207,10 +208,20 @@ function ExplainCell({
                 <div className="mb-2">
                   {showExpanded ? explanation.long : explanation.short}
                 </div>
+                {explanation.recommendation && (
+                  <div className="mt-2 pt-2 border-t border-blue-100">
+                    <div className="flex items-start gap-1">
+                      <span className="text-blue-600 text-xs">💡</span>
+                      <div className="text-xs text-blue-700 font-medium">
+                        {explanation.recommendation}
+                      </div>
+                    </div>
+                  </div>
+                )}
                 {explanation.long && explanation.long !== explanation.short && (
                   <button
                     onClick={() => setShowExpanded(!showExpanded)}
-                    className="text-blue-600 hover:text-blue-800 text-xs font-medium"
+                    className="text-blue-600 hover:text-blue-800 text-xs font-medium mt-2"
                   >
                     {showExpanded ? 'Show less' : 'Keep reading →'}
                   </button>
@@ -798,7 +809,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
             ) : (
               <>
                 <Search className="h-3 w-3 mr-2" />
-                Explain Variances
+                Variance Analysis & Recommendation
               </>
             )}
           </button>
@@ -904,7 +915,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
               ) : (
                 <>
                   <Search className="h-3 w-3 mr-2" />
-                  Explain Variances
+                  Variance Analysis & Recommendation
                 </>
               )}
             </button>
@@ -1016,7 +1027,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
               ) : (
                 <>
                   <Search className="h-3 w-3 mr-2" />
-                  Explain Variances
+                  Variance Analysis & Recommendation
                 </>
               )}
             </button>
@@ -1152,7 +1163,7 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
                   ) : (
                     <>
                       <Search className="h-4 w-4 mr-2" />
-                      Explain Variances
+                      Variance Analysis & Recommendation
                     </>
                   )}
                 </button>
@@ -1459,6 +1470,20 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
                         <div className="text-sm text-gray-700 leading-relaxed">
                           {explanation.short}
                         </div>
+
+                        {explanation.recommendation && (
+                          <div className="mt-3 p-2 bg-blue-50 border-l-2 border-blue-200 rounded-r">
+                            <div className="flex items-start gap-2">
+                              <span className="text-blue-600 text-sm">💡</span>
+                              <div>
+                                <div className="text-xs font-medium text-blue-800 mb-1">Recommendation:</div>
+                                <div className="text-sm text-blue-700">
+                                  {explanation.recommendation}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
 
                         {explanation.long && explanation.long !== explanation.short && (
                           <details className="mt-3">
