@@ -40,22 +40,30 @@ export function UpgradeButton() {
   };
 
   return (
-    <button
-      onClick={handleUpgrade}
-      disabled={isLoading}
-      className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-    >
-      {isLoading ? (
-        <div className="flex items-center justify-center">
-          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-          Processing...
-        </div>
-      ) : (
-        <>
-          <CreditCard className="w-4 h-4 inline mr-2" />
-          Upgrade to Pro
-        </>
-      )}
-    </button>
+    <div>
+      <button
+        onClick={handleUpgrade}
+        disabled={isLoading}
+        className="w-full bg-blue-600 text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+      >
+        {isLoading ? (
+          <div className="flex items-center justify-center">
+            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+            Processing...
+          </div>
+        ) : (
+          <>
+            <CreditCard className="w-4 h-4 inline mr-2" />
+            Upgrade to Pro
+          </>
+        )}
+      </button>
+      <p className="text-xs text-gray-600 text-center mt-2">
+        By continuing you agree to our{' '}
+        <a href="/terms" className="text-blue-600 hover:text-blue-800">Terms</a>
+        {' '}and{' '}
+        <a href="/privacy" className="text-blue-600 hover:text-blue-800">Privacy Policy</a>.
+      </p>
+    </div>
   );
 }

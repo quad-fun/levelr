@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import { AuthHeader } from "@/components/layout/AuthHeader";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 import "./globals.css";
 
 const isAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true';
@@ -29,10 +30,13 @@ export default function RootLayout({
   const content = (
     <html lang="en">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className={`${geistSans.variable} ${geistMono.variable} antialiased min-h-screen flex flex-col`}
       >
         <AuthHeader />
-        {children}
+        <main className="flex-1">
+          {children}
+        </main>
+        <SiteFooter />
       </body>
     </html>
   );
