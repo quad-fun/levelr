@@ -164,6 +164,9 @@ export interface AnalysisResult {
 
   // Comprehensive summary for LLM consumption and comparative analysis
   detailed_summary?: string;
+
+  // Enhanced Risk Analysis (Phase 1) - optional to maintain backward compatibility
+  riskSummary?: RiskSummary;
 }
 
 export interface MarketVariance {
@@ -177,6 +180,53 @@ export interface RiskAssessment {
   score: number;
   level: 'HIGH' | 'MEDIUM' | 'LOW';
   factors: string[];
+}
+
+// Enhanced Risk Analysis Types (Phase 1)
+export interface NormalizedRiskItem {
+  title: string;
+  severity: 'LOW' | 'MEDIUM' | 'HIGH';
+  discipline: 'construction' | 'design' | 'trade';
+  category: 'schedule' | 'market' | 'scope' | 'contract' | 'value_engineering';
+  description: string;
+  impact?: string;
+}
+
+export interface FollowUpAction {
+  title: string;
+  description: string;
+  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  category: string;
+  discipline: 'construction' | 'design' | 'trade';
+}
+
+export interface RiskCategory {
+  score: number;
+  level: 'HIGH' | 'MEDIUM' | 'LOW';
+  risks: NormalizedRiskItem[];
+}
+
+export interface DisciplineRiskAssessment {
+  discipline: 'construction' | 'design' | 'trade';
+  overallScore: number;
+  overallLevel: 'HIGH' | 'MEDIUM' | 'LOW';
+  categoryBreakdown: {
+    schedule: RiskCategory;
+    market: RiskCategory;
+    scope: RiskCategory;
+    contract: RiskCategory;
+    value_engineering: RiskCategory;
+  };
+  risks: NormalizedRiskItem[];
+  followUpActions: FollowUpAction[];
+}
+
+export interface RiskSummary {
+  topRisks: NormalizedRiskItem[]; // max 5
+  assessments: DisciplineRiskAssessment[]; // one per detected discipline
+  crossDisciplineRisks?: NormalizedRiskItem[]; // Phase 4: cross-discipline
+  generatedAt: string;
+  version: string;
 }
 
 export interface UsageData {

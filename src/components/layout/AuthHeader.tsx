@@ -13,8 +13,6 @@ import { AccessIndicator } from "@/components/auth/AccessControl";
 export function AuthHeader() {
   const isAuthEnabled = process.env.NEXT_PUBLIC_ENABLE_AUTH === 'true';
 
-  if (!isAuthEnabled) return null;
-
   return (
     <header className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -25,47 +23,66 @@ export function AuthHeader() {
             </Link>
           </div>
           <div className="flex items-center space-x-4">
-            <SignedIn>
-              <AccessIndicator />
-            </SignedIn>
+            {isAuthEnabled && (
+              <SignedIn>
+                <AccessIndicator />
+              </SignedIn>
+            )}
             <a
               href="/docs"
               className="text-gray-600 hover:text-blue-600 font-medium transition-colors"
             >
               How To Guide
             </a>
-            <SignedOut>
-              <SignInButton mode="modal">
-                <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                  Sign In
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
-                  Sign Up
-                </button>
-              </SignUpButton>
-            </SignedOut>
-            <SignedIn>
-              <UserButton
-                afterSignOutUrl="/"
-                appearance={{
-                  elements: {
-                    avatarBox: "w-8 h-8"
-                  }
-                }}
-                userProfileMode="modal"
+            {isAuthEnabled ? (
+              <>
+                <SignedOut>
+                  <SignInButton mode="modal" fallbackRedirectUrl="/analyze" signInFallbackRedirectUrl="/analyze">
+                    <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                      Sign In
+                    </button>
+                  </SignInButton>
+                  <SignUpButton mode="modal" fallbackRedirectUrl="/analyze" signInFallbackRedirectUrl="/analyze">
+                    <button className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium">
+                      Sign Up
+                    </button>
+                  </SignUpButton>
+                </SignedOut>
+                <SignedIn>
+                  <a
+                    href="/analyze"
+                    className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
+                  >
+                    Open App
+                  </a>
+                  <UserButton
+                    afterSignOutUrl="/"
+                    appearance={{
+                      elements: {
+                        avatarBox: "w-8 h-8"
+                      }
+                    }}
+                    userProfileMode="modal"
+                  >
+                    <UserButton.MenuItems>
+                      <UserButton.Link
+                        label="Profile & Billing"
+                        labelIcon={<span>👤</span>}
+                        href="/profile"
+                      />
+                      <UserButton.Action label="manageAccount" />
+                    </UserButton.MenuItems>
+                  </UserButton>
+                </SignedIn>
+              </>
+            ) : (
+              <a
+                href="/analyze"
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors"
               >
-                <UserButton.MenuItems>
-                  <UserButton.Link
-                    label="Profile & Billing"
-                    labelIcon={<span>👤</span>}
-                    href="/profile"
-                  />
-                  <UserButton.Action label="manageAccount" />
-                </UserButton.MenuItems>
-              </UserButton>
-            </SignedIn>
+                Get Started
+              </a>
+            )}
           </div>
         </div>
       </div>

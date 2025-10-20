@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
     return gateResult; // Return error response
   }
 
-  const { userId } = gateResult;
+  const { userId, flags } = gateResult;
 
   let blobUrl: string | null = null;
 
@@ -180,7 +180,23 @@ export async function POST(request: NextRequest) {
     // Record usage for analysis tracking
     await recordAnalysisUsage(userId);
 
-    return NextResponse.json({ analysis });
+    // Enhanced Risk Analysis (fail closed)
+    let enhancedAnalysis = analysis;
+    try {
+      console.log('[DEBUG] Design: About to run enhanced risk analysis, flags:', {
+        riskDisciplineAware: flags.riskDisciplineAware,
+        riskFollowUps: flags.riskFollowUps,
+        riskCrossDiscipline: flags.riskCrossDiscipline
+      });
+      const { generateEnhancedRiskSummary } = await import('@/lib/analysis/enhanced-risk-analyzer');
+      enhancedAnalysis = await generateEnhancedRiskSummary(analysis, flags);
+      console.log('[DEBUG] Design: Enhanced risk analysis completed, has riskSummary:', !!enhancedAnalysis.riskSummary);
+    } catch (error) {
+      // Fail closed: log error in dev but continue with original analysis
+      console.error('[Enhanced Risk Analysis] Design endpoint failed, returning original analysis:', error);
+    }
+
+    return NextResponse.json({ analysis: enhancedAnalysis });
 
   } catch (error) {
     // Clean up blob storage if used (even in error cases)

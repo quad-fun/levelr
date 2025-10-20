@@ -1,37 +1,11 @@
 import { auth } from "@clerk/nextjs/server";
-import { CheckCircle, Shield, Clock, TrendingUp, FileText, Zap, BarChart3, Building2, DollarSign, Target, ArrowRight, Play, Star } from 'lucide-react';
+import { CheckCircle, Shield, Clock, TrendingUp, FileText, Zap, BarChart3, Building2, DollarSign, Target, ArrowRight, Play } from 'lucide-react';
 
 export default async function LandingPage() {
   const { userId } = await auth();
 
   return (
-    <div className="min-h-screen bg-white">
-      {/* Navigation */}
-      <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
-            <div className="flex items-center">
-              <div className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Levelr
-              </div>
-            </div>
-            <div className="flex items-center space-x-8">
-              <a href="#features" className="text-gray-600 hover:text-blue-600 font-medium">Features</a>
-              <a href="#pricing" className="text-gray-600 hover:text-blue-600 font-medium">Pricing</a>
-              <a href="/docs" className="text-gray-600 hover:text-blue-600 font-medium">Docs</a>
-              {userId ? (
-                <a href="/analyze" className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                  Open App
-                </a>
-              ) : (
-                <a href="/analyze" className="bg-blue-600 text-white px-6 py-2 rounded-lg font-semibold hover:bg-blue-700 transition-colors">
-                  Get Started
-                </a>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+    <div className="bg-white">{/* Landing page content */}
 
       {/* Hero Section */}
       <section className="pt-20 pb-16 bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -123,15 +97,15 @@ export default async function LandingPage() {
       {/* Social Proof */}
       <section className="py-16 bg-gray-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-8">Trusted by Construction Professionals</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-8">Professional Construction Analysis Platform</h2>
           <div className="flex items-center justify-center space-x-8 opacity-60">
-            <div className="text-lg font-semibold">$500M+</div>
+            <div className="text-lg font-semibold">Multi-Discipline</div>
             <div className="text-gray-400">|</div>
-            <div className="text-lg font-semibold">Projects Analyzed</div>
+            <div className="text-lg font-semibold">AI-Powered</div>
             <div className="text-gray-400">|</div>
-            <div className="text-lg font-semibold">99.2%</div>
+            <div className="text-lg font-semibold">Secure Processing</div>
             <div className="text-gray-400">|</div>
-            <div className="text-lg font-semibold">Accuracy Rate</div>
+            <div className="text-lg font-semibold">Instant Results</div>
           </div>
         </div>
       </section>
@@ -164,10 +138,10 @@ export default async function LandingPage() {
               <div className="bg-purple-600 text-white p-4 rounded-2xl w-16 h-16 flex items-center justify-center mx-auto mb-6">
                 <Clock className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-4">Save 90% Time</h3>
+              <h3 className="text-xl font-bold text-gray-900 mb-4">Save Hours of Analysis</h3>
               <p className="text-gray-600">
                 What takes hours of manual review now happens in seconds. Structured outputs with CSI divisions,
-                risk scoring, and professional reports ready for stakeholders.
+                AIA phases, technical systems analysis, risk scoring, and professional reports ready for stakeholders.
               </p>
             </div>
 
@@ -212,7 +186,7 @@ export default async function LandingPage() {
                   </div>
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 mb-2">Bid Leveling & Comparison</h3>
-                    <p className="text-gray-600">Side-by-side comparison of up to 5 bids with automated variance detection and AI explanations for cost differences.</p>
+                    <p className="text-gray-600">Side-by-side comparison of up to 5 bids with automated variance detection, AI explanations for cost differences, and comprehensive award recommendations.</p>
                   </div>
                 </div>
 
@@ -288,112 +262,42 @@ export default async function LandingPage() {
         </div>
       </section>
 
-      {/* Testimonials */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">What Construction Pros Say</h2>
-          </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
-            <div className="bg-gray-50 p-8 rounded-2xl">
-              <div className="flex items-center mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-5 h-5 text-yellow-500 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-600 mb-6">
-                "Levelr caught a $200K pricing error that our team missed. The AI analysis is incredibly thorough."
-              </p>
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                  JS
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900">John Stevens</div>
-                  <div className="text-sm text-gray-600">Project Manager, Metro Construction</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 p-8 rounded-2xl">
-              <div className="flex items-center mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-5 h-5 text-yellow-500 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-600 mb-6">
-                "The bid leveling feature saves us hours of manual comparison. The variance explanations are spot-on."
-              </p>
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-purple-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                  MR
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900">Maria Rodriguez</div>
-                  <div className="text-sm text-gray-600">Senior Estimator, BuildRight Inc</div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-gray-50 p-8 rounded-2xl">
-              <div className="flex items-center mb-4">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="w-5 h-5 text-yellow-500 fill-current" />
-                ))}
-              </div>
-              <p className="text-gray-600 mb-6">
-                "Finally, a tool that understands construction. The CSI division analysis is exactly what we needed."
-              </p>
-              <div className="flex items-center">
-                <div className="w-12 h-12 bg-green-600 rounded-full flex items-center justify-center text-white font-bold mr-4">
-                  DL
-                </div>
-                <div>
-                  <div className="font-semibold text-gray-900">David Lee</div>
-                  <div className="text-sm text-gray-600">VP Operations, Summit Builders</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* Pricing CTA */}
-      <section id="pricing" className="py-20 bg-gradient-to-br from-blue-600 to-purple-700">
+      {/* Get Started CTA */}
+      <section id="get-started" className="py-20 bg-gradient-to-br from-blue-600 to-purple-700">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-4xl font-bold text-white mb-6">
-            Ready to Prevent Your Next Million-Dollar Mistake?
+            Ready to Revolutionize Your Bid Analysis?
           </h2>
           <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
-            Join thousands of construction professionals who trust Levelr for accurate bid analysis and risk detection.
+            Start analyzing construction bids with AI-powered insights and professional reporting capabilities.
           </p>
 
           <div className="bg-white rounded-2xl p-8 max-w-md mx-auto shadow-2xl">
             <div className="text-center">
-              <div className="text-4xl font-bold text-gray-900 mb-2">$49</div>
-              <div className="text-gray-600 mb-6">/month</div>
+              <div className="text-3xl font-bold text-gray-900 mb-2">Start Today</div>
+              <div className="text-gray-600 mb-6">Browser-based • Secure • Instant</div>
 
               <ul className="text-left space-y-3 mb-8">
                 <li className="flex items-center">
                   <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                  <span className="text-gray-700">Unlimited bid analysis</span>
+                  <span className="text-gray-700">Multi-discipline analysis</span>
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                  <span className="text-gray-700">All analysis types</span>
+                  <span className="text-gray-700">AI variance explanations</span>
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                  <span className="text-gray-700">Professional reports</span>
+                  <span className="text-gray-700">Professional PDF/Excel reports</span>
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                  <span className="text-gray-700">Variance explanations</span>
+                  <span className="text-gray-700">Risk assessment scoring</span>
                 </li>
                 <li className="flex items-center">
                   <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-                  <span className="text-gray-700">Priority support</span>
+                  <span className="text-gray-700">Project lifecycle management</span>
                 </li>
               </ul>
 
@@ -401,12 +305,12 @@ export default async function LandingPage() {
                 href="/analyze"
                 className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors flex items-center justify-center"
               >
-                Start Free Trial
+                Get Started Free
                 <ArrowRight className="w-5 h-5 ml-2" />
               </a>
 
               <p className="text-sm text-gray-500 mt-4">
-                No credit card required • Cancel anytime
+                No credit card required • Secure document processing
               </p>
             </div>
           </div>
@@ -430,9 +334,9 @@ export default async function LandingPage() {
               <h4 className="font-semibold mb-4">Product</h4>
               <ul className="space-y-2 text-gray-400">
                 <li><a href="/analyze" className="hover:text-white">Bid Analysis</a></li>
-                <li><a href="#" className="hover:text-white">Bid Leveling</a></li>
-                <li><a href="#" className="hover:text-white">RFP Generator</a></li>
-                <li><a href="#" className="hover:text-white">Project Management</a></li>
+                <li><a href="/analyze" className="hover:text-white">Bid Leveling</a></li>
+                <li><a href="/analyze" className="hover:text-white">RFP Generator</a></li>
+                <li><a href="/analyze" className="hover:text-white">Project Management</a></li>
               </ul>
             </div>
 
@@ -449,16 +353,16 @@ export default async function LandingPage() {
             <div>
               <h4 className="font-semibold mb-4">Company</h4>
               <ul className="space-y-2 text-gray-400">
-                <li><a href="#" className="hover:text-white">About</a></li>
-                <li><a href="#" className="hover:text-white">Contact</a></li>
-                <li><a href="#" className="hover:text-white">Privacy</a></li>
-                <li><a href="#" className="hover:text-white">Terms</a></li>
+                <li><a href="mailto:hello@levelr.app" className="hover:text-white">Contact</a></li>
+                <li><a href="/privacy" className="hover:text-white">Privacy Policy</a></li>
+                <li><a href="/terms" className="hover:text-white">Terms of Service</a></li>
+                <li><a href="/refund" className="hover:text-white">Refund Policy</a></li>
               </ul>
             </div>
           </div>
 
           <div className="border-t border-gray-800 mt-8 pt-8 text-center text-gray-400">
-            <p>&copy; 2024 Levelr. All rights reserved.</p>
+            <p>&copy; 2024 Dandolo Digital LLC. All rights reserved.</p>
           </div>
         </div>
       </footer>

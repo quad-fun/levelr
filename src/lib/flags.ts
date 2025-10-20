@@ -5,7 +5,8 @@ export type FlagName =
   | "bidAnalysis" | "designAnalysis" | "tradeAnalysis" | "summaryGeneration"
   | "generateRfp" | "projectManagement" | "analysisHistory" | "bidLeveling"
   | "blVarianceExplanation" | "blVarianceAnalysis" | "blComparativeAnalysis"
-  | "exportBidAnalysis" | "exportBidLeveling" | "exportRfp" | "blobStorage";
+  | "exportBidAnalysis" | "exportBidLeveling" | "exportRfp" | "blobStorage"
+  | "riskDisciplineAware" | "riskFollowUps" | "riskCrossDiscipline";
 
 export type Flags = {
   // platform
@@ -31,6 +32,11 @@ export type Flags = {
   blVarianceExplanation: boolean;
   blVarianceAnalysis: boolean;
   blComparativeAnalysis: boolean;
+
+  // enhanced risk analysis (Phase 1)
+  riskDisciplineAware: boolean;
+  riskFollowUps: boolean;
+  riskCrossDiscipline: boolean;
 
   // exports
   exportBidAnalysis: boolean;
@@ -68,6 +74,11 @@ function getEnvDefaults(): Flags {
     blVarianceAnalysis: process.env.NEXT_PUBLIC_ENABLE_BL_VARIANCE_ANALYSIS !== 'false', // default true
     blComparativeAnalysis: process.env.NEXT_PUBLIC_ENABLE_BL_COMPARATIVE_ANALYSIS !== 'false', // default true
 
+    // enhanced risk analysis (Phase 1)
+    riskDisciplineAware: process.env.NEXT_PUBLIC_ENABLE_RISK_DISCIPLINE_AWARE !== 'false', // default true
+    riskFollowUps: process.env.NEXT_PUBLIC_ENABLE_RISK_FOLLOW_UPS !== 'false', // default true
+    riskCrossDiscipline: process.env.NEXT_PUBLIC_ENABLE_RISK_CROSS_DISCIPLINE === 'true', // default false (Phase 4)
+
     // exports
     exportBidAnalysis: process.env.NEXT_PUBLIC_ENABLE_EXPORT_BID_ANALYSIS !== 'false', // default true
     exportBidLeveling: process.env.NEXT_PUBLIC_ENABLE_EXPORT_BID_LEVELING !== 'false', // default true
@@ -102,6 +113,10 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         projectManagement: false,
         analysisHistory: true,
         blobStorage: true,
+        // enhanced risk analysis
+        riskDisciplineAware: true,
+        riskFollowUps: true,
+        riskCrossDiscipline: false,
       };
 
     case "pro":
@@ -125,6 +140,10 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         projectManagement: false,
         analysisHistory: true,
         blobStorage: true,
+        // enhanced risk analysis
+        riskDisciplineAware: true,
+        riskFollowUps: true,
+        riskCrossDiscipline: true, // Pro gets cross-discipline analysis
       };
 
     case "team":
@@ -230,6 +249,10 @@ function getAdminPreset(): Flags {
     exportBidLeveling: true,
     exportRfp: true,
     blobStorage: true,
+    // enhanced risk analysis
+    riskDisciplineAware: true,
+    riskFollowUps: true,
+    riskCrossDiscipline: true,
   };
 }
 

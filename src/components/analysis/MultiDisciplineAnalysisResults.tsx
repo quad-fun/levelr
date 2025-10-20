@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { analyzeMarketVariance } from '@/lib/analysis/market-analyzer';
 import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
+import RiskSummaryComponent from './RiskSummary';
 
 interface MultiDisciplineAnalysisResultsProps {
   analysis: AnalysisResult;
@@ -1116,6 +1117,32 @@ function RiskTab({
           <p>Risk analysis not available for this proposal.</p>
         </div>
       )}
+
+      {/* Enhanced Risk Analysis */}
+      {(() => {
+        console.log('[DEBUG] MultiDisciplineAnalysisResults - RiskTab - checking riskSummary:', {
+          hasRiskSummary: !!analysis.riskSummary,
+          riskSummaryKeys: analysis.riskSummary ? Object.keys(analysis.riskSummary) : 'none',
+          contractorName: analysis.contractor_name,
+          totalAmount: analysis.total_amount
+        });
+
+        if (analysis.riskSummary) {
+          return <RiskSummaryComponent riskSummary={analysis.riskSummary} />;
+        } else {
+          return (
+            <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+              <p className="text-yellow-800">Enhanced Risk Analysis: No risk summary data found</p>
+              <p className="text-xs text-yellow-600 mt-1">
+                Contractor: {analysis.contractor_name} | Amount: ${analysis.total_amount?.toLocaleString()}
+              </p>
+              <p className="text-xs text-yellow-600 mt-1">
+                Check server logs for enhanced risk analysis execution
+              </p>
+            </div>
+          );
+        }
+      })()}
 
       {/* Document Quality Assessment */}
       <div>

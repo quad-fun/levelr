@@ -6,6 +6,7 @@ import { CSI_DIVISIONS } from '@/lib/analysis/csi-analyzer';
 import { analyzeMarketVariance } from '@/lib/analysis/market-analyzer';
 import { calculateProjectRisk } from '@/lib/analysis/risk-analyzer';
 import { Building, Calendar, DollarSign, AlertTriangle, CheckCircle, TrendingUp, ChevronDown, ChevronUp, Eye } from 'lucide-react';
+import RiskSummaryComponent from './RiskSummary';
 
 interface AnalysisResultsProps {
   analysis: AnalysisResult;
@@ -952,6 +953,26 @@ export default function AnalysisResults({ analysis }: AnalysisResultsProps) {
           </div>
         </div>
       )}
+
+      {/* Enhanced Risk Analysis Summary */}
+      {(() => {
+        console.log('[DEBUG] AnalysisResults - Full analysis object:', analysis);
+        console.log('[DEBUG] AnalysisResults - checking riskSummary:', {
+          hasRiskSummary: !!analysis.riskSummary,
+          riskSummaryKeys: analysis.riskSummary ? Object.keys(analysis.riskSummary) : 'none',
+          contractorName: analysis.contractor_name
+        });
+        return analysis.riskSummary ? (
+          <RiskSummaryComponent riskSummary={analysis.riskSummary} />
+        ) : (
+          <div className="p-4 bg-yellow-50 border border-yellow-200 rounded">
+            <p className="text-yellow-800">Enhanced Risk Analysis: No risk summary data found</p>
+            <p className="text-xs text-yellow-600 mt-1">
+              Contractor: {analysis.contractor_name} | Amount: ${analysis.total_amount?.toLocaleString()}
+            </p>
+          </div>
+        );
+      })()}
 
     </div>
   );
