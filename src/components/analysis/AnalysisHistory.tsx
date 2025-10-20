@@ -8,7 +8,7 @@ import { formatDistanceToNow } from 'date-fns';
 import {
   Trash2, TrendingUp, BarChart3, Building, Calendar, DollarSign, AlertTriangle,
   FileText, Users, Download, ChevronDown,
-  ChevronUp, Target, TrendingDown, Award, Clock, Sheet, Flag, Shield
+  ChevronUp, Target, TrendingDown, Award, Clock, Sheet, Flag, Shield, Palette
 } from 'lucide-react';
 import RiskSummaryComponent from './RiskSummary';
 
@@ -213,9 +213,9 @@ export default function AnalysisHistory() {
           <div className="text-center bg-purple-50 rounded-lg p-4">
             <Target className="h-6 w-6 text-purple-600 mx-auto mb-2" />
             <p className="text-2xl font-bold text-purple-600">
-              {marketIntel.divisionBenchmarks ? Object.keys(marketIntel.divisionBenchmarks).length : 0}
+              {Object.keys(marketIntel.disciplineBreakdown).length}
             </p>
-            <p className="text-sm text-gray-600">CSI Divisions</p>
+            <p className="text-sm text-gray-600">Disciplines Analyzed</p>
           </div>
           <div className="text-center bg-orange-50 rounded-lg p-4">
             <AlertTriangle className="h-6 w-6 text-orange-600 mx-auto mb-2" />
@@ -243,6 +243,26 @@ export default function AnalysisHistory() {
             ))}
           </div>
         </div>
+
+        {/* Discipline Distribution Visualization */}
+        {Object.keys(marketIntel.disciplineBreakdown).length > 1 && (
+          <div className="mt-4 bg-gray-50 rounded-lg p-4">
+            <h4 className="font-semibold text-gray-900 mb-3">Portfolio Discipline Distribution</h4>
+            <div className="flex flex-wrap gap-6">
+              {Object.entries(marketIntel.disciplineBreakdown).map(([discipline, count]) => (
+                <div key={discipline} className="flex items-center">
+                  <div className={`w-4 h-4 rounded-full mr-2 ${
+                    discipline === 'construction' ? 'bg-orange-500' :
+                    discipline === 'design' ? 'bg-purple-500' : 'bg-blue-500'
+                  }`}></div>
+                  <span className="text-sm font-medium capitalize">
+                    {discipline}: {count} projects ({((count / marketIntel.totalProjects) * 100).toFixed(0)}%)
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Comprehensive Analysis History */}
@@ -492,7 +512,7 @@ export default function AnalysisHistory() {
                       <div className="mt-6 bg-white rounded-lg p-4 border">
                         <h6 className="font-semibold text-gray-900 mb-3 flex items-center">
                           <Shield className="h-4 w-4 mr-2 text-blue-600" />
-                          Enhanced Risk Analysis
+                          Enhanced Risk Analysis & Recommendations
                         </h6>
                         <div className="bg-gray-50 rounded-lg p-3">
                           <RiskSummaryComponent riskSummary={analysis.result.riskSummary} isCompact={true} />
@@ -596,6 +616,53 @@ export default function AnalysisHistory() {
                                 {sub.scope_description && (
                                   <p className="text-xs text-gray-600">{sub.scope_description}</p>
                                 )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* AIA Phases Cost Breakdown for Design */}
+                    {analysis.result.discipline === 'design' && analysis.result.aia_phases && (
+                      <div className="border rounded-lg">
+                        <button
+                          onClick={() => toggleSection('aiaPhases')}
+                          className="w-full flex justify-between items-center p-4 text-left hover:bg-gray-50 transition-colors"
+                        >
+                          <span className="font-medium flex items-center">
+                            <Palette className="h-4 w-4 mr-2" />
+                            AIA Phases Cost Breakdown (${analysis.result.total_amount.toLocaleString()})
+                          </span>
+                          {expandedSection === 'aiaPhases' ?
+                            <ChevronUp className="h-4 w-4" /> :
+                            <ChevronDown className="h-4 w-4" />
+                          }
+                        </button>
+                        {expandedSection === 'aiaPhases' && (
+                          <div className="border-t p-4 space-y-2 max-h-64 overflow-y-auto">
+                            {Object.entries(analysis.result.aia_phases || {}).map(([phaseKey, phase]) => (
+                              <div key={phaseKey} className="flex justify-between items-center py-2 px-3 bg-blue-50 rounded">
+                                <div className="flex-1">
+                                  <span className="text-sm font-medium">{phase.phase_name}</span>
+                                  {phase.deliverables && phase.deliverables.length > 0 && (
+                                    <p className="text-xs text-gray-600">
+                                      {phase.deliverables.slice(0, 3).map(d => d.description).join(', ')}
+                                      {phase.deliverables.length > 3 && ` +${phase.deliverables.length - 3} more`}
+                                    </p>
+                                  )}
+                                  {phase.scope_notes && (
+                                    <p className="text-xs text-gray-500">{phase.scope_notes}</p>
+                                  )}
+                                </div>
+                                <div className="text-right">
+                                  <span className="font-medium">
+                                    ${(phase.fee_amount || 0).toLocaleString()}
+                                  </span>
+                                  <span className="text-xs text-gray-500 block">
+                                    {(phase.percentage_of_total || 0).toFixed(1)}%
+                                  </span>
+                                </div>
                               </div>
                             ))}
                           </div>

@@ -94,7 +94,7 @@ export default function MultiDisciplineAnalysisResults({
     { id: 'scope', name: disciplineConfig.scopeLabel, icon: disciplineConfig.icon },
     { id: 'soft-costs', name: analysis.discipline === 'design' ? 'Uncategorized' : 'Soft Costs', icon: Building },
     { id: 'commercial', name: 'Commercial', icon: DollarSign },
-    { id: 'risk', name: 'Risk Analysis', icon: Shield }
+    { id: 'risk', name: 'Risk Analysis & Recommendations', icon: Shield }
   ];
 
   return (
@@ -293,6 +293,36 @@ function OverviewTab({
               <h3 className="font-semibold">Market Analysis</h3>
               <p className="text-sm text-gray-700">{marketVariance.message}</p>
               <p className="text-xs text-gray-600 mt-1">{marketVariance.recommendation}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Enhanced Risk Analysis Indicator */}
+      {analysis.riskSummary && (
+        <div className="rounded-lg p-4 border-l-4 bg-orange-50 border-orange-400">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="p-2 rounded-full bg-orange-100">
+                <AlertTriangle className="h-5 w-5 text-orange-600" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold">Enhanced Risk Analysis Available</h3>
+                <p className="text-sm text-gray-700">
+                  {analysis.riskSummary.topRisks?.length || 0} risks identified with actionable recommendations
+                </p>
+                <p className="text-xs text-gray-600 mt-1">
+                  Review detailed risk assessment and follow-up actions in the Risk Analysis & Recommendations tab
+                </p>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-sm font-medium text-orange-700">
+                {analysis.riskSummary.topRisks?.filter(r => r.severity === 'HIGH').length || 0} High
+              </div>
+              <div className="text-xs text-gray-600">
+                {analysis.riskSummary.topRisks?.filter(r => r.severity === 'MEDIUM').length || 0} Medium
+              </div>
             </div>
           </div>
         </div>

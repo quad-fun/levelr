@@ -661,22 +661,47 @@ async function analyzeDesignScheduleRisks(
   let riskScore = 0;
 
   // Check for incomplete phase coverage
-  const standardPhases = ['SD', 'DD', 'CD', 'BN', 'CA'];
-  const providedPhases = analysis.aia_phases ? Object.keys(analysis.aia_phases) : [];
-  const missingPhases = standardPhases.filter(phase => !providedPhases.some(p => p.includes(phase)));
+  const standardPhases = [
+    { code: 'SD', keys: ['schematic_design', 'schematic', 'sd'] },
+    { code: 'DD', keys: ['design_development', 'design_dev', 'dd'] },
+    { code: 'CD', keys: ['construction_documents', 'construction_docs', 'cd'] },
+    { code: 'BN', keys: ['bidding', 'bidding_negotiation', 'bid_negotiation', 'bn'] },
+    { code: 'CA', keys: ['construction_administration', 'construction_admin', 'ca'] }
+  ];
 
-  if (missingPhases.length > 2) {
+  const providedPhases = analysis.aia_phases ? Object.keys(analysis.aia_phases) : [];
+  const missingPhases = standardPhases.filter(phase =>
+    !providedPhases.some(providedPhase =>
+      phase.keys.some(key =>
+        providedPhase.toLowerCase().includes(key.toLowerCase())
+      )
+    )
+  ).map(phase => phase.code);
+
+  if (missingPhases.length >= 3) {
     const risk = {
       title: 'Incomplete Design Phase Coverage',
       severity: 'HIGH' as const,
       discipline: 'design' as const,
-      category: 'schedule' as const,
+      category: 'scope' as const,
       description: `Missing ${missingPhases.length} standard AIA phases: ${missingPhases.join(', ')}`,
-      impact: 'Design schedule may require additional phases, extending timeline'
+      impact: 'Significant design scope gaps may require additional contracts and extend timeline'
     };
     risks.push(risk);
     category.risks.push(risk);
     riskScore += 50;
+  } else if (missingPhases.length === 2) {
+    const risk = {
+      title: 'Limited Design Phase Coverage',
+      severity: 'MEDIUM' as const,
+      discipline: 'design' as const,
+      category: 'scope' as const,
+      description: `Missing ${missingPhases.length} AIA phases: ${missingPhases.join(', ')}`,
+      impact: 'Some design phases not included in current scope'
+    };
+    risks.push(risk);
+    category.risks.push(risk);
+    riskScore += 25;
 
     if (flags.riskFollowUps) {
       followUpActions.push({
@@ -709,6 +734,57 @@ async function analyzeDesignScheduleRisks(
       risks.push(risk);
       category.risks.push(risk);
       riskScore += 30;
+    }
+
+    // Check individual phase percentages against typical AIA standards
+    const typicalPhasePercentages = {
+      'SD': { min: 10, max: 20, typical: 15 },
+      'DD': { min: 15, max: 25, typical: 20 },
+      'CD': { min: 35, max: 50, typical: 40 },
+      'BN': { min: 2, max: 8, typical: 5 },
+      'CA': { min: 15, max: 25, typical: 20 }
+    };
+
+    for (const [phaseKey, phaseData] of Object.entries(analysis.aia_phases)) {
+      const percentage = phaseData.percentage_of_total || 0;
+
+      // Try to identify which standard phase this corresponds to
+      let standardPhase = null;
+      if (phaseKey.toLowerCase().includes('schematic')) standardPhase = 'SD';
+      else if (phaseKey.toLowerCase().includes('design_development')) standardPhase = 'DD';
+      else if (phaseKey.toLowerCase().includes('construction_documents')) standardPhase = 'CD';
+      else if (phaseKey.toLowerCase().includes('bidding')) standardPhase = 'BN';
+      else if (phaseKey.toLowerCase().includes('construction_administration')) standardPhase = 'CA';
+
+      if (standardPhase && typicalPhasePercentages[standardPhase]) {
+        const typical = typicalPhasePercentages[standardPhase];
+
+        if (percentage > typical.max) {
+          const risk = {
+            title: `Unusually High ${standardPhase} Phase Fee`,
+            severity: 'MEDIUM' as const,
+            discipline: 'design' as const,
+            category: 'scope' as const,
+            description: `${phaseData.phase_name}: ${percentage.toFixed(1)}% (typical: ${typical.typical}%)`,
+            impact: 'Phase may include non-standard scope or indicate scope creep'
+          };
+          risks.push(risk);
+          category.risks.push(risk);
+          riskScore += 20;
+        } else if (percentage < typical.min) {
+          const risk = {
+            title: `Unusually Low ${standardPhase} Phase Fee`,
+            severity: 'MEDIUM' as const,
+            discipline: 'design' as const,
+            category: 'scope' as const,
+            description: `${phaseData.phase_name}: ${percentage.toFixed(1)}% (typical: ${typical.typical}%)`,
+            impact: 'Phase scope may be incomplete or understaffed'
+          };
+          risks.push(risk);
+          category.risks.push(risk);
+          riskScore += 20;
+        }
+      }
     }
   }
 

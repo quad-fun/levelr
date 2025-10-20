@@ -14,7 +14,7 @@ interface RiskSummaryProps {
 export default function RiskSummaryComponent({ riskSummary, isCompact = false }: RiskSummaryProps) {
   const [expandedAssessments, setExpandedAssessments] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
-  const [showFollowUps, setShowFollowUps] = useState(false);
+  const [showFollowUps, setShowFollowUps] = useState(true);
 
   const toggleAssessment = (discipline: string) => {
     const newExpanded = new Set(expandedAssessments);
@@ -146,9 +146,9 @@ export default function RiskSummaryComponent({ riskSummary, isCompact = false }:
             <p className="text-xs font-medium text-gray-700 mb-2">Top Recommended Actions:</p>
             <div className="space-y-1">
               {topActions.map((action, index) => (
-                <div key={index} className="flex items-center text-xs text-gray-600">
-                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2 flex-shrink-0"></div>
-                  <span className="truncate">{action.action}</span>
+                <div key={index} className="flex items-start text-xs text-gray-600">
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2 mt-1 flex-shrink-0"></div>
+                  <span className="flex-1 leading-tight">{action.title}</span>
                 </div>
               ))}
             </div>
@@ -163,7 +163,7 @@ export default function RiskSummaryComponent({ riskSummary, isCompact = false }:
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <AlertTriangle className="h-5 w-5 text-orange-500" />
-          <h3 className="text-lg font-semibold text-gray-900">Risk Analysis</h3>
+          <h3 className="text-lg font-semibold text-gray-900">Risk Analysis & Recommendations</h3>
           <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
             v{riskSummary.version}
           </span>
