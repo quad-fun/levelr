@@ -5,11 +5,12 @@ import { getAllAnalyses, getMarketIntelligence, deleteAnalysis, SavedAnalysis } 
 import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import { formatDistanceToNow } from 'date-fns';
-import { 
-  Trash2, TrendingUp, BarChart3, Building, Calendar, DollarSign, AlertTriangle, 
-  FileText, Users, Download, ChevronDown, 
-  ChevronUp, Target, TrendingDown, Award, Clock, Sheet, Flag
+import {
+  Trash2, TrendingUp, BarChart3, Building, Calendar, DollarSign, AlertTriangle,
+  FileText, Users, Download, ChevronDown,
+  ChevronUp, Target, TrendingDown, Award, Clock, Sheet, Flag, Shield
 } from 'lucide-react';
+import RiskSummaryComponent from './RiskSummary';
 
 export default function AnalysisHistory() {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
@@ -386,6 +387,12 @@ export default function AnalysisHistory() {
                           <span>{analysis.result.timeline}</span>
                         </div>
                       )}
+                      {analysis.result.riskSummary && (
+                        <div className="flex items-center">
+                          <Shield className="h-4 w-4 mr-1 text-blue-600" />
+                          <span>Enhanced Risk Analysis</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -476,6 +483,19 @@ export default function AnalysisHistory() {
                               <span className="text-sm text-gray-700">{factor}</span>
                             </div>
                           ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Enhanced Risk Analysis */}
+                    {analysis.result.riskSummary && (
+                      <div className="mt-6 bg-white rounded-lg p-4 border">
+                        <h6 className="font-semibold text-gray-900 mb-3 flex items-center">
+                          <Shield className="h-4 w-4 mr-2 text-blue-600" />
+                          Enhanced Risk Analysis
+                        </h6>
+                        <div className="bg-gray-50 rounded-lg p-3">
+                          <RiskSummaryComponent riskSummary={analysis.result.riskSummary} isCompact={true} />
                         </div>
                       </div>
                     )}

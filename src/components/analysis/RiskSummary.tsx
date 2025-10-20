@@ -8,9 +8,10 @@ import { useState } from 'react';
 
 interface RiskSummaryProps {
   riskSummary: RiskSummary;
+  isCompact?: boolean;
 }
 
-export default function RiskSummaryComponent({ riskSummary }: RiskSummaryProps) {
+export default function RiskSummaryComponent({ riskSummary, isCompact = false }: RiskSummaryProps) {
   const [expandedAssessments, setExpandedAssessments] = useState<Set<string>>(new Set());
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [showFollowUps, setShowFollowUps] = useState(false);
@@ -95,6 +96,67 @@ export default function RiskSummaryComponent({ riskSummary }: RiskSummaryProps) 
   const allFollowUps: FollowUpAction[] = riskSummary.assessments.flatMap(assessment =>
     assessment.followUpActions || []
   );
+
+  // Compact view for Analysis History
+  if (isCompact) {
+    const highRisks = riskSummary.topRisks?.filter(risk => risk.severity === 'HIGH') || [];
+    const mediumRisks = riskSummary.topRisks?.filter(risk => risk.severity === 'MEDIUM') || [];
+    const topActions = allFollowUps.slice(0, 3);
+
+    return (
+      <div className="space-y-3">
+        {/* Risk Summary Stats */}
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-gray-600">
+            {riskSummary.topRisks?.length || 0} risks identified, {allFollowUps.length} actions recommended
+          </span>
+          <span className="text-xs text-gray-500">
+            v{riskSummary.version}
+          </span>
+        </div>
+
+        {/* Top 3 Priority Risks */}
+        {riskSummary.topRisks && riskSummary.topRisks.length > 0 && (
+          <div className="space-y-2">
+            {riskSummary.topRisks.slice(0, 3).map((risk, index) => (
+              <div
+                key={index}
+                className={`p-3 rounded-md border text-sm ${getSeverityColor(risk.severity)}`}
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 flex-1">
+                    {getSeverityIcon(risk.severity)}
+                    <span className="font-medium truncate">{risk.title}</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-white bg-opacity-60">
+                      {getDisciplineLabel(risk.discipline)}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-xs mt-1 line-clamp-2">{risk.description}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Top Follow-up Actions */}
+        {topActions.length > 0 && (
+          <div className="pt-2 border-t border-gray-200">
+            <p className="text-xs font-medium text-gray-700 mb-2">Top Recommended Actions:</p>
+            <div className="space-y-1">
+              {topActions.map((action, index) => (
+                <div key={index} className="flex items-center text-xs text-gray-600">
+                  <div className="w-1.5 h-1.5 bg-blue-400 rounded-full mr-2 flex-shrink-0"></div>
+                  <span className="truncate">{action.action}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
