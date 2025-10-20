@@ -170,27 +170,8 @@ export async function POST(request: NextRequest) {
     try {
       analysis = await analyzeDocumentDirectly(finalProcessedDoc);
     } catch (error) {
-      console.error('Claude analysis failed, using mock data for testing enhanced risk analysis:', error);
-
-      // Temporary mock data to test enhanced risk analysis
-      analysis = {
-        contractor_name: "Test Contractor",
-        total_amount: 500000,
-        project_name: "Test Project",
-        discipline: "construction" as const,
-        csi_divisions: {
-          "03": { cost: 150000, items: ["Concrete work"], estimatedPercentage: 30 },
-          "05": { cost: 100000, items: ["Metal work"], estimatedPercentage: 20 },
-          "09": { cost: 80000, items: ["Finishes"], estimatedPercentage: 16 }
-        },
-        project_overhead: {
-          total_overhead: 50000
-        },
-        timeline: "6 months construction",
-        assumptions: ["Standard construction methods"],
-        exclusions: ["Site preparation", "Permits"],
-        document_quality: "professional_typed" as const
-      };
+      console.error('Claude analysis failed:', error);
+      throw error; // Rethrow the error to be handled properly
     }
 
     // Clean up blob storage if used

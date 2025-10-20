@@ -432,6 +432,188 @@ export function exportConstructionAnalysisToPDF(analysis: AnalysisResult): void 
     }
   }
 
+  // Enhanced Risk Analysis Section
+  if (analysis.riskSummary) {
+    checkPageBreak(40);
+
+    // Risk Summary Header
+    doc.setFillColor(254, 226, 226); // Red-100
+    doc.setDrawColor(239, 68, 68); // Red-500
+    doc.rect(margin, yPosition - 5, contentWidth, 20, 'FD');
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(153, 27, 27); // Red-800
+    doc.text('Enhanced Risk Analysis & Recommendations', margin + 5, yPosition + 8);
+
+    doc.setTextColor(0, 0, 0);
+    yPosition += 25;
+
+    // Overall Risk Level
+    checkPageBreak(20);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Overall Risk Assessment:', margin, yPosition);
+    yPosition += 8;
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+
+    // Get overall risk level from assessments
+    const constructionAssessment = analysis.riskSummary.assessments?.find(a => a.discipline === 'construction');
+    const overallLevel = constructionAssessment?.overallLevel || 'MEDIUM';
+    const overallScore = constructionAssessment?.overallScore || 50;
+
+    // Color code the risk level
+    if (overallLevel === 'HIGH') {
+      doc.setTextColor(153, 27, 27); // Red-800
+    } else if (overallLevel === 'MEDIUM') {
+      doc.setTextColor(146, 64, 14); // Yellow-800
+    } else {
+      doc.setTextColor(20, 83, 45); // Green-800
+    }
+
+    doc.text(`Risk Level: ${overallLevel} (Score: ${overallScore}/100)`, margin + 5, yPosition);
+    doc.setTextColor(0, 0, 0);
+    yPosition += 12;
+
+    // Top Priority Risks
+    if (analysis.riskSummary.topRisks && analysis.riskSummary.topRisks.length > 0) {
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Priority Risk Items:', margin, yPosition);
+      yPosition += 10;
+
+      const topRisks = analysis.riskSummary.topRisks.slice(0, 5); // Show top 5
+
+      topRisks.forEach((risk, index) => {
+        checkPageBreak(15);
+
+        // Risk severity indicator
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+
+        if (risk.severity === 'HIGH') {
+          doc.setTextColor(153, 27, 27);
+          doc.text('[HIGH]', margin + 5, yPosition);
+        } else if (risk.severity === 'MEDIUM') {
+          doc.setTextColor(146, 64, 14);
+          doc.text('⚠️ MEDIUM', margin + 5, yPosition);
+        } else {
+          doc.setTextColor(20, 83, 45);
+          doc.text('✓ LOW', margin + 5, yPosition);
+        }
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(risk.title, margin + 35, yPosition);
+        yPosition += 6;
+
+        // Risk description
+        doc.setFont('helvetica', 'normal');
+        const description = doc.splitTextToSize(risk.description, contentWidth - 40);
+        if (Array.isArray(description)) {
+          description.forEach((line: string) => {
+            checkPageBreak(5);
+            doc.text(line, margin + 35, yPosition);
+            yPosition += 5;
+          });
+        } else {
+          doc.text(description, margin + 35, yPosition);
+          yPosition += 5;
+        }
+
+        if (risk.impact) {
+          doc.setFont('helvetica', 'italic');
+          doc.text(`Impact: ${risk.impact}`, margin + 35, yPosition);
+          yPosition += 8;
+        } else {
+          yPosition += 3;
+        }
+      });
+    }
+
+    // Follow-up Actions
+    const allFollowUps = analysis.riskSummary.assessments?.flatMap(assessment =>
+      assessment.followUpActions || []
+    ) || [];
+
+    if (allFollowUps.length > 0) {
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Recommended Follow-up Actions:', margin, yPosition);
+      yPosition += 10;
+
+      const priorityActions = allFollowUps
+        .sort((a, b) => {
+          const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+          return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+        })
+        .slice(0, 8); // Show top 8 actions
+
+      priorityActions.forEach((action, index) => {
+        checkPageBreak(12);
+
+        // Priority indicator
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+
+        if (action.priority === 'HIGH') {
+          doc.setTextColor(153, 27, 27);
+          doc.text('[HIGH]', margin + 5, yPosition);
+        } else if (action.priority === 'MEDIUM') {
+          doc.setTextColor(146, 64, 14);
+          doc.text('[MEDIUM]', margin + 5, yPosition);
+        } else {
+          doc.setTextColor(20, 83, 45);
+          doc.text('[LOW]', margin + 5, yPosition);
+        }
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(action.title, margin + 40, yPosition);
+        yPosition += 6;
+
+        // Action description
+        if (action.description) {
+          doc.setFont('helvetica', 'normal');
+          const description = doc.splitTextToSize(action.description, contentWidth - 45);
+          if (Array.isArray(description)) {
+            description.forEach((line: string) => {
+              checkPageBreak(5);
+              doc.text(line, margin + 40, yPosition);
+              yPosition += 5;
+            });
+          } else {
+            doc.text(description, margin + 40, yPosition);
+            yPosition += 5;
+          }
+        }
+        yPosition += 3;
+      });
+
+      if (allFollowUps.length > 8) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(10);
+        doc.text(`+ ${allFollowUps.length - 8} additional recommendations available in detailed analysis`, margin + 5, yPosition);
+        yPosition += 10;
+      }
+    }
+
+    // Risk Analysis Footer
+    checkPageBreak(15);
+    doc.setFillColor(239, 246, 255); // Blue-50
+    doc.setDrawColor(191, 219, 254); // Blue-200
+    doc.rect(margin, yPosition - 5, contentWidth, 12, 'FD');
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text(`Risk analysis generated using Levelr's proprietary multi-discipline assessment framework v${analysis.riskSummary.version}`, margin + 5, yPosition + 3);
+    yPosition += 20;
+  }
+
   // Footer on every page
   const pageCount = doc.getNumberOfPages();
   for (let i = 1; i <= pageCount; i++) {
@@ -859,6 +1041,126 @@ export function exportConstructionAnalysisToExcel(analysis: AnalysisResult): voi
     const additionalWs = XLSX.utils.aoa_to_sheet(additionalData);
     additionalWs['!cols'] = [{ wch: 25 }, { wch: 20 }];
     XLSX.utils.book_append_sheet(wb, additionalWs, 'Additional Info');
+  }
+
+  // Enhanced Risk Analysis Sheet
+  if (analysis.riskSummary) {
+    const riskData = [
+      ['ENHANCED RISK ANALYSIS & RECOMMENDATIONS'],
+      [`Generated using Levelr Risk Assessment Framework v${analysis.riskSummary.version}`],
+      [`Analysis Date: ${new Date(analysis.riskSummary.generatedAt).toLocaleDateString()}`],
+      [''],
+      ['OVERALL RISK ASSESSMENT']
+    ];
+
+    // Get construction-specific assessment
+    const constructionAssessment = analysis.riskSummary.assessments?.find(a => a.discipline === 'construction');
+    if (constructionAssessment) {
+      riskData.push(['Risk Level', constructionAssessment.overallLevel]);
+      riskData.push(['Risk Score', `${constructionAssessment.overallScore}/100`]);
+    }
+
+    riskData.push(['']);
+    riskData.push(['PRIORITY RISK ITEMS']);
+    riskData.push(['Severity', 'Title', 'Category', 'Description', 'Impact', 'Discipline']);
+
+    // Add priority risks
+    if (analysis.riskSummary.topRisks) {
+      analysis.riskSummary.topRisks.slice(0, 10).forEach(risk => {
+        riskData.push([
+          risk.severity,
+          risk.title,
+          risk.category,
+          risk.description,
+          risk.impact || 'See description',
+          risk.discipline
+        ]);
+      });
+    }
+
+    // Add follow-up actions
+    const allFollowUps = analysis.riskSummary.assessments?.flatMap(assessment =>
+      assessment.followUpActions || []
+    ) || [];
+
+    if (allFollowUps.length > 0) {
+      riskData.push(['']);
+      riskData.push(['RECOMMENDED FOLLOW-UP ACTIONS']);
+      riskData.push(['Priority', 'Action', 'Category', 'Description', 'Discipline']);
+
+      allFollowUps
+        .sort((a, b) => {
+          const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+          return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+        })
+        .slice(0, 15)
+        .forEach(action => {
+          riskData.push([
+            action.priority,
+            action.title,
+            action.category,
+            action.description,
+            action.discipline
+          ]);
+        });
+    }
+
+    // Add risk category breakdown if available
+    if (constructionAssessment?.categoryBreakdown) {
+      riskData.push(['']);
+      riskData.push(['RISK CATEGORY BREAKDOWN']);
+      riskData.push(['Category', 'Risk Level', 'Score (/100)', 'Risk Count']);
+
+      Object.entries(constructionAssessment.categoryBreakdown).forEach(([category, breakdown]) => {
+        riskData.push([
+          category.charAt(0).toUpperCase() + category.slice(1),
+          breakdown.level,
+          breakdown.score.toString(),
+          (breakdown.risks?.length || 0).toString()
+        ]);
+      });
+    }
+
+    const riskWs = XLSX.utils.aoa_to_sheet(riskData);
+
+    // Style the risk analysis sheet
+    riskWs['!cols'] = [
+      { wch: 15 }, // Priority/Severity
+      { wch: 35 }, // Title/Action
+      { wch: 20 }, // Category
+      { wch: 50 }, // Description
+      { wch: 25 }, // Impact/Discipline
+      { wch: 15 }  // Additional column
+    ];
+
+    // Add conditional formatting for risk levels (simplified - Excel will show colors based on cell values)
+    const riskRange = XLSX.utils.decode_range(riskWs['!ref'] || 'A1');
+
+    // Color code severity/priority columns
+    for (let row = 6; row <= riskRange.e.r; row++) {
+      const severityCell = `A${row + 1}`;
+      if (riskWs[severityCell]) {
+        const value = riskWs[severityCell].v;
+        if (value === 'HIGH') {
+          riskWs[severityCell].s = {
+            fill: { fgColor: { rgb: 'FFEBEE' } },
+            font: { color: { rgb: '991B1B' }, bold: true }
+          };
+        } else if (value === 'MEDIUM') {
+          riskWs[severityCell].s = {
+            fill: { fgColor: { rgb: 'FFF8E1' } },
+            font: { color: { rgb: '92400E' }, bold: true }
+          };
+        } else if (value === 'LOW') {
+          riskWs[severityCell].s = {
+            fill: { fgColor: { rgb: 'F0FDF4' } },
+            font: { color: { rgb: '14532D' }, bold: true }
+          };
+        }
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, riskWs, 'Risk Analysis');
   }
 
   // Save the Excel file

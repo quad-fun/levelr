@@ -185,6 +185,188 @@ export function exportTradeAnalysisToPDF(analysis: AnalysisResult): void {
   yPosition = addExclusionsAndAssumptions(doc, analysis, margin, contentWidth, getCurrentY(), checkPageBreak);
   updateYPosition(yPosition);
 
+  // Enhanced Risk Analysis Section
+  if (analysis.riskSummary) {
+    checkPageBreak(40);
+
+    // Risk Summary Header
+    doc.setFillColor(254, 226, 226); // Red-100
+    doc.setDrawColor(239, 68, 68); // Red-500
+    doc.rect(margin, getCurrentY() - 5, contentWidth, 20, 'FD');
+
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(153, 27, 27); // Red-800
+    doc.text('Enhanced Risk Analysis & Recommendations', margin + 5, getCurrentY() + 8);
+
+    doc.setTextColor(0, 0, 0);
+    updateYPosition(getCurrentY() + 25);
+
+    // Overall Risk Level
+    checkPageBreak(20);
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Overall Risk Assessment:', margin, getCurrentY());
+    updateYPosition(getCurrentY() + 8);
+
+    doc.setFontSize(12);
+    doc.setFont('helvetica', 'normal');
+
+    // Get trade-specific assessment
+    const tradeAssessment = analysis.riskSummary.assessments?.find(a => a.discipline === 'trade');
+    const overallLevel = tradeAssessment?.overallLevel || 'MEDIUM';
+    const overallScore = tradeAssessment?.overallScore || 50;
+
+    // Color code the risk level
+    if (overallLevel === 'HIGH') {
+      doc.setTextColor(153, 27, 27); // Red-800
+    } else if (overallLevel === 'MEDIUM') {
+      doc.setTextColor(146, 64, 14); // Yellow-800
+    } else {
+      doc.setTextColor(20, 83, 45); // Green-800
+    }
+
+    doc.text(`Risk Level: ${overallLevel} (Score: ${overallScore}/100)`, margin + 5, getCurrentY());
+    doc.setTextColor(0, 0, 0);
+    updateYPosition(getCurrentY() + 12);
+
+    // Top Priority Risks
+    if (analysis.riskSummary.topRisks && analysis.riskSummary.topRisks.length > 0) {
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Priority Risk Items:', margin, getCurrentY());
+      updateYPosition(getCurrentY() + 10);
+
+      const topRisks = analysis.riskSummary.topRisks.slice(0, 5); // Show top 5
+
+      topRisks.forEach((risk) => {
+        checkPageBreak(15);
+
+        // Risk severity indicator
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+
+        if (risk.severity === 'HIGH') {
+          doc.setTextColor(153, 27, 27);
+          doc.text('[HIGH]', margin + 5, getCurrentY());
+        } else if (risk.severity === 'MEDIUM') {
+          doc.setTextColor(146, 64, 14);
+          doc.text('⚠️ MEDIUM', margin + 5, getCurrentY());
+        } else {
+          doc.setTextColor(20, 83, 45);
+          doc.text('✓ LOW', margin + 5, getCurrentY());
+        }
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(risk.title, margin + 35, getCurrentY());
+        updateYPosition(getCurrentY() + 6);
+
+        // Risk description
+        doc.setFont('helvetica', 'normal');
+        const description = doc.splitTextToSize(risk.description, contentWidth - 40);
+        if (Array.isArray(description)) {
+          description.forEach((line: string) => {
+            checkPageBreak(5);
+            doc.text(line, margin + 35, getCurrentY());
+            updateYPosition(getCurrentY() + 5);
+          });
+        } else {
+          doc.text(description, margin + 35, getCurrentY());
+          updateYPosition(getCurrentY() + 5);
+        }
+
+        if (risk.impact) {
+          doc.setFont('helvetica', 'italic');
+          doc.text(`Impact: ${risk.impact}`, margin + 35, getCurrentY());
+          updateYPosition(getCurrentY() + 8);
+        } else {
+          updateYPosition(getCurrentY() + 3);
+        }
+      });
+    }
+
+    // Follow-up Actions
+    const allFollowUps = analysis.riskSummary.assessments?.flatMap(assessment =>
+      assessment.followUpActions || []
+    ) || [];
+
+    if (allFollowUps.length > 0) {
+      checkPageBreak(30);
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text('Recommended Follow-up Actions:', margin, getCurrentY());
+      updateYPosition(getCurrentY() + 10);
+
+      const priorityActions = allFollowUps
+        .sort((a, b) => {
+          const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+          return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+        })
+        .slice(0, 8); // Show top 8 actions
+
+      priorityActions.forEach((action) => {
+        checkPageBreak(12);
+
+        // Priority indicator
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+
+        if (action.priority === 'HIGH') {
+          doc.setTextColor(153, 27, 27);
+          doc.text('[HIGH]', margin + 5, getCurrentY());
+        } else if (action.priority === 'MEDIUM') {
+          doc.setTextColor(146, 64, 14);
+          doc.text('[MEDIUM]', margin + 5, getCurrentY());
+        } else {
+          doc.setTextColor(20, 83, 45);
+          doc.text('[LOW]', margin + 5, getCurrentY());
+        }
+
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(action.title, margin + 40, getCurrentY());
+        updateYPosition(getCurrentY() + 6);
+
+        // Action description
+        if (action.description) {
+          doc.setFont('helvetica', 'normal');
+          const description = doc.splitTextToSize(action.description, contentWidth - 45);
+          if (Array.isArray(description)) {
+            description.forEach((line: string) => {
+              checkPageBreak(5);
+              doc.text(line, margin + 40, getCurrentY());
+              updateYPosition(getCurrentY() + 5);
+            });
+          } else {
+            doc.text(description, margin + 40, getCurrentY());
+            updateYPosition(getCurrentY() + 5);
+          }
+        }
+        updateYPosition(getCurrentY() + 3);
+      });
+
+      if (allFollowUps.length > 8) {
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(10);
+        doc.text(`+ ${allFollowUps.length - 8} additional recommendations available in detailed analysis`, margin + 5, getCurrentY());
+        updateYPosition(getCurrentY() + 10);
+      }
+    }
+
+    // Risk Analysis Footer
+    checkPageBreak(15);
+    doc.setFillColor(239, 246, 255); // Blue-50
+    doc.setDrawColor(191, 219, 254); // Blue-200
+    doc.rect(margin, getCurrentY() - 5, contentWidth, 12, 'FD');
+
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'italic');
+    doc.text(`Risk analysis generated using Levelr's proprietary multi-discipline assessment framework v${analysis.riskSummary.version}`, margin + 5, getCurrentY() + 3);
+    updateYPosition(getCurrentY() + 20);
+  }
+
   // Footer
   addLevelrFooter(doc, pageWidth, pageHeight, margin, 'Trade Analysis Report');
 
@@ -259,6 +441,134 @@ export function exportTradeAnalysisToExcel(analysis: AnalysisResult): void {
 
   // Project Overhead Sheet
   addProjectOverheadSheet(wb, analysis, 'Project Overhead');
+
+  // Enhanced Risk Analysis Sheet
+  if (analysis.riskSummary) {
+    const riskData = [
+      ['ENHANCED TRADE RISK ANALYSIS & RECOMMENDATIONS'],
+      [`Generated using Levelr Risk Assessment Framework v${analysis.riskSummary.version}`],
+      [`Analysis Date: ${new Date(analysis.riskSummary.generatedAt).toLocaleDateString()}`],
+      [''],
+      ['OVERALL RISK ASSESSMENT']
+    ];
+
+    // Get trade-specific assessment
+    const tradeAssessment = analysis.riskSummary.assessments?.find(a => a.discipline === 'trade');
+    if (tradeAssessment) {
+      riskData.push(['Risk Level', tradeAssessment.overallLevel]);
+      riskData.push(['Risk Score', `${tradeAssessment.overallScore}/100`]);
+    }
+
+    riskData.push(['']);
+    riskData.push(['PRIORITY RISK ITEMS']);
+    riskData.push(['Severity', 'Title', 'Category', 'Description', 'Impact', 'Discipline']);
+
+    // Add priority risks (focus on trade-related risks)
+    if (analysis.riskSummary.topRisks) {
+      analysis.riskSummary.topRisks
+        .filter(risk => risk.discipline === 'trade')
+        .slice(0, 10)
+        .forEach(risk => {
+          riskData.push([
+            risk.severity,
+            risk.title,
+            risk.category,
+            risk.description,
+            risk.impact || 'See description',
+            risk.discipline
+          ]);
+        });
+    }
+
+    // Add follow-up actions (trade-specific)
+    const tradeFollowUps = analysis.riskSummary.assessments
+      ?.find(a => a.discipline === 'trade')
+      ?.followUpActions || [];
+
+    if (tradeFollowUps.length > 0) {
+      riskData.push(['']);
+      riskData.push(['RECOMMENDED FOLLOW-UP ACTIONS']);
+      riskData.push(['Priority', 'Action', 'Category', 'Description']);
+
+      tradeFollowUps
+        .sort((a, b) => {
+          const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+          return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+        })
+        .slice(0, 15)
+        .forEach(action => {
+          riskData.push([
+            action.priority,
+            action.title,
+            action.category,
+            action.description
+          ]);
+        });
+    }
+
+    // Add technical system risk breakdown if available
+    if (tradeAssessment?.categoryBreakdown) {
+      riskData.push(['']);
+      riskData.push(['TECHNICAL SYSTEM RISK BREAKDOWN']);
+      riskData.push(['System Category', 'Risk Level', 'Score (/100)', 'Risk Count']);
+
+      Object.entries(tradeAssessment.categoryBreakdown).forEach(([category, breakdown]) => {
+        // Map internal categories to technical system categories
+        let systemCategory = category;
+        if (category === 'schedule') systemCategory = 'Installation Schedule';
+        else if (category === 'scope') systemCategory = 'Technical Scope';
+        else if (category === 'contract') systemCategory = 'Contract Terms';
+        else if (category === 'market') systemCategory = 'Equipment Market';
+
+        riskData.push([
+          systemCategory,
+          breakdown.level,
+          breakdown.score.toString(),
+          (breakdown.risks?.length || 0).toString()
+        ]);
+      });
+    }
+
+    const riskWs = XLSX.utils.aoa_to_sheet(riskData);
+
+    // Style the risk analysis sheet
+    riskWs['!cols'] = [
+      { wch: 15 }, // Priority/Severity
+      { wch: 40 }, // Title/Action
+      { wch: 25 }, // Category
+      { wch: 55 }, // Description
+      { wch: 30 }, // Impact
+      { wch: 15 }  // Discipline
+    ];
+
+    // Color code severity/priority columns for trade-specific risks
+    const riskRange = XLSX.utils.decode_range(riskWs['!ref'] || 'A1');
+
+    for (let row = 6; row <= riskRange.e.r; row++) {
+      const severityCell = `A${row + 1}`;
+      if (riskWs[severityCell]) {
+        const value = riskWs[severityCell].v;
+        if (value === 'HIGH') {
+          riskWs[severityCell].s = {
+            fill: { fgColor: { rgb: 'FFEBEE' } },
+            font: { color: { rgb: '991B1B' }, bold: true }
+          };
+        } else if (value === 'MEDIUM') {
+          riskWs[severityCell].s = {
+            fill: { fgColor: { rgb: 'FFF8E1' } },
+            font: { color: { rgb: '92400E' }, bold: true }
+          };
+        } else if (value === 'LOW') {
+          riskWs[severityCell].s = {
+            fill: { fgColor: { rgb: 'F0FDF4' } },
+            font: { color: { rgb: '14532D' }, bold: true }
+          };
+        }
+      }
+    }
+
+    XLSX.utils.book_append_sheet(wb, riskWs, 'Trade Risk Analysis');
+  }
 
   // Save the Excel file
   const fileName = generateExcelFilename('trade', analysis.contractor_name);

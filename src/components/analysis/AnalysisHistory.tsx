@@ -18,6 +18,7 @@ export default function AnalysisHistory() {
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
   const [isExporting, setIsExporting] = useState<string | null>(null);
   const [marketIntel, setMarketIntel] = useState(getMarketIntelligence());
+  const [activeFilter, setActiveFilter] = useState<'all' | 'high-risk' | 'above-market' | 'recent'>('all');
 
   useEffect(() => {
     loadAnalyses();
@@ -176,6 +177,30 @@ export default function AnalysisHistory() {
     }
   };
 
+  const getFilteredAnalyses = () => {
+    if (activeFilter === 'all') return analyses;
+
+    return analyses.filter(analysis => {
+      const riskData = calculateMultiDisciplineRisk(analysis.result);
+      const top5Categories = getTop5CostCategories(analysis);
+      const isRecent = new Date(analysis.timestamp) > new Date(Date.now() - 7 * 24 * 60 * 60 * 1000); // Last 7 days
+
+      switch (activeFilter) {
+        case 'high-risk':
+          return riskData.level === 'HIGH';
+        case 'above-market':
+          return top5Categories.some(category => {
+            const benchmark = marketIntel.divisionBenchmarks?.[category.code];
+            return benchmark && category.percentage > benchmark.average * 1.2;
+          });
+        case 'recent':
+          return isRecent;
+        default:
+          return true;
+      }
+    });
+  };
+
   if (analyses.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-md p-6 text-center">
@@ -267,19 +292,92 @@ export default function AnalysisHistory() {
 
       {/* Comprehensive Analysis History */}
       <div className="space-y-4">
-        <h3 className="text-xl font-bold text-gray-900 flex items-center">
-          <FileText className="h-5 w-5 mr-2" />
-          Project Analysis History ({analyses.length})
-        </h3>
-        
-        {analyses.map((analysis) => {
-          const coveragePercentage = calculateCoveragePercentage(analysis);
-          const top5Categories = getTop5CostCategories(analysis);
-          const subSummary = getSubcontractorSummary(analysis);
-          // Use discipline-aware risk calculation
-          const riskData = calculateMultiDisciplineRisk(analysis.result);
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-3 sm:space-y-0">
+          <h3 className="text-xl font-bold text-gray-900 flex items-center">
+            <FileText className="h-5 w-5 mr-2" />
+            Project Analysis History ({getFilteredAnalyses().length}{activeFilter !== 'all' ? ` of ${analyses.length}` : ''})
+          </h3>
 
-          return (
+          {/* Quick Filter Buttons */}
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveFilter('all')}
+              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors ${
+                activeFilter === 'all'
+                  ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              All Projects
+            </button>
+            <button
+              onClick={() => setActiveFilter('high-risk')}
+              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors flex items-center ${
+                activeFilter === 'high-risk'
+                  ? 'bg-red-100 text-red-700 border border-red-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <AlertTriangle className="h-3 w-3 mr-1" />
+              High Risk
+            </button>
+            <button
+              onClick={() => setActiveFilter('above-market')}
+              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors flex items-center ${
+                activeFilter === 'above-market'
+                  ? 'bg-yellow-100 text-yellow-700 border border-yellow-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <TrendingUp className="h-3 w-3 mr-1" />
+              Above Market
+            </button>
+            <button
+              onClick={() => setActiveFilter('recent')}
+              className={`px-3 py-1.5 text-sm rounded-md font-medium transition-colors flex items-center ${
+                activeFilter === 'recent'
+                  ? 'bg-green-100 text-green-700 border border-green-200'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <Clock className="h-3 w-3 mr-1" />
+              Recent
+            </button>
+          </div>
+        </div>
+
+        {getFilteredAnalyses().length === 0 ? (
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h4 className="text-lg font-medium text-gray-900 mb-2">No analyses found</h4>
+            <p className="text-gray-600 mb-4">
+              {activeFilter === 'all'
+                ? "No analyses have been saved yet."
+                : `No analyses match the "${
+                    activeFilter === 'high-risk' ? 'High Risk' :
+                    activeFilter === 'above-market' ? 'Above Market' :
+                    activeFilter === 'recent' ? 'Recent' : activeFilter
+                  }" filter.`
+              }
+            </p>
+            {activeFilter !== 'all' && (
+              <button
+                onClick={() => setActiveFilter('all')}
+                className="text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Clear filter and show all analyses
+              </button>
+            )}
+          </div>
+        ) : (
+          getFilteredAnalyses().map((analysis) => {
+            const coveragePercentage = calculateCoveragePercentage(analysis);
+            const top5Categories = getTop5CostCategories(analysis);
+            const subSummary = getSubcontractorSummary(analysis);
+            // Use discipline-aware risk calculation
+            const riskData = calculateMultiDisciplineRisk(analysis.result);
+
+            return (
             <div key={analysis.id} className="bg-white rounded-lg shadow-md overflow-hidden">
               {/* Analysis Header - Always Visible */}
               <div 
@@ -292,13 +390,23 @@ export default function AnalysisHistory() {
                   <div className="flex-1">
                     <div className="flex items-center justify-between mb-4">
                       <div className="flex items-center">
-                        <Building className="h-5 w-5 text-gray-600 mr-3" />
+                        <Building className="h-6 w-6 text-gray-700 mr-3" />
                         <div>
-                          <h4 className="text-lg font-bold text-gray-900">
-                            {analysis.result.contractor_name}
-                          </h4>
+                          <div className="flex items-center space-x-3">
+                            <h4 className="text-xl font-bold text-gray-900">
+                              {analysis.result.contractor_name}
+                            </h4>
+                            <span className={`px-3 py-1 text-sm rounded-full font-semibold capitalize shadow-sm ${
+                              analysis.result.discipline === 'construction' ? 'bg-blue-500 text-white' :
+                              analysis.result.discipline === 'design' ? 'bg-purple-500 text-white' :
+                              analysis.result.discipline === 'trade' ? 'bg-green-500 text-white' :
+                              'bg-gray-500 text-white'
+                            }`}>
+                              {analysis.result.discipline || 'construction'}
+                            </span>
+                          </div>
                           {analysis.result.project_name && (
-                            <p className="text-sm text-gray-600">{analysis.result.project_name}</p>
+                            <p className="text-base font-medium text-gray-700 mt-1">{analysis.result.project_name}</p>
                           )}
                         </div>
                       </div>
@@ -339,13 +447,27 @@ export default function AnalysisHistory() {
                       </div>
 
                       {/* Risk Assessment */}
-                      <div className={`border rounded-lg p-3 ${getRiskColor(riskData.level)}`}>
+                      <div className={`border-2 rounded-lg p-3 ${getRiskColor(riskData.level)} ${
+                        riskData.level === 'HIGH' ? 'ring-2 ring-red-400 ring-opacity-50' : ''
+                      }`}>
                         <div className="flex items-center justify-between">
-                          <AlertTriangle className="h-5 w-5" />
-                          <span className="text-xs font-medium">RISK</span>
+                          <div className="flex items-center">
+                            <AlertTriangle className={`h-5 w-5 ${
+                              riskData.level === 'HIGH' ? 'animate-pulse' : ''
+                            }`} />
+                            {riskData.level === 'HIGH' && (
+                              <Flag className="h-4 w-4 ml-1 text-red-600" />
+                            )}
+                          </div>
+                          <span className="text-xs font-bold">RISK LEVEL</span>
                         </div>
-                        <p className="text-lg font-bold mt-1">{riskData.level}</p>
-                        <p className="text-xs opacity-75">{riskData.score}/100</p>
+                        <p className={`text-xl font-black mt-1 ${
+                          riskData.level === 'HIGH' ? 'text-red-700' :
+                          riskData.level === 'MEDIUM' ? 'text-yellow-700' : 'text-green-700'
+                        }`}>
+                          {riskData.level}
+                        </p>
+                        <p className="text-xs font-medium opacity-90">{riskData.score}/100 Risk Score</p>
                       </div>
 
                       {/* Coverage Quality */}
@@ -375,6 +497,61 @@ export default function AnalysisHistory() {
                         </div>
                       </div>
                     </div>
+
+                    {/* Next Steps Summary Card */}
+                    {analysis.result.riskSummary?.assessments && (() => {
+                      const allFollowUps = analysis.result.riskSummary.assessments.flatMap(assessment =>
+                        assessment.followUpActions || []
+                      );
+                      const topActions = allFollowUps
+                        .sort((a, b) => {
+                          const priorityOrder = { 'HIGH': 3, 'MEDIUM': 2, 'LOW': 1 };
+                          return (priorityOrder[b.priority] || 0) - (priorityOrder[a.priority] || 0);
+                        })
+                        .slice(0, 3);
+
+                      return topActions.length > 0 ? (
+                        <div className="mb-4">
+                          <div className="bg-blue-50 border-l-4 border-blue-400 rounded-lg p-4">
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center">
+                                <Clock className="h-5 w-5 text-blue-600 mr-2" />
+                                <h6 className="font-semibold text-blue-900">Next Steps</h6>
+                              </div>
+                              <span className="text-xs text-blue-700 bg-blue-100 px-2 py-1 rounded">
+                                {allFollowUps.length} total actions
+                              </span>
+                            </div>
+                            <div className="space-y-2">
+                              {topActions.map((action, index) => (
+                                <div key={index} className="flex items-start text-sm">
+                                  <div className={`w-2 h-2 rounded-full mr-3 mt-2 flex-shrink-0 ${
+                                    action.priority === 'HIGH' ? 'bg-red-500' :
+                                    action.priority === 'MEDIUM' ? 'bg-yellow-500' : 'bg-blue-500'
+                                  }`}></div>
+                                  <div className="flex-1">
+                                    <span className="text-blue-900 font-medium">{action.title}</span>
+                                    <span className={`ml-2 text-xs px-2 py-0.5 rounded ${
+                                      action.priority === 'HIGH' ? 'bg-red-100 text-red-700' :
+                                      action.priority === 'MEDIUM' ? 'bg-yellow-100 text-yellow-700' :
+                                      'bg-blue-100 text-blue-700'
+                                    }`}>
+                                      {action.priority}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                            {allFollowUps.length > 3 && (
+                              <p className="text-xs text-blue-600 mt-2">
+                                +{allFollowUps.length - 3} more actions in risk analysis below
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      ) : null;
+                    })()}
+
 
                     {/* Quick Metrics Bar */}
                     <div className="flex flex-wrap gap-4 text-sm text-gray-600">
@@ -423,15 +600,18 @@ export default function AnalysisHistory() {
                 <div className="border-t border-gray-200">
                   {/* Financial Breakdown Section */}
                   <div className="p-6 bg-gray-50">
-                    <h5 className="font-bold text-gray-900 mb-4 flex items-center">
-                      <BarChart3 className="h-5 w-5 mr-2" />
+                    <h5 className="text-lg font-bold text-gray-900 mb-6 flex items-center border-b border-gray-200 pb-2">
+                      <BarChart3 className="h-6 w-6 mr-3 text-blue-600" />
                       Financial Breakdown & Market Intelligence
                     </h5>
 
                     <div className="grid md:grid-cols-2 gap-6">
                       {/* Top 5 Cost Categories */}
                       <div className="bg-white rounded-lg p-4 border">
-                        <h6 className="font-semibold text-gray-900 mb-3">Top Cost Categories</h6>
+                        <h6 className="text-base font-bold text-gray-900 mb-4 flex items-center">
+                          <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                          Top Cost Categories
+                        </h6>
                         <div className="space-y-2">
                           {top5Categories.map((category, index) => {
                             const benchmark = marketIntel.divisionBenchmarks?.[category.code];
@@ -463,7 +643,10 @@ export default function AnalysisHistory() {
 
                       {/* Subcontractor Analysis */}
                       <div className="bg-white rounded-lg p-4 border">
-                        <h6 className="font-semibold text-gray-900 mb-3">Subcontractor Analysis</h6>
+                        <h6 className="text-base font-bold text-gray-900 mb-4 flex items-center">
+                          <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
+                          Subcontractor Analysis
+                        </h6>
                         <div className="space-y-3">
                           <div className="flex justify-between items-center">
                             <span className="text-sm text-gray-600">Total Trades:</span>
@@ -492,8 +675,8 @@ export default function AnalysisHistory() {
                     {/* Risk Factors & Red Flags */}
                     {riskData.factors.length > 0 && (
                       <div className="mt-6 bg-white rounded-lg p-4 border">
-                        <h6 className="font-semibold text-gray-900 mb-3 flex items-center">
-                          <AlertTriangle className="h-4 w-4 mr-2 text-orange-600" />
+                        <h6 className="text-base font-bold text-gray-900 mb-4 flex items-center">
+                          <AlertTriangle className="h-5 w-5 mr-2 text-orange-600" />
                           Risk Factors & Market Intelligence
                         </h6>
                         <div className="space-y-2">
@@ -839,8 +1022,9 @@ export default function AnalysisHistory() {
                 </div>
               )}
             </div>
-          );
-        })}
+            );
+          })
+        )}
       </div>
     </div>
   );

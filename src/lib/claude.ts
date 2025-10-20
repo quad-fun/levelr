@@ -41,101 +41,43 @@ function sanitizeJsonStringMinimal(raw: string): string {
   // Remove trailing commas before closing brackets
   s = s.replace(/,(\s*[}\]])/g, '$1');
 
-  // Fix common Claude JSON issues
-  // Fix missing commas between object properties
-  s = s.replace(/("\w+"):\s*("[^"]*"|[^,}\]]+)\s*(?="\w+")/g, '$1: $2,');
-  // Fix missing quotes around property names
-  s = s.replace(/([{,]\s*)(\w+)(\s*:)/g, '$1"$2"$3');
-  // Fix unescaped quotes in strings
-  s = s.replace(/"([^"]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)"([^":,}\]]*)/g, '"$1\\"$2\\"$3\\"$4\\"$5\\"$6\\"$7\\"$8\\"$9\\"$10\\"$11\\"$12\\"$13\\"$14\\"$15"');
-
   try {
     JSON.parse(s);
     return s;
   } catch {
-    // Last-ditch string-safe broad fix
-    const widened = broadCommaFix(s);
+    // Fix specific malformed patterns seen in Claude responses before broadCommaFix
+    let fixed = s;
+
+    // Fix missing property name before comma: "00": { ,"cost": -> "00": {"cost":
+    fixed = fixed.replace(/(\{\s*),(\s*")/g, '$1$2');
+
+    // Fix extra comma before value: "property": ,"value" -> "property": "value"
+    fixed = fixed.replace(/:\s*,(\s*"[^"]*")/g, ': $1');
+    fixed = fixed.replace(/:\s*,(\s*[^,}\]]+)/g, ': $1');
+
+    // Fix array comma issues: [,"item"] -> ["item"]
+    fixed = fixed.replace(/\[\s*,(\s*")/g, '[$1');
+    fixed = fixed.replace(/\[\s*,(\s*[^,\]]+)/g, '[$1');
+
     try {
-      JSON.parse(widened);
-      return widened;
-    } catch (finalErr) {
-      // Enhanced error logging for debugging
-      const pos = (finalErr as SyntaxError & { position?: number }).position ?? -1;
-      if (pos >= 0) {
-        const start = Math.max(0, pos - 100);
-        const end = Math.min(s.length, pos + 100);
-        console.error(`JSON parse error window @${pos}: ${s.slice(start, end)}`);
-
-        // Show the problematic line
-        const lines = s.split('\n');
-        const charsSoFar = s.substring(0, pos).split('\n');
-        const lineNum = charsSoFar.length;
-        const colNum = charsSoFar[charsSoFar.length - 1].length;
-        console.error(`Error at line ${lineNum}, column ${colNum}:`);
-        if (lines[lineNum - 1]) {
-          console.error(`> ${lines[lineNum - 1]}`);
-          console.error(`> ${' '.repeat(colNum - 1)}^`);
+      JSON.parse(fixed);
+      return fixed;
+    } catch {
+      // Last-ditch string-safe broad fix
+      const widened = broadCommaFix(fixed);
+      try {
+        JSON.parse(widened);
+        return widened;
+      } catch (finalErr) {
+        // Log error context for debugging
+        const pos = (finalErr as SyntaxError & { position?: number }).position ?? -1;
+        if (pos >= 0) {
+          const start = Math.max(0, pos - 100);
+          const end = Math.min(s.length, pos + 100);
+          console.error(`JSON parse error window @${pos}: ${s.slice(start, end)}`);
         }
+        throw finalErr;
       }
-
-      // Try multiple aggressive fixes for common Claude issues
-      const repairStrategies = [
-        // Strategy 1: Fix common punctuation issues
-        (text: string) => {
-          let fixed = text;
-          // Remove invalid characters
-          fixed = fixed.replace(/[^\x20-\x7E\n\r\t]/g, '');
-          // Fix missing commas after values
-          fixed = fixed.replace(/(["}]\s*)\n(\s*")/g, '$1,\n$2');
-          // Fix incomplete objects/arrays
-          fixed = fixed.replace(/,\s*([}\]])/g, '$1');
-          return fixed;
-        },
-
-        // Strategy 2: Extract JSON block if wrapped in text
-        (text: string) => {
-          const jsonMatch = text.match(/\{[\s\S]*\}/);
-          return jsonMatch ? jsonMatch[0] : text;
-        },
-
-        // Strategy 3: Try to complete incomplete JSON
-        (text: string) => {
-          let fixed = text.trim();
-          // Count brackets to see if we need to close
-          const openBraces = (fixed.match(/\{/g) || []).length;
-          const closeBraces = (fixed.match(/\}/g) || []).length;
-          const openBrackets = (fixed.match(/\[/g) || []).length;
-          const closeBrackets = (fixed.match(/\]/g) || []).length;
-
-          // Add missing closing brackets
-          for (let i = 0; i < openBrackets - closeBrackets; i++) {
-            fixed += ']';
-          }
-          for (let i = 0; i < openBraces - closeBraces; i++) {
-            fixed += '}';
-          }
-
-          return fixed;
-        }
-      ];
-
-      for (let i = 0; i < repairStrategies.length; i++) {
-        try {
-          const fixed = repairStrategies[i](s);
-          JSON.parse(fixed);
-          console.log(`JSON repair strategy ${i + 1} succeeded`);
-          return fixed;
-        } catch {
-          // Continue to next strategy
-        }
-      }
-
-      console.error('All JSON repair attempts failed');
-      console.error('Raw Claude response length:', s.length);
-      console.error('First 500 chars:', s.substring(0, 500));
-      console.error('Last 500 chars:', s.substring(Math.max(0, s.length - 500)));
-
-      throw finalErr;
     }
   }
 }

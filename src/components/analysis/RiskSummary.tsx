@@ -2,7 +2,7 @@
 
 'use client';
 
-import { RiskSummary, NormalizedRiskItem, DisciplineRiskAssessment, FollowUpAction } from '@/types/analysis';
+import { RiskSummary, FollowUpAction } from '@/types/analysis';
 import { AlertTriangle, TrendingDown, CheckCircle, Clock, Building, Palette, Settings, ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
 
@@ -99,8 +99,6 @@ export default function RiskSummaryComponent({ riskSummary, isCompact = false }:
 
   // Compact view for Analysis History
   if (isCompact) {
-    const highRisks = riskSummary.topRisks?.filter(risk => risk.severity === 'HIGH') || [];
-    const mediumRisks = riskSummary.topRisks?.filter(risk => risk.severity === 'MEDIUM') || [];
     const topActions = allFollowUps.slice(0, 3);
 
     return (

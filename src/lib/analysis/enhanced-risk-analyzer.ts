@@ -438,19 +438,96 @@ async function analyzeScopeRisks(
     riskScore += 30;
   }
 
-  // Check for exclusions that might indicate scope gaps
-  if (analysis.exclusions && analysis.exclusions.length > 3) {
-    const risk = {
-      title: 'Extensive Exclusions Listed',
-      severity: 'MEDIUM' as const,
-      discipline: 'construction' as const,
-      category: 'scope' as const,
-      description: `${analysis.exclusions.length} exclusions may indicate scope uncertainties`,
-      impact: 'Multiple exclusions increase risk of scope gaps and change orders'
-    };
-    risks.push(risk);
-    category.risks.push(risk);
-    riskScore += 25;
+  // Enhanced exclusions analysis by criticality for construction
+  if (analysis.exclusions && analysis.exclusions.length > 0) {
+    const criticalExclusions: string[] = [];
+    const moderateExclusions: string[] = [];
+    const minorExclusions: string[] = [];
+
+    // Categorize construction exclusions by potential impact
+    analysis.exclusions.forEach(exclusion => {
+      const exclusionText = exclusion.toLowerCase();
+
+      // Critical exclusions - structural or essential systems
+      if (
+        exclusionText.includes('permit') ||
+        exclusionText.includes('foundation') ||
+        exclusionText.includes('structural') ||
+        exclusionText.includes('excavation') ||
+        exclusionText.includes('utilities') ||
+        exclusionText.includes('electrical service') ||
+        exclusionText.includes('mechanical systems') ||
+        exclusionText.includes('fire protection') ||
+        exclusionText.includes('life safety') ||
+        exclusionText.includes('code compliance') ||
+        exclusionText.includes('accessibility') ||
+        exclusionText.includes('site work') ||
+        exclusionText.includes('infrastructure')
+      ) {
+        criticalExclusions.push(exclusion);
+      }
+      // Moderate exclusions - significant cost but not always required
+      else if (
+        exclusionText.includes('finish') ||
+        exclusionText.includes('interior') ||
+        exclusionText.includes('flooring') ||
+        exclusionText.includes('paint') ||
+        exclusionText.includes('lighting fixtures') ||
+        exclusionText.includes('appliance') ||
+        exclusionText.includes('equipment') ||
+        exclusionText.includes('millwork') ||
+        exclusionText.includes('specialty') ||
+        exclusionText.includes('testing') ||
+        exclusionText.includes('commissioning') ||
+        exclusionText.includes('cleanup')
+      ) {
+        moderateExclusions.push(exclusion);
+      }
+      // Minor exclusions - typically optional or owner-provided
+      else {
+        minorExclusions.push(exclusion);
+      }
+    });
+
+    // Risk assessment based on construction exclusion criticality
+    if (criticalExclusions.length >= 2) {
+      const risk = {
+        title: 'Critical Construction Services Excluded',
+        severity: 'HIGH' as const,
+        discipline: 'construction' as const,
+        category: 'scope' as const,
+        description: `${criticalExclusions.length} critical exclusions: ${criticalExclusions.slice(0, 3).join(', ')}${criticalExclusions.length > 3 ? '...' : ''}`,
+        impact: 'Critical excluded services likely required, significant change order risk'
+      };
+      risks.push(risk);
+      category.risks.push(risk);
+      riskScore += 50;
+    } else if (criticalExclusions.length === 1 || moderateExclusions.length >= 4) {
+      const primaryExclusions = criticalExclusions.length > 0 ? criticalExclusions : moderateExclusions;
+      const risk = {
+        title: criticalExclusions.length > 0 ? 'Significant Construction Exclusion' : 'Multiple Construction Exclusions',
+        severity: 'MEDIUM' as const,
+        discipline: 'construction' as const,
+        category: 'scope' as const,
+        description: `${primaryExclusions.length} exclusions: ${primaryExclusions.slice(0, 2).join(', ')}${primaryExclusions.length > 2 ? '...' : ''}`,
+        impact: 'Excluded services may require additional contracts and increase costs'
+      };
+      risks.push(risk);
+      category.risks.push(risk);
+      riskScore += 30;
+    } else if (analysis.exclusions.length > 5) {
+      const risk = {
+        title: 'Extensive Construction Exclusions',
+        severity: 'LOW' as const,
+        discipline: 'construction' as const,
+        category: 'scope' as const,
+        description: `${analysis.exclusions.length} exclusions listed (mostly minor scope items)`,
+        impact: 'Multiple exclusions may indicate scope uncertainty or gaps'
+      };
+      risks.push(risk);
+      category.risks.push(risk);
+      riskScore += 15;
+    }
   }
 
   category.score = Math.min(riskScore, 100);
@@ -660,43 +737,73 @@ async function analyzeDesignScheduleRisks(
 ): Promise<void> {
   let riskScore = 0;
 
-  // Check for incomplete phase coverage
+  // Context-aware phase coverage analysis
   const standardPhases = [
-    { code: 'SD', keys: ['schematic_design', 'schematic', 'sd'] },
-    { code: 'DD', keys: ['design_development', 'design_dev', 'dd'] },
-    { code: 'CD', keys: ['construction_documents', 'construction_docs', 'cd'] },
-    { code: 'BN', keys: ['bidding', 'bidding_negotiation', 'bid_negotiation', 'bn'] },
-    { code: 'CA', keys: ['construction_administration', 'construction_admin', 'ca'] }
+    { code: 'SD', keys: ['schematic_design', 'schematic', 'sd'], name: 'Schematic Design' },
+    { code: 'DD', keys: ['design_development', 'design_dev', 'dd'], name: 'Design Development' },
+    { code: 'CD', keys: ['construction_documents', 'construction_docs', 'cd'], name: 'Construction Documents' },
+    { code: 'BN', keys: ['bidding', 'bidding_negotiation', 'bid_negotiation', 'bn'], name: 'Bidding/Negotiation' },
+    { code: 'CA', keys: ['construction_administration', 'construction_admin', 'ca'], name: 'Construction Administration' }
   ];
 
   const providedPhases = analysis.aia_phases ? Object.keys(analysis.aia_phases) : [];
-  const missingPhases = standardPhases.filter(phase =>
-    !providedPhases.some(providedPhase =>
+
+  // Check for explicitly excluded phases in exclusions or assumptions
+  const exclusionText = (analysis.exclusions || []).join(' ').toLowerCase();
+  const assumptionText = (analysis.assumptions || []).join(' ').toLowerCase();
+  const combinedText = exclusionText + ' ' + assumptionText;
+
+  const explicitlyExcludedPhases = standardPhases.filter(phase => {
+    return phase.keys.some(key =>
+      combinedText.includes(`exclud ${key}`) ||
+      combinedText.includes(`not includ ${key}`) ||
+      combinedText.includes(`separate ${key}`) ||
+      combinedText.includes(`additional ${key}`) ||
+      combinedText.includes(`${key} excluded`) ||
+      combinedText.includes(`${key} not included`) ||
+      combinedText.includes(`future ${key}`)
+    );
+  }).map(phase => phase.code);
+
+  // Only flag missing phases that are NOT explicitly excluded and are critical
+  const trulyMissingPhases = standardPhases.filter(phase => {
+    const isProvided = providedPhases.some(providedPhase =>
       phase.keys.some(key =>
         providedPhase.toLowerCase().includes(key.toLowerCase())
       )
-    )
-  ).map(phase => phase.code);
+    );
 
-  if (missingPhases.length >= 3) {
+    const isExplicitlyExcluded = explicitlyExcludedPhases.includes(phase.code);
+
+    return !isProvided && !isExplicitlyExcluded;
+  });
+
+  // Check if this appears to be a limited-scope engagement
+  const totalPhaseValue = Object.values(analysis.aia_phases || {}).reduce((sum, phase) => sum + phase.fee_amount, 0);
+  const isLimitedScope = totalPhaseValue < analysis.total_amount * 0.7 || providedPhases.length <= 2;
+
+  // Only flag phase coverage issues if it's clearly a comprehensive engagement
+  if (!isLimitedScope && trulyMissingPhases.length >= 3) {
+    const missingCodes = trulyMissingPhases.map(p => p.code);
     const risk = {
       title: 'Incomplete Design Phase Coverage',
       severity: 'HIGH' as const,
       discipline: 'design' as const,
       category: 'scope' as const,
-      description: `Missing ${missingPhases.length} standard AIA phases: ${missingPhases.join(', ')}`,
+      description: `Missing ${missingCodes.length} critical AIA phases: ${missingCodes.join(', ')} (not explicitly excluded)`,
       impact: 'Significant design scope gaps may require additional contracts and extend timeline'
     };
     risks.push(risk);
     category.risks.push(risk);
     riskScore += 50;
-  } else if (missingPhases.length === 2) {
+  } else if (!isLimitedScope && trulyMissingPhases.length === 2) {
+    const missingCodes = trulyMissingPhases.map(p => p.code);
     const risk = {
       title: 'Limited Design Phase Coverage',
       severity: 'MEDIUM' as const,
       discipline: 'design' as const,
       category: 'scope' as const,
-      description: `Missing ${missingPhases.length} AIA phases: ${missingPhases.join(', ')}`,
+      description: `Missing ${missingCodes.length} AIA phases: ${missingCodes.join(', ')} (not explicitly excluded)`,
       impact: 'Some design phases not included in current scope'
     };
     risks.push(risk);
@@ -706,7 +813,7 @@ async function analyzeDesignScheduleRisks(
     if (flags.riskFollowUps) {
       followUpActions.push({
         title: 'Clarify Design Phase Scope',
-        description: `Confirm scope for missing phases: ${missingPhases.join(', ')}`,
+        description: `Confirm scope for missing phases: ${missingCodes.join(', ')} or verify if excluded from project`,
         priority: 'HIGH',
         category: 'schedule',
         discipline: 'design'
@@ -877,19 +984,94 @@ async function analyzeDesignScopeRisks(
 ): Promise<void> {
   let riskScore = 0;
 
-  // Check for scope exclusions
-  if (analysis.exclusions && analysis.exclusions.length > 2) {
-    const risk = {
-      title: 'Multiple Design Exclusions',
-      severity: 'MEDIUM' as const,
-      discipline: 'design' as const,
-      category: 'scope' as const,
-      description: `${analysis.exclusions.length} exclusions may indicate scope uncertainties`,
-      impact: 'Excluded services may be required later, increasing project cost'
-    };
-    risks.push(risk);
-    category.risks.push(risk);
-    riskScore += 35;
+  // Enhanced exclusions analysis by criticality
+  if (analysis.exclusions && analysis.exclusions.length > 0) {
+    const criticalExclusions: string[] = [];
+    const moderateExclusions: string[] = [];
+    const minorExclusions: string[] = [];
+
+    // Categorize exclusions by potential impact
+    analysis.exclusions.forEach(exclusion => {
+      const exclusionText = exclusion.toLowerCase();
+
+      // Critical exclusions - likely to be needed later
+      if (
+        exclusionText.includes('permit') ||
+        exclusionText.includes('structural') ||
+        exclusionText.includes('engineering') ||
+        exclusionText.includes('architectural') ||
+        exclusionText.includes('coordination') ||
+        exclusionText.includes('consultant') ||
+        exclusionText.includes('approval') ||
+        exclusionText.includes('review') ||
+        exclusionText.includes('code') ||
+        exclusionText.includes('compliance') ||
+        exclusionText.includes('infrastructure') ||
+        exclusionText.includes('utilities')
+      ) {
+        criticalExclusions.push(exclusion);
+      }
+      // Moderate exclusions - potentially significant cost impact
+      else if (
+        exclusionText.includes('interior') ||
+        exclusionText.includes('finish') ||
+        exclusionText.includes('mechanical') ||
+        exclusionText.includes('electrical') ||
+        exclusionText.includes('plumbing') ||
+        exclusionText.includes('hvac') ||
+        exclusionText.includes('lighting') ||
+        exclusionText.includes('specialty') ||
+        exclusionText.includes('equipment') ||
+        exclusionText.includes('testing') ||
+        exclusionText.includes('commissioning')
+      ) {
+        moderateExclusions.push(exclusion);
+      }
+      // Minor exclusions - typically optional or clearly separate
+      else {
+        minorExclusions.push(exclusion);
+      }
+    });
+
+    // Risk assessment based on exclusion criticality
+    if (criticalExclusions.length >= 2) {
+      const risk = {
+        title: 'Critical Design Services Excluded',
+        severity: 'HIGH' as const,
+        discipline: 'design' as const,
+        category: 'scope' as const,
+        description: `${criticalExclusions.length} critical exclusions: ${criticalExclusions.slice(0, 3).join(', ')}${criticalExclusions.length > 3 ? '...' : ''}`,
+        impact: 'Critical excluded services likely required, potentially doubling project cost'
+      };
+      risks.push(risk);
+      category.risks.push(risk);
+      riskScore += 60;
+    } else if (criticalExclusions.length === 1 || moderateExclusions.length >= 3) {
+      const primaryExclusions = criticalExclusions.length > 0 ? criticalExclusions : moderateExclusions;
+      const risk = {
+        title: criticalExclusions.length > 0 ? 'Significant Design Exclusion' : 'Multiple Design Exclusions',
+        severity: 'MEDIUM' as const,
+        discipline: 'design' as const,
+        category: 'scope' as const,
+        description: `${primaryExclusions.length} exclusions: ${primaryExclusions.slice(0, 2).join(', ')}${primaryExclusions.length > 2 ? '...' : ''}`,
+        impact: 'Excluded services may be required later, increasing project cost'
+      };
+      risks.push(risk);
+      category.risks.push(risk);
+      riskScore += 35;
+    } else if (analysis.exclusions.length > 4) {
+      const risk = {
+        title: 'Extensive Minor Exclusions',
+        severity: 'LOW' as const,
+        discipline: 'design' as const,
+        category: 'scope' as const,
+        description: `${analysis.exclusions.length} exclusions listed (mostly minor scope items)`,
+        impact: 'Multiple exclusions may indicate scope uncertainty'
+      };
+      risks.push(risk);
+      category.risks.push(risk);
+      riskScore += 15;
+    }
   }
 
   // Check for deliverables without clear definitions
