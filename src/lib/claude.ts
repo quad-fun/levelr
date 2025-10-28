@@ -473,7 +473,7 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 4000,
+        max_tokens: 8000, // Increased from 4000 to handle complex JSON structures
         messages: [{
           role: 'user',
           content: messageContent
@@ -544,16 +544,9 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     // Final completeness validation on enhanced data
     validateAnalysisCompleteness(validatedAnalysis);
 
-    // Generate detailed summary via two-pass pipeline (feature flagged)
-    const enableDetailedSummary = process.env.ENABLE_DETAILED_SUMMARY !== 'false'; // Default enabled
-
-    if (enableDetailedSummary) {
-      const enhancedAnalysis = await generateDetailedSummaryInProcess(validatedAnalysis);
-      return enhancedAnalysis;
-    } else {
-      console.log('📝 Detailed summary generation disabled via feature flag');
-      return validatedAnalysis;
-    }
+    // Temporarily disable summary generation to focus on core analysis parsing issue
+    console.log('📝 Detailed summary generation temporarily disabled due to parsing issues');
+    return validatedAnalysis;
   } catch (error) {
     console.error('Error analyzing document with Claude:', error);
     throw error instanceof Error ? error : new Error('Failed to analyze document. Please try again.');
