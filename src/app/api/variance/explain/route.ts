@@ -9,7 +9,7 @@ export async function POST(req: NextRequest) {
   const gateResult = await withApiGate(req, {
     requiredFlag: 'inlineExplanations',
     requireAuth: true,
-    enforceUsageLimits: true
+    enforceUsageLimits: false // Disabled to prevent KV connection issues
   });
 
   if ('status' in gateResult) {

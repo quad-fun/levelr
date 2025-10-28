@@ -7,7 +7,7 @@ export async function POST(request: NextRequest) {
   const gateResult = await withApiGate(request, {
     requiredFlag: 'generateRfp',
     requireAuth: true,
-    enforceUsageLimits: true
+    enforceUsageLimits: false // Disabled to prevent KV connection issues
   });
 
   if ('status' in gateResult) {
