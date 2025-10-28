@@ -1,4 +1,5 @@
 // src/lib/analysis/enhanced-risk-analyzer.ts
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { AnalysisResult, RiskSummary, DisciplineRiskAssessment, NormalizedRiskItem } from '@/types/analysis';
 import type { Flags } from '@/lib/flags';
@@ -863,8 +864,8 @@ async function analyzeDesignScheduleRisks(
       else if (phaseKey.toLowerCase().includes('bidding')) standardPhase = 'BN';
       else if (phaseKey.toLowerCase().includes('construction_administration')) standardPhase = 'CA';
 
-      if (standardPhase && typicalPhasePercentages[standardPhase]) {
-        const typical = typicalPhasePercentages[standardPhase];
+      if (standardPhase && typicalPhasePercentages[standardPhase as keyof typeof typicalPhasePercentages]) {
+        const typical = typicalPhasePercentages[standardPhase as keyof typeof typicalPhasePercentages];
 
         if (percentage > typical.max) {
           const risk = {

@@ -2,7 +2,7 @@ import { auth } from "@clerk/nextjs/server";
 import { CheckCircle, Shield, Clock, TrendingUp, FileText, Zap, BarChart3, Building2, DollarSign, Target, ArrowRight, Play } from 'lucide-react';
 
 export default async function LandingPage() {
-  const { userId } = await auth();
+  await auth();
 
   return (
     <div className="bg-white">{/* Landing page content */}

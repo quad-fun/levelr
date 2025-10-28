@@ -411,7 +411,7 @@ export function exportDesignAnalysisToPDF(analysis: AnalysisResult): void {
           // Transform action description into actionable checklist
           const checklistSteps = transformToChecklist(action.title, action.description, action.category);
 
-          checklistSteps.forEach((step, index) => {
+          checklistSteps.forEach((step, _index) => {
             checkPageBreak(5);
             doc.text(`[ ] ${step}`, margin + 40, getCurrentY());
             updateYPosition(getCurrentY() + 5);

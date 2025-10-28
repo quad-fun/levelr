@@ -37,7 +37,7 @@ export function AuthHeader() {
             {isAuthEnabled ? (
               <>
                 <SignedOut>
-                  <SignInButton mode="modal" fallbackRedirectUrl="/analyze" signInFallbackRedirectUrl="/analyze">
+                  <SignInButton mode="modal" fallbackRedirectUrl="/analyze">
                     <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium">
                       Sign In
                     </button>

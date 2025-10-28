@@ -487,7 +487,7 @@ export function exportConstructionAnalysisToPDF(analysis: AnalysisResult): void 
 
       const topRisks = analysis.riskSummary.topRisks.slice(0, 5); // Show top 5
 
-      topRisks.forEach((risk, index) => {
+      topRisks.forEach((risk, _index) => {
         checkPageBreak(15);
 
         // Risk severity indicator
@@ -553,7 +553,7 @@ export function exportConstructionAnalysisToPDF(analysis: AnalysisResult): void 
         })
         .slice(0, 8); // Show top 8 actions
 
-      priorityActions.forEach((action, index) => {
+      priorityActions.forEach((action, _index) => {
         checkPageBreak(12);
 
         // Priority indicator
