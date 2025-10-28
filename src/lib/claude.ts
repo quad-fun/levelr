@@ -45,147 +45,24 @@ function sanitizeJsonStringMinimal(raw: string): string {
     JSON.parse(s);
     return s;
   } catch {
-    // Fix specific malformed patterns seen in Claude responses before broadCommaFix
-    let fixed = s;
-
-    // Fix missing property name before comma: "00": { ,"cost": -> "00": {"cost":
-    fixed = fixed.replace(/(\{\s*),(\s*")/g, '$1$2');
-
-    // Fix extra comma before value: "property": ,"value" -> "property": "value"
-    fixed = fixed.replace(/:\s*,(\s*"[^"]*")/g, ': $1');
-    fixed = fixed.replace(/:\s*,(\s*[^,}\]]+)/g, ': $1');
-
-    // Fix array comma issues: [,"item"] -> ["item"]
-    fixed = fixed.replace(/\[\s*,(\s*")/g, '[$1');
-    fixed = fixed.replace(/\[\s*,(\s*[^,\]]+)/g, '[$1');
-
-    // Fix missing commas in arrays (new fix for the specific error)
-    // Pattern: "item1" "item2" -> "item1", "item2"
-    fixed = fixed.replace(/(")\s+(")/g, '$1, $2');
-
-    // Fix missing commas between object properties
-    fixed = fixed.replace(/(})\s+(")/g, '$1, $2');
-    fixed = fixed.replace(/(])\s+(")/g, '$1, $2');
-    fixed = fixed.replace(/(\d)\s+(")/g, '$1, $2');
-
+    // Last-ditch string-safe broad fix
+    const widened = broadCommaFix(s);
     try {
-      JSON.parse(fixed);
-      return fixed;
-    } catch (secondError) {
-      // Log the second error for debugging
-      console.warn('Secondary JSON fixes failed:', secondError);
-
-      // Only use broadCommaFix as last resort and log when we do
-      console.warn('Attempting aggressive comma fix as last resort...');
-      const widened = broadCommaFix(fixed);
-      try {
-        JSON.parse(widened);
-        console.log('Aggressive comma fix succeeded');
-        return widened;
-      } catch (finalErr) {
-        // Enhanced error logging with more context
-        const pos = (finalErr as SyntaxError & { position?: number }).position ?? -1;
-        if (pos >= 0) {
-          const start = Math.max(0, pos - 200);
-          const end = Math.min(s.length, pos + 200);
-          const errorWindow = s.slice(start, end);
-          const lines = errorWindow.split('\n');
-          const lineNum = errorWindow.slice(0, pos - start).split('\n').length;
-
-          console.error(`JSON parse error at position ${pos}:`);
-          console.error(`Error window (±200 chars): ${errorWindow}`);
-          console.error(`Problem around line ${lineNum} of error window`);
-          if (lines[lineNum - 1]) {
-            console.error(`Problematic line: ${lines[lineNum - 1]}`);
-          }
-        }
-        throw finalErr;
+      JSON.parse(widened);
+      return widened;
+    } catch (finalErr) {
+      // Log error context for debugging
+      const pos = (finalErr as SyntaxError & { position?: number }).position ?? -1;
+      if (pos >= 0) {
+        const start = Math.max(0, pos - 100);
+        const end = Math.min(s.length, pos + 100);
+        console.error(`JSON parse error window @${pos}: ${s.slice(start, end)}`);
       }
+      throw finalErr;
     }
   }
 }
 
-function findLastCompleteJsonStructure(jsonString: string): string | null {
-  // Find the last complete JSON object by balancing braces
-  let braceCount = 0;
-  let lastValidEnd = -1;
-  let inString = false;
-  let escaped = false;
-
-  for (let i = 0; i < jsonString.length; i++) {
-    const char = jsonString[i];
-
-    if (inString) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === '"') {
-        inString = false;
-      }
-    } else {
-      if (char === '"') {
-        inString = true;
-      } else if (char === '{') {
-        braceCount++;
-      } else if (char === '}') {
-        braceCount--;
-        if (braceCount === 0) {
-          lastValidEnd = i;
-        }
-      }
-    }
-  }
-
-  if (lastValidEnd > 0) {
-    return jsonString.substring(0, lastValidEnd + 1);
-  }
-
-  return null;
-}
-
-function createMinimalFallbackJson(responseText: string, processedDoc: ProcessedDocument): string {
-  // Extract basic information from the response text for fallback
-  const contractorMatch = responseText.match(/"contractor_name"\s*:\s*"([^"]+)"/);
-  const totalMatch = responseText.match(/"total_amount"\s*:\s*(\d+(?:\.\d+)?)/);
-
-  const contractorName = contractorMatch ? contractorMatch[1] : "Analysis Failed";
-  const totalAmount = totalMatch ? parseFloat(totalMatch[1]) : 0;
-
-  return JSON.stringify({
-    contractor_name: contractorName,
-    total_amount: totalAmount,
-    gross_sqft: 0,
-    project_name: processedDoc.fileName || "Unknown Project",
-    bid_date: new Date().toISOString().split('T')[0],
-    base_bid_amount: totalAmount,
-    direct_costs: totalAmount,
-    markup_percentage: 0,
-    csi_divisions: {
-      "01": {
-        cost: totalAmount,
-        items: ["partial analysis - json parsing failed"],
-        subcontractor: "Unknown",
-        scope_notes: "Analysis incomplete due to response parsing error"
-      }
-    },
-    project_overhead: {
-      total_overhead: 0
-    },
-    allowances: [],
-    allowances_total: 0,
-    subcontractors: [],
-    softCosts: [],
-    softCostsTotal: 0,
-    uncategorizedCosts: [],
-    uncategorizedTotal: 0,
-    categorizationPercentage: 0,
-    timeline: "Unknown",
-    exclusions: [],
-    assumptions: ["Partial analysis due to parsing error"],
-    document_quality: "parsing_error"
-  });
-}
 
 export async function analyzeDocumentWithClaude(processedDoc: ProcessedDocument): Promise<AnalysisResult> {
   const prompt = `
@@ -473,7 +350,7 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
       },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
-        max_tokens: 8000, // Increased from 4000 to handle complex JSON structures
+        max_tokens: 6000, // Increased for complex projects while keeping working parsing logic
         messages: [{
           role: 'user',
           content: messageContent
@@ -507,27 +384,9 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
 
     // Pre-process JSON to auto-correct legacy divisions before parsing
     const correctedJsonString = autoCorrectLegacyDivisions(jsonMatch[0]);
-
-    // Robust JSON sanitization with fallback recovery
-    let sanitizedJson: string;
-    try {
-      sanitizedJson = sanitizeJsonStringMinimal(correctedJsonString);
-      console.log(`About to parse length=${sanitizedJson.length}, tail=${sanitizedJson.slice(-120)}`);
-    } catch (sanitizeError) {
-      console.warn('JSON sanitization failed, attempting recovery...', sanitizeError);
-
-      // Fallback: Try to recover by finding the last complete object/array structure
-      const lastCompleteStructure = findLastCompleteJsonStructure(correctedJsonString);
-      if (lastCompleteStructure) {
-        console.log('Recovered truncated JSON structure');
-        sanitizedJson = sanitizeJsonStringMinimal(lastCompleteStructure);
-      } else {
-        // Final fallback: return partial structure with minimal required fields
-        console.warn('Creating minimal fallback JSON structure');
-        sanitizedJson = createMinimalFallbackJson(content.text, processedDoc);
-      }
-    }
-
+    // Robust JSON sanitization with string masking
+    const sanitizedJson = sanitizeJsonStringMinimal(correctedJsonString);
+    console.log(`About to parse length=${sanitizedJson.length}, tail=${sanitizedJson.slice(-120)}`);
     const analysisResult: AnalysisResult = JSON.parse(sanitizedJson);
     
     // Validate required fields
@@ -544,9 +403,16 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     // Final completeness validation on enhanced data
     validateAnalysisCompleteness(validatedAnalysis);
 
-    // Temporarily disable summary generation to focus on core analysis parsing issue
-    console.log('📝 Detailed summary generation temporarily disabled due to parsing issues');
-    return validatedAnalysis;
+    // Generate detailed summary via two-pass pipeline (feature flagged)
+    const enableDetailedSummary = process.env.ENABLE_DETAILED_SUMMARY !== 'false'; // Default enabled
+
+    if (enableDetailedSummary) {
+      const enhancedAnalysis = await generateDetailedSummaryInProcess(validatedAnalysis);
+      return enhancedAnalysis;
+    } else {
+      console.log('📝 Detailed summary generation disabled via feature flag');
+      return validatedAnalysis;
+    }
   } catch (error) {
     console.error('Error analyzing document with Claude:', error);
     throw error instanceof Error ? error : new Error('Failed to analyze document. Please try again.');
@@ -953,6 +819,7 @@ function migrateMasterFormat2018Compliance(analysis: AnalysisResult): AnalysisRe
   return migratedAnalysis;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function generateDetailedSummaryInProcess(analysis: AnalysisResult): Promise<AnalysisResult> {
   console.log('📝 Generating detailed summary via in-process pipeline...');
 
