@@ -27,6 +27,27 @@ export default function MultiDisciplineAnalysisResults({
 }: MultiDisciplineAnalysisResultsProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'scope' | 'soft-costs' | 'commercial' | 'risk'>('overview');
 
+  // Smart fallback: Use enhanced risk summary if legacy assessment is missing/empty
+  const getEffectiveRiskAssessment = (): RiskAssessment | undefined => {
+    if (riskAssessment && riskAssessment.score > 0) {
+      return riskAssessment;
+    }
+
+    // Calculate from enhanced risk summary
+    if (analysis.riskSummary?.assessments && analysis.riskSummary.assessments.length > 0) {
+      const assessment = analysis.riskSummary.assessments[0]; // Primary discipline
+      return {
+        score: assessment.overallScore,
+        level: assessment.overallLevel,
+        factors: assessment.risks.slice(0, 3).map(risk => risk.title)
+      };
+    }
+
+    return riskAssessment;
+  };
+
+  const effectiveRiskAssessment = getEffectiveRiskAssessment();
+
   const getDisciplineConfig = (discipline: string) => {
     const configs = {
       construction: {
@@ -140,10 +161,10 @@ export default function MultiDisciplineAnalysisResults({
 
         <div className="text-center">
           <div className="flex items-center justify-center mb-2">
-            <AlertTriangle className={`h-4 w-4 ${riskAssessment ? getRiskColor(riskAssessment.level).split(' ')[0] : 'text-gray-500'}`} />
+            <AlertTriangle className={`h-4 w-4 ${effectiveRiskAssessment ? getRiskColor(effectiveRiskAssessment.level).split(' ')[0] : 'text-gray-500'}`} />
           </div>
           <p className="text-sm text-gray-600">Risk Level</p>
-          <p className="font-semibold">{riskAssessment?.level || 'Unknown'}</p>
+          <p className="font-semibold">{effectiveRiskAssessment?.level || 'Unknown'}</p>
         </div>
 
         <div className="text-center">
@@ -186,7 +207,7 @@ export default function MultiDisciplineAnalysisResults({
           <OverviewTab 
             analysis={analysis} 
             marketVariance={marketVariance}
-            _riskAssessment={riskAssessment}
+            _riskAssessment={effectiveRiskAssessment}
             _disciplineConfig={disciplineConfig}
           />
         )}
@@ -215,7 +236,7 @@ export default function MultiDisciplineAnalysisResults({
         {activeTab === 'risk' && (
           <RiskTab 
             analysis={analysis}
-            riskAssessment={riskAssessment}
+            riskAssessment={effectiveRiskAssessment}
             _disciplineConfig={disciplineConfig}
           />
         )}
@@ -1132,7 +1153,7 @@ function RiskTab({
           <div>
             <h4 className="font-medium text-gray-900 mb-3">Risk Factors</h4>
             <ul className="space-y-2">
-              {riskAssessment.factors.map((factor, idx) => (
+              {riskAssessment.factors.map((factor: string, idx: number) => (
                 <li key={idx} className="flex items-start space-x-2">
                   <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5" />
                   <span className="text-sm text-gray-700">{factor}</span>
