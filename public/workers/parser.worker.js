@@ -87,14 +87,13 @@ async function mockParseDocument(file) {
     mockLines.push({
       id: `line-${index + 1}`,
       description: `${div.name} - ${generateMockDescription(div.name)}`,
-      csiDivision: div.division,
-      csiTitle: div.name,
+      division: div.division, // Use 'division' to match CsiLine interface
+      cost: cost, // Use 'cost' to match CsiLine interface
       quantity: Math.floor(Math.random() * 1000) + 100,
       unit: getRandomUnit(div.name),
       unitCost: Math.round(cost / (Math.floor(Math.random() * 500) + 100)),
-      totalCost: cost,
       subcontractor: generateMockSubcontractor(div.name),
-      lineNumber: index + 1,
+      pageRef: Math.floor(Math.random() * 5) + 1,
       confidence: Math.random() * 0.2 + 0.8 // 80-100% confidence
     });
   });

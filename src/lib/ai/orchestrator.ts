@@ -173,6 +173,7 @@ export class AnalysisOrchestrator {
     ];
 
     for (const line of lines) {
+      if (!line.description) continue;
       for (const pattern of companyPatterns) {
         const match = line.description.match(pattern);
         if (match) {
@@ -202,6 +203,7 @@ export class AnalysisOrchestrator {
     ];
 
     for (const line of lines) {
+      if (!line.description) continue;
       for (const pattern of projectPatterns) {
         const match = line.description.match(pattern);
         if (match) {
@@ -237,7 +239,8 @@ export class AnalysisOrchestrator {
 
     // Check for invalid divisions
     const invalidDivisions = lines.filter(line =>
-      !line.division.match(/^\d{2}$/) ||
+      !line.division?.match(/^\d{2}$/) ||
+      !line.division ||
       parseInt(line.division) < 1 ||
       parseInt(line.division) > 49
     ).length;
