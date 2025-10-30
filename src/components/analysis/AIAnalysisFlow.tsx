@@ -7,14 +7,13 @@ import Timeline, { TimelineStage } from '@/components/analysis/Timeline';
 import Artifacts from '@/components/analysis/Artifacts';
 import { AnalysisOrchestrator } from '@/lib/ai/orchestrator';
 import { ArtifactStorage } from '@/lib/storage';
-import { getFlags } from '@/lib/flags';
 import type { BidArtifact, CsiLine } from '@/types/analysis';
 import type { Flags } from '@/lib/flags';
 
 interface AIAnalysisFlowProps {
   file: File;
   flags: Flags;
-  userId?: string;
+  userId?: string; // eslint-disable-line @typescript-eslint/no-unused-vars
   onComplete?: (artifact: BidArtifact) => void;
   onError?: (error: string) => void;
   onCancel?: () => void;
@@ -93,6 +92,47 @@ export default function AIAnalysisFlow({
       stage.id === stageId ? { ...stage, ...updates } : stage
     ));
   }, []);
+
+  const parseDocumentWithWorker = useCallback(async (file: File): Promise<CsiLine[]> => {
+    return new Promise((resolve, reject) => {
+      if (!workerRef.current) {
+        workerRef.current = new Worker('/workers/parser.worker.js');
+      }
+
+      const worker = workerRef.current;
+
+      worker.onmessage = (event) => {
+        const { type, data, error, progress } = event.data;
+
+        if (type === 'progress') {
+          updateStage('parsing', { progress: progress / 100 });
+        } else if (type === 'success') {
+          resolve(data.lines || []);
+        } else if (type === 'error') {
+          reject(new Error(error));
+        }
+      };
+
+      worker.onerror = (error) => {
+        reject(new Error(`Worker error: ${error.message}`));
+      };
+
+      // Convert file to base64 for worker
+      const reader = new FileReader();
+      reader.onload = () => {
+        worker.postMessage({
+          type: 'parse',
+          file: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+            data: reader.result
+          }
+        });
+      };
+      reader.readAsDataURL(file);
+    });
+  }, [updateStage]);
 
   const runAnalysis = useCallback(async () => {
     if (isRunning) return;
@@ -214,48 +254,7 @@ export default function AIAnalysisFlow({
     } finally {
       setIsRunning(false);
     }
-  }, [file, flags, isRunning, onComplete, onError, updateStage]);
-
-  const parseDocumentWithWorker = useCallback(async (file: File): Promise<CsiLine[]> => {
-    return new Promise((resolve, reject) => {
-      if (!workerRef.current) {
-        workerRef.current = new Worker('/workers/parser.worker.js');
-      }
-
-      const worker = workerRef.current;
-
-      worker.onmessage = (event) => {
-        const { type, data, error, progress } = event.data;
-
-        if (type === 'progress') {
-          updateStage('parsing', { progress: progress / 100 });
-        } else if (type === 'success') {
-          resolve(data.lines || []);
-        } else if (type === 'error') {
-          reject(new Error(error));
-        }
-      };
-
-      worker.onerror = (error) => {
-        reject(new Error(`Worker error: ${error.message}`));
-      };
-
-      // Convert file to base64 for worker
-      const reader = new FileReader();
-      reader.onload = () => {
-        worker.postMessage({
-          type: 'parse',
-          file: {
-            name: file.name,
-            size: file.size,
-            type: file.type,
-            data: reader.result
-          }
-        });
-      };
-      reader.readAsDataURL(file);
-    });
-  }, [updateStage]);
+  }, [file, flags, isRunning, onComplete, onError, updateStage, parseDocumentWithWorker]);
 
   // Auto-start analysis when component mounts
   React.useEffect(() => {

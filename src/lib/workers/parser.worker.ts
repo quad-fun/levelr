@@ -103,7 +103,7 @@ class DocumentParser {
     }
   }
 
-  private async parsePdf(file: File): Promise<CsiLine[]> {
+  private async parsePdf(_file: File): Promise<CsiLine[]> {
     this.postProgress('parsing', 0.2, 'Loading PDF...');
 
     // Note: In a real implementation, you'd import PDF.js here
@@ -136,7 +136,7 @@ class DocumentParser {
     return this.normalizeLines(lines);
   }
 
-  private async parseSpreadsheet(file: File): Promise<CsiLine[]> {
+  private async parseSpreadsheet(_file: File): Promise<CsiLine[]> {
     this.postProgress('parsing', 0.2, 'Loading spreadsheet...');
 
     // Note: In a real implementation, you'd use SheetJS (xlsx library) here

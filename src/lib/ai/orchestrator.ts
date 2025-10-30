@@ -1,7 +1,7 @@
 // src/lib/ai/orchestrator.ts
 
 import type { CsiLine, Risk, BidArtifact } from '@/types/analysis';
-import { calculateScore, scoreToLevel } from '@/lib/analysis/score';
+import { calculateScore } from '@/lib/analysis/score';
 import { AVAILABLE_TOOLS } from './tools';
 
 export interface OrchestrationResult {
@@ -280,7 +280,7 @@ export class AnalysisOrchestrator {
     }
 
     // Cost distribution insights
-    const totalCost = artifact.analysis.totalAmount;
+    const _totalCost = artifact.analysis.totalAmount;
     const divisions = Object.entries(artifact.analysis.csiBreakdown);
     const topDivisions = divisions
       .sort(([, a], [, b]) => b.cost - a.cost)

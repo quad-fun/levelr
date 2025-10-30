@@ -9,7 +9,7 @@ export const runtime = 'edge';
 interface PutRequest {
   kind: 'bid-artifact' | 'leveling-artifact' | 'analysis-artifact';
   runId: string;
-  payload: any; // JSON payload only
+  payload: unknown; // JSON payload only
   ttl?: number; // Optional TTL in seconds
 }
 

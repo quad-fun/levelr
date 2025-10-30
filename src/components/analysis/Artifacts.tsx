@@ -5,7 +5,7 @@
 import { useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { AlertTriangle, FileBarChart, Download, Share2, Eye } from 'lucide-react';
-import type { BidArtifact, Risk } from '@/types/analysis';
+import type { BidArtifact } from '@/types/analysis';
 
 interface ArtifactsProps {
   artifact: BidArtifact;

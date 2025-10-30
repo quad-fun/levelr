@@ -819,7 +819,6 @@ function migrateMasterFormat2018Compliance(analysis: AnalysisResult): AnalysisRe
   return migratedAnalysis;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 async function generateDetailedSummaryInProcess(analysis: AnalysisResult): Promise<AnalysisResult> {
   console.log('📝 Generating detailed summary via in-process pipeline...');
 
