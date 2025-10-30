@@ -1335,7 +1335,7 @@ export class ArtifactStorage {
   private async getLocalArtifact<T>(key: string): Promise<StorageResult<T>> {
     try {
       // Use existing secureRetrieve function
-      const data = secureRetrieve<T>(key);
+      const data = secureRetrieve(key) as T | null;
 
       if (data) {
         return { success: true, data };
