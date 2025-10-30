@@ -150,10 +150,7 @@ export function exportBidArtifactToPDF(artifact: BidArtifact): void {
     contractor_name: artifact.analysis.contractorName,
     total_amount: artifact.analysis.totalAmount,
     discipline: 'construction', // AI-native artifacts are construction-focused for now
-    csi_divisions: artifact.analysis.csiBreakdown,
-    total_pages: artifact.parsing.totalPages,
-    analysis_date: artifact.meta.createdAt,
-    file_name: artifact.meta.fileName
+    csi_divisions: artifact.analysis.csiBreakdown
   };
 
   return exportAnalysisToPDF(analysis);
@@ -165,10 +162,7 @@ export function exportBidArtifactToExcel(artifact: BidArtifact): void {
     contractor_name: artifact.analysis.contractorName,
     total_amount: artifact.analysis.totalAmount,
     discipline: 'construction',
-    csi_divisions: artifact.analysis.csiBreakdown,
-    total_pages: artifact.parsing.totalPages,
-    analysis_date: artifact.meta.createdAt,
-    file_name: artifact.meta.fileName
+    csi_divisions: artifact.analysis.csiBreakdown
   };
 
   return exportAnalysisToExcel(analysis);
