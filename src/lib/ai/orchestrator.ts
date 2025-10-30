@@ -25,9 +25,69 @@ export class AnalysisOrchestrator {
   }
 
   /**
+   * Automatically detect discipline from document content
+   */
+  private detectDiscipline(lines: CsiLine[], fileName: string): 'construction' | 'design' | 'trade' {
+    // Keywords that indicate design documents
+    const designKeywords = [
+      'schematic design', 'design development', 'construction documents',
+      'architectural', 'engineering', 'aia', 'phase', 'deliverable',
+      'design fees', 'consultant', 'drawing', 'specification',
+      'sd', 'dd', 'cd', 'bn', 'ca'
+    ];
+
+    // Keywords that indicate trade/technical documents
+    const tradeKeywords = [
+      'electrical system', 'hvac system', 'plumbing system', 'fire protection',
+      'security system', 'elevator', 'commissioning', 'testing',
+      'automation', 'controls', 'equipment', 'installation',
+      'technical', 'specialty', 'mechanical', 'systems integration'
+    ];
+
+    // Keywords that indicate construction documents
+    const constructionKeywords = [
+      'concrete', 'masonry', 'steel', 'framing', 'roofing',
+      'excavation', 'foundation', 'drywall', 'flooring',
+      'general contractor', 'construction', 'building'
+    ];
+
+    const content = [fileName, ...lines.map(l => l.description || '')].join(' ').toLowerCase();
+
+    // Check for design indicators
+    const designScore = designKeywords.reduce((score, keyword) =>
+      score + (content.includes(keyword) ? 1 : 0), 0);
+
+    // Check for trade indicators
+    const tradeScore = tradeKeywords.reduce((score, keyword) =>
+      score + (content.includes(keyword) ? 1 : 0), 0);
+
+    // Check for construction indicators
+    const constructionScore = constructionKeywords.reduce((score, keyword) =>
+      score + (content.includes(keyword) ? 1 : 0), 0);
+
+    // Also check line item divisions for clues
+    const divisionTypes = lines.map(l => l.division).filter(Boolean);
+    const hasCSIDivisions = divisionTypes.some(d => /^\d{2}$/.test(d));
+    const hasAIAPhases = divisionTypes.some(d => /^(SD|DD|CD|BN|CA)/.test(d));
+    const hasTechnicalSystems = divisionTypes.some(d => /^(ELEC|HVAC|PLUMB|FIRE|SECU|COMM|ELEV|SPEC|AUTO|LIFE|TEST|MAINT)$/.test(d));
+
+    // Boost scores based on division patterns
+    if (hasAIAPhases) return 'design';
+    if (hasTechnicalSystems) return 'trade';
+    if (hasCSIDivisions) return 'construction';
+
+    // Use keyword scores
+    if (designScore > tradeScore && designScore > constructionScore) return 'design';
+    if (tradeScore > constructionScore) return 'trade';
+
+    // Default to construction
+    return 'construction';
+  }
+
+  /**
    * Main orchestration method
-   * Input: parsed CSI lines
-   * Output: complete analysis artifact
+   * Input: parsed lines (any discipline)
+   * Output: complete analysis artifact with auto-detected discipline
    */
   async orchestrate(
     lines: CsiLine[],
@@ -39,6 +99,10 @@ export class AnalysisOrchestrator {
     }
   ): Promise<OrchestrationResult> {
     this.timings = {}; // Reset timings
+
+    // Step 0: Auto-detect discipline
+    const detectedDiscipline = this.detectDiscipline(lines, metadata.fileName);
+    console.log(`🎯 Auto-detected discipline: ${detectedDiscipline}`);
 
     // Step 1: Extract basic analysis data
     const analysis = this.time('extract_analysis', () => {
@@ -75,7 +139,10 @@ export class AnalysisOrchestrator {
         parseConfidence: this.calculateParseConfidence(lines),
         errors: this.validateLines(lines)
       },
-      analysis,
+      analysis: {
+        ...analysis,
+        discipline: detectedDiscipline
+      },
       risks,
       score: {
         overall: score.overall,

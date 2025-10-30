@@ -333,6 +333,7 @@ export interface BidArtifact {
     totalAmount: number;
     projectName?: string;
     bidDate?: string;
+    discipline: 'construction' | 'design' | 'trade';
     csiBreakdown: Record<string, {
       cost: number;
       items: string[];

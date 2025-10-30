@@ -13,7 +13,6 @@ import type { Flags } from '@/lib/flags';
 interface AIAnalysisFlowProps {
   file: File;
   flags: Flags;
-  discipline: 'construction' | 'design' | 'trade';
   userId?: string;
   onComplete?: (artifact: BidArtifact) => void;
   onError?: (error: string) => void;
@@ -23,7 +22,6 @@ interface AIAnalysisFlowProps {
 export default function AIAnalysisFlow({
   file,
   flags,
-  discipline,
   userId: _userId,
   onComplete,
   onError,
@@ -123,7 +121,7 @@ export default function AIAnalysisFlow({
     ];
   };
 
-  const [stages, setStages] = useState<TimelineStage[]>(getDisciplineStages(discipline));
+  const [stages, setStages] = useState<TimelineStage[]>(getDisciplineStages('construction')); // Start with generic stages
 
   const [artifact, setArtifact] = useState<BidArtifact | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -172,8 +170,7 @@ export default function AIAnalysisFlow({
             size: file.size,
             type: file.type,
             data: reader.result
-          },
-          discipline: discipline
+          }
         });
       };
       reader.readAsDataURL(file);
@@ -240,6 +237,11 @@ export default function AIAnalysisFlow({
         fileSize: file.size,
         docIds: []
       });
+
+      // Update stages based on detected discipline
+      const detectedDiscipline = analysisResult.artifact.analysis.discipline;
+      console.log(`🎯 Updating UI for detected discipline: ${detectedDiscipline}`);
+      setStages(getDisciplineStages(detectedDiscipline));
 
       updateStage('detecting', {
         status: 'complete',

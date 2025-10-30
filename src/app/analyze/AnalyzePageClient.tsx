@@ -3,7 +3,6 @@
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import DocumentUpload from '@/components/analysis/DocumentUpload';
-import AnalysisResults from '@/components/analysis/AnalysisResults';
 import MultiDisciplineAnalysisResults from '@/components/analysis/MultiDisciplineAnalysisResults';
 import ExportTools from '@/components/analysis/ExportTools';
 import AIAnalysisFlow from '@/components/analysis/AIAnalysisFlow';
@@ -14,11 +13,8 @@ import RFPBuilder from '@/components/rfp/RFPBuilder';
 import ProjectManager from '@/components/ecosystem/ProjectManager';
 import { AuthDebug } from '@/components/debug/AuthDebug';
 import { FeatureGate } from '@/components/common/FeatureGate';
-import { analyzeDocument } from '@/lib/claude-client';
-import { MultiDisciplineAnalyzer } from '@/lib/analysis/multi-discipline-analyzer';
-import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
-import { AnalysisResult, MarketVariance, RiskAssessment, BidArtifact } from '@/types/analysis';
-import { saveAnalysis, getProject } from '@/lib/storage';
+import { AnalysisResult, BidArtifact } from '@/types/analysis';
+import { getProject } from '@/lib/storage';
 import { ProcessedDocument } from '@/lib/document-processor';
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import type { Flags } from '@/lib/flags';
@@ -31,15 +27,9 @@ interface AnalyzePageClientProps {
 
 function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: AnalyzePageClientProps) {
   const searchParams = useSearchParams();
-  const [isProcessing, setIsProcessing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'upload' | 'history' | 'leveling' | 'rfp' | 'ecosystem'>('upload');
-  const [lastProcessedDoc, setLastProcessedDoc] = useState<{file: File, processedDoc: ProcessedDocument} | null>(null);
-  const [selectedDiscipline, setSelectedDiscipline] = useState<'construction' | 'design' | 'trade'>('construction');
-  const [marketVariance, setMarketVariance] = useState<MarketVariance | null>(null);
-  const [riskAssessment, setRiskAssessment] = useState<RiskAssessment | null>(null);
-  const [useMultiDisciplineAnalysis] = useState(true);
   const [projectContext, setProjectContext] = useState<{
     projectId: string;
     projectName: string;
@@ -60,13 +50,9 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
     discipline?: 'construction' | 'design' | 'trade';
   } | null>(null);
 
-  // AI-native flow state
-  const [useAINativeFlow, setUseAINativeFlow] = useState(false);
+  // AI-native flow state (now the only flow)
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [aiArtifact, setAiArtifact] = useState<BidArtifact | null>(null);
-
-  // Determine if AI-native flow should be used (when local mode or deterministic scoring is enabled)
-  const shouldUseAINativeFlow = flags.localMode || flags.deterministicScoring || flags.webWorkerParsing;
 
   // Avoid unused variable warning
   if (selectedProjectForRFP) {
@@ -97,137 +83,21 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
     }
   }, [searchParams]);
 
-  const handleFileSelect = async (file: File, processedDoc: ProcessedDocument) => {
-    setIsProcessing(true);
-    setError(null);
 
-    setLastProcessedDoc({ file, processedDoc });
-
-    try {
-      console.log('Starting analysis for:', file.name, 'Type:', processedDoc.fileType, 'Discipline:', selectedDiscipline);
-
-      let result: AnalysisResult;
-
-      if (useMultiDisciplineAnalysis) {
-        if (selectedDiscipline === 'construction') {
-          result = await analyzeDocument(processedDoc);
-          result.discipline = 'construction';
-        } else if (selectedDiscipline === 'design' && !flags.designAnalysis) {
-          // Show upgrade prompt but allow the analysis for demo purposes
-          setError('Design analysis requires Pro tier. This is a demo analysis - upgrade to save and export results.');
-          result = await analyzeDocument(processedDoc); // Use construction analysis as fallback
-          result.discipline = 'design';
-        } else if (selectedDiscipline === 'trade' && !flags.tradeAnalysis) {
-          // Show upgrade prompt but allow the analysis for demo purposes
-          setError('Trade analysis requires Pro tier. This is a demo analysis - upgrade to save and export results.');
-          result = await analyzeDocument(processedDoc); // Use construction analysis as fallback
-          result.discipline = 'trade';
-        } else {
-          result = await MultiDisciplineAnalyzer.analyzeProposal(
-            processedDoc,
-            selectedDiscipline,
-            {
-              projectType: 'general',
-              estimatedValue: 0
-            }
-          );
-        }
-
-        if (selectedDiscipline === 'construction') {
-          setMarketVariance(null);
-        } else {
-          setMarketVariance(null);
-        }
-
-        setRiskAssessment(calculateMultiDisciplineRisk(result));
-
-      } else {
-        if (selectedDiscipline === 'construction') {
-          result = await analyzeDocument(processedDoc);
-          result.discipline = 'construction';
-        } else if (selectedDiscipline === 'design') {
-          const response = await fetch('/api/claude/design', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ processedDoc })
-          });
-          if (!response.ok) throw new Error(`Design analysis failed: ${response.statusText}`);
-          const data = await response.json();
-          result = data.result;
-        } else {
-          const response = await fetch('/api/claude/trade', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ processedDoc })
-          });
-          if (!response.ok) throw new Error(`Trade analysis failed: ${response.statusText}`);
-          const data = await response.json();
-          result = data.result;
-        }
-        setMarketVariance(null);
-        setRiskAssessment(null);
-      }
-
-      setAnalysisResult(result);
-
-      const analysisId = saveAnalysis(result, marketVariance || undefined, riskAssessment || undefined);
-      console.log('Analysis saved with ID:', analysisId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed');
-      console.error('Analysis error:', err);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleExport = () => {
-    if (!analysisResult) return;
-    console.log('Exporting analysis...');
-  };
-
-  const retryAnalysis = async () => {
-    if (!lastProcessedDoc) {
-      setError('No document to retry. Please upload a new document.');
-      return;
-    }
-
-    const { file, processedDoc } = lastProcessedDoc;
-    setIsProcessing(true);
-    setError(null);
-
-    try {
-      console.log('Retrying analysis for:', file.name, 'Type:', processedDoc.fileType);
-
-      const result = await analyzeDocument(processedDoc);
-      setAnalysisResult(result);
-
-      const analysisId = saveAnalysis(result);
-      console.log('Analysis saved with ID:', analysisId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Analysis failed');
-      console.error('Analysis retry error:', err);
-    } finally {
-      setIsProcessing(false);
-    }
-  };
 
   const resetAnalysis = () => {
     setAnalysisResult(null);
     setError(null);
-    setLastProcessedDoc(null);
-    setMarketVariance(null);
-    setRiskAssessment(null);
     setSelectedFile(null);
     setAiArtifact(null);
-    setUseAINativeFlow(false);
   };
 
-  // AI-native flow handlers
-  const handleAIFileSelect = (file: File) => {
+  // AI-native flow handlers (now the primary flow)
+  const handleFileSelect = (file: File, _processedDoc: ProcessedDocument) => {
     setSelectedFile(file);
-    setUseAINativeFlow(true);
     setError(null);
     setAnalysisResult(null);
+    setAiArtifact(null);
   };
 
   const handleAIAnalysisComplete = (artifact: BidArtifact) => {
@@ -240,8 +110,7 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
     console.error('AI-native analysis error:', errorMessage);
   };
 
-  const handleAIAnalysisCancel = () => {
-    setUseAINativeFlow(false);
+  const handleAnalysisCancel = () => {
     setSelectedFile(null);
     setError(null);
   };
@@ -389,148 +258,29 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
             {/* Title */}
             <div className="text-center">
               <h1 className="text-4xl font-bold text-gray-900 mb-4">
-                Multi-Discipline Proposal Analysis
+                AI-Powered Proposal Analysis
               </h1>
               <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-                Upload your proposal document for instant AI-powered analysis.
-                Support for construction, design services, and trade proposals with expert recommendations.
+                Upload your proposal document for instant AI-powered analysis with automatic discipline detection.
+                Supports construction, design services, and trade proposals with expert recommendations.
               </p>
             </div>
 
-            {/* Discipline Selector */}
-            <div className="max-w-4xl mx-auto">
-              <div className="bg-white rounded-lg shadow-sm border p-6 mb-8">
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Analysis Type</h3>
-                  <p className="text-gray-600">Select the type of analysis for your proposal document.</p>
-                </div>
-
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedDiscipline === 'construction'
-                          ? 'border-blue-500 bg-blue-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="discipline"
-                          value="construction"
-                          checked={selectedDiscipline === 'construction'}
-                          onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
-                          className="h-4 w-4 text-blue-600 border-gray-300 focus:ring-blue-500"
-                        />
-                        <div>
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="text-2xl">🏗️</span>
-                            <h4 className="font-semibold text-gray-900">Construction</h4>
-                          </div>
-                          <p className="text-sm text-gray-600">General contracting and construction projects - CSI Divisions</p>
-                        </div>
-                      </label>
-
-                      <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedDiscipline === 'design'
-                          ? 'border-purple-500 bg-purple-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="discipline"
-                          value="design"
-                          checked={selectedDiscipline === 'design'}
-                          onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
-                          className="h-4 w-4 text-purple-600 border-gray-300 focus:ring-purple-500"
-                        />
-                        <div>
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="text-2xl">📐</span>
-                            <h4 className="font-semibold text-gray-900">Design Services</h4>
-                            {!flags.designAnalysis && (
-                              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">Pro</span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600">Architecture and engineering services - AIA Phases</p>
-                        </div>
-                      </label>
-
-                      <label className={`flex items-center space-x-3 p-4 rounded-lg border-2 cursor-pointer transition-all ${
-                        selectedDiscipline === 'trade'
-                          ? 'border-green-500 bg-green-50'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}>
-                        <input
-                          type="radio"
-                          name="discipline"
-                          value="trade"
-                          checked={selectedDiscipline === 'trade'}
-                          onChange={(e) => setSelectedDiscipline(e.target.value as 'construction' | 'design' | 'trade')}
-                          className="h-4 w-4 text-green-600 border-gray-300 focus:ring-green-500"
-                        />
-                        <div>
-                          <div className="flex items-center space-x-2 mb-1">
-                            <span className="text-2xl">⚡</span>
-                            <h4 className="font-semibold text-gray-900">Trade Services</h4>
-                            {!flags.tradeAnalysis && (
-                              <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Pro</span>
-                            )}
-                          </div>
-                          <p className="text-sm text-gray-600">Specialty trade services - Technical Systems</p>
-                        </div>
-                      </label>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Upload Component or AI-Native Flow */}
-            {useAINativeFlow && selectedFile ? (
+            {/* AI-Native Analysis Flow */}
+            {selectedFile ? (
               <AIAnalysisFlow
                 file={selectedFile}
                 flags={flags}
-                discipline={selectedDiscipline}
                 userId={_userId}
                 onComplete={handleAIAnalysisComplete}
                 onError={handleAIAnalysisError}
-                onCancel={handleAIAnalysisCancel}
+                onCancel={handleAnalysisCancel}
               />
             ) : (
-              <div className="space-y-6">
-                {/* AI-Native Mode Toggle (if available) */}
-                {shouldUseAINativeFlow && (
-                  <div className="max-w-4xl mx-auto">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <svg className="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                          </svg>
-                          <div>
-                            <h3 className="text-sm font-medium text-blue-800">AI-Native Analysis Available</h3>
-                            <p className="text-sm text-blue-700">
-                              Browser-first analysis with deterministic scoring and real-time progress tracking
-                            </p>
-                          </div>
-                        </div>
-                        <label className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={useAINativeFlow}
-                            onChange={(e) => setUseAINativeFlow(e.target.checked)}
-                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <span className="ml-2 text-sm text-blue-800">Enable</span>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                <DocumentUpload
-                  onFileSelect={useAINativeFlow ? (file: File) => handleAIFileSelect(file) : handleFileSelect}
-                  isProcessing={isProcessing}
-                />
-              </div>
+              <DocumentUpload
+                onFileSelect={handleFileSelect}
+                isProcessing={false}
+              />
             )}
 
             {/* Error Display */}
@@ -548,16 +298,7 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
                       <p className="mt-2 text-sm text-red-700">{error}</p>
                     </div>
                   </div>
-                  <div className="mt-4 space-x-3">
-                    {lastProcessedDoc && (
-                      <button
-                        onClick={retryAnalysis}
-                        disabled={isProcessing}
-                        className="bg-blue-100 hover:bg-blue-200 text-blue-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                      >
-                        {isProcessing ? 'Retrying...' : 'Try Again'}
-                      </button>
-                    )}
+                  <div className="mt-4">
                     <button
                       onClick={resetAnalysis}
                       className="bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
@@ -577,8 +318,8 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                   </svg>
                 </div>
-                <h3 className="font-semibold text-gray-900 mb-2">Multi-Discipline Analysis</h3>
-                <p className="text-sm text-gray-600">CSI divisions for construction, AIA phases for design, and technical systems for trade services</p>
+                <h3 className="font-semibold text-gray-900 mb-2">Automatic Discipline Detection</h3>
+                <p className="text-sm text-gray-600">AI automatically detects document type and applies the right analysis framework</p>
               </div>
 
               <div className="text-center p-6 bg-white rounded-lg shadow-sm border">
@@ -671,11 +412,9 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
             </div>
 
             {/* Analysis Results */}
-            {useMultiDisciplineAnalysis && analysisResult?.discipline ? (
+            {analysisResult?.discipline ? (
               <MultiDisciplineAnalysisResults
                 analysis={analysisResult}
-                marketVariance={marketVariance || undefined}
-                riskAssessment={riskAssessment || undefined}
                 onExport={(format) => {
                   if (!analysisResult) return;
                   try {
@@ -691,13 +430,7 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
                 }}
               />
             ) : (
-              <>
-                <AnalysisResults
-                  analysis={analysisResult}
-                  onExport={handleExport}
-                />
-                <ExportTools analysis={analysisResult} />
-              </>
+              <ExportTools analysis={analysisResult} />
             )}
           </div>
         )}
