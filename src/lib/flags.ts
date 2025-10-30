@@ -6,7 +6,8 @@ export type FlagName =
   | "generateRfp" | "projectManagement" | "analysisHistory" | "bidLeveling"
   | "blVarianceExplanation" | "blVarianceAnalysis" | "blComparativeAnalysis"
   | "exportBidAnalysis" | "exportBidLeveling" | "exportRfp" | "blobStorage"
-  | "riskDisciplineAware" | "riskFollowUps" | "riskCrossDiscipline";
+  | "riskDisciplineAware" | "riskFollowUps" | "riskCrossDiscipline"
+  | "localMode" | "proModeEnabled" | "webWorkerParsing" | "deterministicScoring" | "blobArtifactStorage";
 
 export type Flags = {
   // platform
@@ -45,6 +46,13 @@ export type Flags = {
 
   // file management
   blobStorage: boolean;
+
+  // AI-Native Mode Flags
+  localMode: boolean;              // Default true - browser-first analysis
+  proModeEnabled: boolean;         // Show "Enhance with AI (Pro)" when allowed
+  webWorkerParsing: boolean;       // Use Web Worker for document parsing
+  deterministicScoring: boolean;   // Use new scoring system
+  blobArtifactStorage: boolean;    // Store artifacts in Vercel Blob
 };
 
 // Environment variable defaults
@@ -86,6 +94,13 @@ function getEnvDefaults(): Flags {
 
     // file management
     blobStorage: process.env.NEXT_PUBLIC_ENABLE_BLOB_STORAGE !== 'false', // default true
+
+    // AI-Native Mode Flags - all default true for new browser-first experience
+    localMode: process.env.NEXT_PUBLIC_ENABLE_LOCAL_MODE !== 'false', // default true
+    proModeEnabled: process.env.NEXT_PUBLIC_ENABLE_PRO_MODE === 'true', // default false (requires auth)
+    webWorkerParsing: process.env.NEXT_PUBLIC_ENABLE_WEB_WORKER_PARSING !== 'false', // default true
+    deterministicScoring: process.env.NEXT_PUBLIC_ENABLE_DETERMINISTIC_SCORING !== 'false', // default true
+    blobArtifactStorage: process.env.NEXT_PUBLIC_ENABLE_BLOB_ARTIFACT_STORAGE === 'true', // default false
   };
 }
 
@@ -117,6 +132,12 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         riskDisciplineAware: true,
         riskFollowUps: true,
         riskCrossDiscipline: false,
+        // AI-native features
+        localMode: true,
+        proModeEnabled: false, // Starter gets local-only
+        webWorkerParsing: true,
+        deterministicScoring: true,
+        blobArtifactStorage: false,
       };
 
     case "pro":
@@ -144,6 +165,12 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         riskDisciplineAware: true,
         riskFollowUps: true,
         riskCrossDiscipline: true, // Pro gets cross-discipline analysis
+        // AI-native features
+        localMode: true,
+        proModeEnabled: true, // Pro gets AI enhancement
+        webWorkerParsing: true,
+        deterministicScoring: true,
+        blobArtifactStorage: true, // Pro gets cloud artifact storage
       };
 
     case "team":
@@ -253,6 +280,12 @@ function getAdminPreset(): Flags {
     riskDisciplineAware: true,
     riskFollowUps: true,
     riskCrossDiscipline: true,
+    // AI-native features - admin gets everything
+    localMode: true,
+    proModeEnabled: true,
+    webWorkerParsing: true,
+    deterministicScoring: true,
+    blobArtifactStorage: true,
   };
 }
 

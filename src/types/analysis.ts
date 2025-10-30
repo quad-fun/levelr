@@ -272,7 +272,7 @@ export interface BidComparisonRequest {
 
 export const CONSTRUCTION_UNITS = {
   SF: "Square Foot",
-  LF: "Linear Foot", 
+  LF: "Linear Foot",
   CY: "Cubic Yard",
   EA: "Each",
   LS: "Lump Sum",
@@ -281,3 +281,115 @@ export const CONSTRUCTION_UNITS = {
   HR: "Hour",
   DAY: "Day"
 } as const;
+
+// AI-Native Artifact Types
+export interface CsiLine {
+  id: string;
+  division: string;
+  description: string;
+  cost: number;
+  unit?: string;
+  quantity?: number;
+  unitCost?: number;
+  subcontractor?: string;
+  pageRef?: number;
+  confidence: number; // 0-1 parsing confidence
+}
+
+export interface Risk {
+  id: string;
+  category: 'Schedule' | 'Market' | 'Scope' | 'Contract' | 'Quality';
+  severity: number; // 0-5 scale
+  title: string;
+  description: string;
+  evidence: string[];
+  pageRefs: number[];
+  explanation?: string;
+  recommendation?: string;
+  impact?: {
+    financial?: number;
+    timeline?: number; // days
+    probability?: number; // 0-1
+  };
+}
+
+export interface BidArtifact {
+  meta: {
+    runId: string;
+    createdAt: string;
+    version: string;
+    docIds: string[];
+    fileName: string;
+    fileSize: number;
+  };
+  parsing: {
+    lines: CsiLine[];
+    totalPages: number;
+    parseConfidence: number;
+    errors: string[];
+  };
+  analysis: {
+    contractorName: string;
+    totalAmount: number;
+    projectName?: string;
+    bidDate?: string;
+    csiBreakdown: Record<string, {
+      cost: number;
+      items: string[];
+      subcontractor?: string;
+    }>;
+  };
+  risks: Risk[];
+  score: {
+    overall: number; // 0-100
+    byCategory: Record<Risk['category'], number>;
+    confidence: number;
+  };
+}
+
+export interface LevelingArtifact {
+  meta: {
+    runId: string;
+    createdAt: string;
+    version: string;
+    bidIds: string[];
+  };
+  comparison: {
+    baseline: string;
+    comparators: string[];
+    variances: Array<{
+      division: string;
+      baseline: number;
+      comparator: number;
+      variance: number;
+      explanation?: string;
+    }>;
+  };
+  recommendation: {
+    winner: string;
+    reasoning: string[];
+    adjustments: Array<{
+      division: string;
+      adjustment: number;
+      reason: string;
+    }>;
+  };
+}
+
+export interface AnalysisArtifact {
+  meta: {
+    runId: string;
+    createdAt: string;
+    version: string;
+    docIds: string[];
+    mode: 'local' | 'pro';
+  };
+  bids: BidArtifact[];
+  leveling?: LevelingArtifact;
+  narrative?: {
+    summary: string;
+    keyFindings: string[];
+    recommendations: string[];
+    generatedAt: string;
+  };
+}
