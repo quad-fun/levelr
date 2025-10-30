@@ -488,6 +488,7 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
               <AIAnalysisFlow
                 file={selectedFile}
                 flags={flags}
+                discipline={selectedDiscipline}
                 userId={_userId}
                 onComplete={handleAIAnalysisComplete}
                 onError={handleAIAnalysisError}
