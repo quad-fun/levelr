@@ -27,8 +27,22 @@ export default function AIAnalysisFlow({
   onError,
   onCancel
 }: AIAnalysisFlowProps) {
-  const getDisciplineStages = (discipline: string): TimelineStage[] => {
-    const baseStages = [
+  const getDisciplineAnalysisMessage = (discipline: string): string => {
+    switch (discipline) {
+      case 'design':
+        return 'Analyzing AIA phases and design deliverables...';
+      case 'trade':
+        return 'Analyzing technical systems and equipment...';
+      case 'construction':
+      default:
+        return 'Analyzing CSI divisions and construction risks...';
+    }
+  };
+
+
+  const [stages, setStages] = useState<TimelineStage[]>(() => {
+    // Start with generic stages before discipline detection
+    return [
       {
         id: 'parsing',
         name: 'Parsing Document',
@@ -38,53 +52,20 @@ export default function AIAnalysisFlow({
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         )
-      }
-    ];
-
-    const disciplineStages = {
-      construction: [
-        {
-          id: 'normalizing',
-          name: 'Categorizing CSI Divisions',
-          status: 'pending' as const,
-          icon: ({ className }: { className?: string }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-            </svg>
-          )
-        }
-      ],
-      design: [
-        {
-          id: 'normalizing',
-          name: 'Analyzing AIA Phases',
-          status: 'pending' as const,
-          icon: ({ className }: { className?: string }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v6a2 2 0 002 2h2m0-8h2a2 2 0 012 2v6a2 2 0 01-2 2H9m0-8v8" />
-            </svg>
-          )
-        }
-      ],
-      trade: [
-        {
-          id: 'normalizing',
-          name: 'Categorizing Technical Systems',
-          status: 'pending' as const,
-          icon: ({ className }: { className?: string }) => (
-            <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          )
-        }
-      ]
-    };
-
-    const commonStages = [
+      },
       {
         id: 'detecting',
-        name: 'Running Risk Detectors',
+        name: 'Detecting Document Type',
+        status: 'pending' as const,
+        icon: ({ className }: { className?: string }) => (
+          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+          </svg>
+        )
+      },
+      {
+        id: 'analyzing',
+        name: 'Running Analysis',
         status: 'pending' as const,
         icon: ({ className }: { className?: string }) => (
           <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -94,34 +75,16 @@ export default function AIAnalysisFlow({
       },
       {
         id: 'scoring',
-        name: 'Calculating Risk Score',
+        name: 'Calculating Score',
         status: 'pending' as const,
         icon: ({ className }: { className?: string }) => (
           <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         )
-      },
-      {
-        id: 'storage',
-        name: 'Storing Artifacts',
-        status: 'pending' as const,
-        icon: ({ className }: { className?: string }) => (
-          <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
-          </svg>
-        )
       }
     ];
-
-    return [
-      ...baseStages,
-      ...disciplineStages[discipline as keyof typeof disciplineStages],
-      ...commonStages
-    ];
-  };
-
-  const [stages, setStages] = useState<TimelineStage[]>(getDisciplineStages('construction')); // Start with generic stages
+  });
 
   const [artifact, setArtifact] = useState<BidArtifact | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -209,25 +172,10 @@ export default function AIAnalysisFlow({
         duration: 2000
       });
 
-      // Stage 2: Normalize Data
-      updateStage('normalizing', {
-        status: 'active',
-        message: 'Categorizing CSI divisions...',
-        progress: 0
-      });
-
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate processing
-
-      updateStage('normalizing', {
-        status: 'complete',
-        message: 'Data normalized successfully',
-        duration: 1000
-      });
-
-      // Stage 3: Run Risk Detectors
+      // Stage 2: Detect document type and run analysis
       updateStage('detecting', {
         status: 'active',
-        message: 'Analyzing market, schedule, and contract risks...',
+        message: 'Auto-detecting document type...',
         progress: 0
       });
 
@@ -240,13 +188,27 @@ export default function AIAnalysisFlow({
 
       // Update stages based on detected discipline
       const detectedDiscipline = analysisResult.artifact.analysis.discipline;
-      console.log(`🎯 Updating UI for detected discipline: ${detectedDiscipline}`);
-      setStages(getDisciplineStages(detectedDiscipline));
+      console.log(`🎯 Detected discipline: ${detectedDiscipline} - updating UI stages`);
 
       updateStage('detecting', {
         status: 'complete',
+        message: `Detected ${detectedDiscipline} document`,
+        duration: 1000
+      });
+
+      // Stage 3: Run discipline-specific analysis
+      updateStage('analyzing', {
+        status: 'active',
+        message: getDisciplineAnalysisMessage(detectedDiscipline),
+        progress: 0
+      });
+
+      await new Promise(resolve => setTimeout(resolve, 800)); // Let user see analysis
+
+      updateStage('analyzing', {
+        status: 'complete',
         message: `Found ${analysisResult.artifact.risks.length} risks`,
-        duration: 3000
+        duration: 1500
       });
 
       // Stage 4: Calculate Score

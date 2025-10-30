@@ -1,15 +1,18 @@
 // public/workers/parser.worker.js
 
+// Import XLSX for Excel processing (need to load from CDN in worker)
+importScripts('https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js');
+
 // Web Worker for browser-only document parsing
 self.onmessage = function(event) {
-  const { type, file, discipline } = event.data;
+  const { type, file } = event.data;
 
   if (type === 'parse') {
-    parseDocument(file, discipline);
+    parseDocument(file);
   }
 };
 
-async function parseDocument(file, discipline = 'construction') {
+async function parseDocument(file) {
   try {
     // Send initial progress
     self.postMessage({
@@ -17,8 +20,16 @@ async function parseDocument(file, discipline = 'construction') {
       progress: 10
     });
 
-    // Mock document parsing based on file type and discipline
-    const lines = await mockParseDocument(file, discipline);
+    // Real document processing based on file type
+    const processedDoc = await processDocumentInWorker(file);
+
+    self.postMessage({
+      type: 'progress',
+      progress: 50
+    });
+
+    // Parse content into structured lines
+    const lines = await parseContentToLines(processedDoc);
 
     // Send completion progress
     self.postMessage({
@@ -31,8 +42,8 @@ async function parseDocument(file, discipline = 'construction') {
       type: 'success',
       data: {
         lines,
-        parseConfidence: Math.random() * 0.2 + 0.8, // 80-100%
-        totalPages: Math.floor(Math.random() * 20) + 1
+        parseConfidence: calculateParseConfidence(lines),
+        totalPages: Math.max(...lines.map(l => l.pageRef || 1))
       }
     });
   } catch (error) {
@@ -43,221 +54,224 @@ async function parseDocument(file, discipline = 'construction') {
   }
 }
 
-async function mockParseDocument(file, discipline = 'construction') {
-  // Simulate processing time
-  await new Promise(resolve => setTimeout(resolve, 1000));
+// Real document processing functions
+async function processDocumentInWorker(file) {
+  const fileType = detectFileType(file.name, file.type);
+  console.log(`Processing ${file.name} as ${fileType} in worker`);
 
-  // Send progress updates
-  for (let i = 20; i <= 90; i += 20) {
-    self.postMessage({
-      type: 'progress',
-      progress: i
-    });
-    await new Promise(resolve => setTimeout(resolve, 200));
-  }
+  if (file.data && file.data.startsWith('data:')) {
+    // Convert base64 data URL back to file content
+    const base64Data = file.data.split(',')[1];
 
-  // Generate discipline-specific mock data
-  const mockLines = [];
-  const disciplineData = getDisciplineData(discipline);
-
-  function getDisciplineData(discipline) {
-    switch (discipline) {
-      case 'construction':
+    switch (fileType) {
+      case 'excel':
+        return await processExcelInWorker(file.name, base64Data);
+      case 'pdf':
         return {
-          items: [
-            { division: '03', name: 'Concrete', baseCost: 50000 },
-            { division: '04', name: 'Masonry', baseCost: 30000 },
-            { division: '05', name: 'Metals', baseCost: 25000 },
-            { division: '06', name: 'Wood, Plastics, Composites', baseCost: 20000 },
-            { division: '07', name: 'Thermal and Moisture Protection', baseCost: 35000 },
-            { division: '08', name: 'Openings', baseCost: 15000 },
-            { division: '09', name: 'Finishes', baseCost: 40000 },
-            { division: '21', name: 'Fire Suppression', baseCost: 18000 },
-            { division: '22', name: 'Plumbing', baseCost: 28000 },
-            { division: '23', name: 'HVAC', baseCost: 45000 },
-            { division: '26', name: 'Electrical', baseCost: 35000 },
-            { division: '31', name: 'Earthwork', baseCost: 22000 },
-            { division: '32', name: 'Exterior Improvements', baseCost: 16000 }
-          ],
-          type: 'csi'
+          content: file.data, // Keep as base64 for PDF
+          fileType: 'pdf',
+          fileName: file.name,
+          isBase64: true
         };
-
-      case 'design':
-        return {
-          items: [
-            { division: 'SD', name: 'Schematic Design', baseCost: 25000 },
-            { division: 'DD', name: 'Design Development', baseCost: 35000 },
-            { division: 'CD', name: 'Construction Documents', baseCost: 45000 },
-            { division: 'BN', name: 'Bidding/Negotiation', baseCost: 8000 },
-            { division: 'CA', name: 'Construction Administration', baseCost: 22000 },
-            { division: 'SD-A', name: 'Architectural Schematic Design', baseCost: 15000 },
-            { division: 'SD-S', name: 'Structural Schematic Design', baseCost: 12000 },
-            { division: 'SD-M', name: 'MEP Schematic Design', baseCost: 18000 },
-            { division: 'DD-A', name: 'Architectural Design Development', baseCost: 20000 },
-            { division: 'DD-S', name: 'Structural Design Development', baseCost: 16000 },
-            { division: 'DD-M', name: 'MEP Design Development', baseCost: 24000 },
-            { division: 'CD-A', name: 'Architectural Construction Documents', baseCost: 25000 },
-            { division: 'CD-S', name: 'Structural Construction Documents', baseCost: 20000 }
-          ],
-          type: 'aia'
-        };
-
-      case 'trade':
-        return {
-          items: [
-            { division: 'ELEC', name: 'Electrical Systems', baseCost: 85000 },
-            { division: 'HVAC', name: 'HVAC Systems', baseCost: 120000 },
-            { division: 'PLUMB', name: 'Plumbing Systems', baseCost: 65000 },
-            { division: 'FIRE', name: 'Fire Protection Systems', baseCost: 45000 },
-            { division: 'SECU', name: 'Security Systems', baseCost: 35000 },
-            { division: 'COMM', name: 'Communications Systems', baseCost: 25000 },
-            { division: 'ELEV', name: 'Elevator Systems', baseCost: 95000 },
-            { division: 'SPEC', name: 'Specialty Equipment', baseCost: 55000 },
-            { division: 'AUTO', name: 'Building Automation', baseCost: 40000 },
-            { division: 'LIFE', name: 'Life Safety Systems', baseCost: 30000 },
-            { division: 'TEST', name: 'Testing & Commissioning', baseCost: 20000 },
-            { division: 'MAINT', name: 'Maintenance Systems', baseCost: 15000 }
-          ],
-          type: 'technical'
-        };
-
       default:
-        return getDisciplineData('construction');
+        throw new Error(`Unsupported file type: ${fileType}`);
     }
+  } else {
+    throw new Error('Invalid file data format');
+  }
+}
+
+function detectFileType(fileName, mimeType) {
+  const extension = fileName.toLowerCase().split('.').pop() || '';
+
+  if (['xlsx', 'xls', 'csv'].includes(extension) ||
+      (mimeType && (mimeType.includes('spreadsheet') || mimeType.includes('excel')))) {
+    return 'excel';
   }
 
-  // Generate 8-15 line items based on discipline
-  const numLines = Math.floor(Math.random() * 8) + 8;
-  const selectedItems = disciplineData.items
-    .sort(() => Math.random() - 0.5)
-    .slice(0, numLines);
+  if (extension === 'pdf' || (mimeType && mimeType.includes('pdf'))) {
+    return 'pdf';
+  }
 
-  selectedItems.forEach((item, index) => {
-    const variance = Math.random() * 0.4 - 0.2; // ±20% variance
-    const cost = Math.round(item.baseCost * (1 + variance));
+  return 'unknown';
+}
 
-    mockLines.push({
-      id: `line-${index + 1}`,
-      description: `${item.name} - ${generateMockDescription(item.name, discipline)}`,
-      division: item.division,
-      cost: cost,
-      quantity: Math.floor(Math.random() * 1000) + 100,
-      unit: getRandomUnit(item.name, discipline),
-      unitCost: Math.round(cost / (Math.floor(Math.random() * 500) + 100)),
-      subcontractor: generateMockSubcontractor(item.name, discipline),
-      pageRef: Math.floor(Math.random() * 5) + 1,
-      confidence: Math.random() * 0.2 + 0.8 // 80-100% confidence
+async function processExcelInWorker(fileName, base64Data) {
+  try {
+    // Convert base64 to binary data
+    const binaryString = atob(base64Data);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+
+    // Parse with XLSX
+    const workbook = XLSX.read(bytes, { type: 'array' });
+
+    let extractedText = `Excel File: ${fileName}\n\n`;
+
+    // Process all worksheets
+    workbook.SheetNames.forEach((sheetName, index) => {
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false });
+
+      extractedText += `=== Sheet ${index + 1}: ${sheetName} ===\n`;
+
+      // Convert to readable format
+      jsonData.forEach((row) => {
+        if (Array.isArray(row) && row.some(cell => cell !== undefined && cell !== '')) {
+          extractedText += row.join('\t') + '\n';
+        }
+      });
+
+      extractedText += '\n';
     });
-  });
 
-  return mockLines;
+    console.log('Excel extraction successful in worker, content length:', extractedText.length);
+
+    return {
+      content: extractedText,
+      fileType: 'excel',
+      fileName: fileName,
+      isBase64: false
+    };
+  } catch (error) {
+    console.error('Excel processing error in worker:', error);
+    throw new Error('Failed to process Excel file. Please ensure it\'s a valid spreadsheet.');
+  }
 }
 
-function generateMockDescription(itemName, discipline) {
-  const descriptions = {
-    construction: {
-      'Concrete': ['Cast-in-place concrete footings', 'Concrete slabs on grade', 'Reinforced concrete walls'],
-      'Masonry': ['CMU block walls', 'Brick veneer installation', 'Stone masonry work'],
-      'Metals': ['Structural steel framing', 'Metal decking', 'Steel stairs and railings'],
-      'Wood, Plastics, Composites': ['Wood framing lumber', 'Engineered lumber beams', 'Composite decking'],
-      'Thermal and Moisture Protection': ['Built-up roofing system', 'Insulation installation', 'Waterproofing membrane'],
-      'Openings': ['Aluminum windows', 'Hollow metal doors', 'Hardware installation'],
-      'Finishes': ['Drywall and paint', 'Ceramic tile flooring', 'Suspended ceiling system'],
-      'Fire Suppression': ['Sprinkler system installation', 'Fire pump equipment', 'Fire alarm system'],
-      'Plumbing': ['Domestic water piping', 'Sanitary sewer system', 'Plumbing fixtures'],
-      'HVAC': ['Rooftop HVAC units', 'Ductwork installation', 'VAV boxes and controls'],
-      'Electrical': ['Electrical distribution panels', 'Power and lighting circuits', 'Emergency lighting'],
-      'Earthwork': ['Site excavation', 'Backfill and compaction', 'Site grading'],
-      'Exterior Improvements': ['Asphalt paving', 'Concrete sidewalks', 'Site landscaping']
-    },
-    design: {
-      'Schematic Design': ['Conceptual design development', 'Site analysis and programming', 'Design alternatives study'],
-      'Design Development': ['Detailed design refinement', 'Material and system selection', 'Coordination drawings'],
-      'Construction Documents': ['Technical specifications', 'Detailed drawings and plans', 'Code compliance review'],
-      'Bidding/Negotiation': ['Bid document preparation', 'Contractor prequalification', 'Bid evaluation'],
-      'Construction Administration': ['Construction observation', 'Shop drawing review', 'Change order processing'],
-      'Architectural Schematic Design': ['Space planning and layout', 'Building massing studies', 'Aesthetic concept development'],
-      'Structural Schematic Design': ['Structural system selection', 'Load path analysis', 'Foundation design concept'],
-      'MEP Schematic Design': ['System sizing and layout', 'Equipment selection', 'Energy modeling'],
-      'Architectural Design Development': ['Material specifications', 'Detail development', 'Building envelope design'],
-      'Structural Design Development': ['Structural calculations', 'Connection details', 'Foundation sizing'],
-      'MEP Design Development': ['System optimization', 'Equipment specifications', 'Control strategies'],
-      'Architectural Construction Documents': ['Working drawings', 'Detail specifications', 'Material schedules'],
-      'Structural Construction Documents': ['Structural drawings', 'Steel details', 'Concrete specifications']
-    },
-    trade: {
-      'Electrical Systems': ['Power distribution design', 'Lighting system installation', 'Emergency power systems'],
-      'HVAC Systems': ['Air handling unit installation', 'Ductwork fabrication', 'Control system programming'],
-      'Plumbing Systems': ['Water distribution piping', 'Waste and vent systems', 'Fixture installation'],
-      'Fire Protection Systems': ['Sprinkler system design', 'Fire alarm installation', 'Emergency egress lighting'],
-      'Security Systems': ['Access control installation', 'CCTV system setup', 'Intrusion detection systems'],
-      'Communications Systems': ['Data cabling installation', 'Telephone system setup', 'Wireless network design'],
-      'Elevator Systems': ['Elevator installation', 'Modernization services', 'Maintenance programs'],
-      'Specialty Equipment': ['Kitchen equipment installation', 'Medical equipment setup', 'Laboratory systems'],
-      'Building Automation': ['BMS programming', 'Sensor installation', 'System integration'],
-      'Life Safety Systems': ['Emergency communication', 'Mass notification systems', 'Evacuation systems'],
-      'Testing & Commissioning': ['System performance testing', 'Equipment commissioning', 'Documentation'],
-      'Maintenance Systems': ['Preventive maintenance setup', 'Service agreements', 'Spare parts supply']
+async function parseContentToLines(processedDoc) {
+  const lines = [];
+
+  if (processedDoc.fileType === 'excel') {
+    // Parse Excel content for real line items
+    const content = processedDoc.content;
+    const textLines = content.split('\n');
+
+    let lineId = 1;
+    let currentPage = 1;
+
+    for (const textLine of textLines) {
+      const line = textLine.trim();
+      if (!line || line.startsWith('===') || line.startsWith('Excel File:')) continue;
+
+      // Try to parse line for cost information
+      const parsedLine = parseLineItem(line, lineId, currentPage);
+      if (parsedLine) {
+        lines.push(parsedLine);
+        lineId++;
+      }
     }
-  };
-
-  const disciplineDescriptions = descriptions[discipline] || descriptions.construction;
-  const options = disciplineDescriptions[itemName] || ['General service work'];
-  return options[Math.floor(Math.random() * options.length)];
-}
-
-function getRandomUnit(itemName, discipline) {
-  const units = {
-    'Concrete': ['CY', 'SF', 'LF'],
-    'Masonry': ['SF', 'LF', 'EA'],
-    'Metals': ['LB', 'SF', 'LF'],
-    'Wood, Plastics, Composites': ['BF', 'LF', 'SF'],
-    'Thermal and Moisture Protection': ['SF', 'SQ', 'LF'],
-    'Openings': ['EA', 'SF', 'LF'],
-    'Finishes': ['SF', 'SY', 'LF'],
-    'Fire Suppression': ['SF', 'EA', 'LF'],
-    'Plumbing': ['EA', 'LF', 'SF'],
-    'HVAC': ['EA', 'LB', 'SF'],
-    'Electrical': ['EA', 'LF', 'SF'],
-    'Earthwork': ['CY', 'SF', 'LF'],
-    'Exterior Improvements': ['SF', 'SY', 'LF']
-  };
-
-  if (discipline === 'design') {
-    return ['HR', 'EA', 'LS'][Math.floor(Math.random() * 3)]; // Hours, Each, Lump Sum
-  } else if (discipline === 'trade') {
-    return ['EA', 'SF', 'LF', 'SYS'][Math.floor(Math.random() * 4)]; // Each, Square Feet, Linear Feet, System
+  } else if (processedDoc.fileType === 'pdf') {
+    // For PDF, we'll need to send to Claude for parsing
+    // For now, create a placeholder that indicates real PDF content
+    lines.push({
+      id: 'pdf-1',
+      division: '00',
+      description: `PDF Document: ${processedDoc.fileName} (requires Claude processing)`,
+      cost: 0,
+      confidence: 0.5,
+      pageRef: 1
+    });
   }
 
-  const options = units[itemName] || ['EA'];
-  return options[Math.floor(Math.random() * options.length)];
+  return lines.length > 0 ? lines : createEmptyFallback();
 }
 
-function generateMockSubcontractor(itemName, discipline) {
-  const contractors = {
-    'Concrete': ['ABC Concrete Co.', 'Premier Concrete', 'Solid Foundation Inc.'],
-    'Masonry': ['Master Masonry', 'Stone & Block Co.', 'Heritage Masonry'],
-    'Metals': ['Steel Fabricators Inc.', 'Metro Steel Works', 'Precision Metal Co.'],
-    'Wood, Plastics, Composites': ['Timber Frame LLC', 'Wood Works Co.', 'Composite Solutions'],
-    'Thermal and Moisture Protection': ['Roof Systems Inc.', 'Weather Shield Co.', 'Thermal Solutions'],
-    'Openings': ['Window & Door Co.', 'Openings Unlimited', 'Access Solutions'],
-    'Finishes': ['Elite Finishes', 'Perfect Paint Co.', 'Interior Solutions'],
-    'Fire Suppression': ['Fire Safety Systems', 'Sprinkler Pro Inc.', 'Safety First Co.'],
-    'Plumbing': ['Premier Plumbing', 'Flow Systems Inc.', 'Pipe Masters LLC'],
-    'HVAC': ['Climate Control Co.', 'Air Systems Inc.', 'Comfort Solutions'],
-    'Electrical': ['Power Pro Electric', 'Current Solutions', 'Bright Ideas Electric'],
-    'Earthwork': ['Earth Movers Inc.', 'Excavation Pro', 'Site Prep LLC'],
-    'Exterior Improvements': ['Landscape Pro', 'Exterior Solutions', 'Site Works Co.']
-  };
+function parseLineItem(line, id, pageRef) {
+  // Enhanced line parsing to extract real contractor and cost data
+  const parts = line.split('\t');
+  if (parts.length < 2) return null;
 
-  if (discipline === 'design') {
-    const designFirms = ['Architectural Studio LLC', 'Design Associates', 'Creative Design Group', 'Urban Planning Co.', 'Engineering Consultants'];
-    return designFirms[Math.floor(Math.random() * designFirms.length)];
-  } else if (discipline === 'trade') {
-    const tradeFirms = ['Systems Integration Inc.', 'Technical Services LLC', 'Specialty Contractors', 'Equipment Specialists', 'Installation Experts'];
-    return tradeFirms[Math.floor(Math.random() * tradeFirms.length)];
+  // Look for cost patterns (numbers with decimals, commas, dollar signs)
+  let cost = 0;
+  let description = '';
+  let division = '00';
+  let subcontractor = '';
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i].trim();
+
+    // Try to extract cost
+    const costMatch = part.match(/[\$]?[\d,]+\.?\d*/);
+    if (costMatch && !cost) {
+      const cleanCost = costMatch[0].replace(/[$,]/g, '');
+      const parsedCost = parseFloat(cleanCost);
+      if (parsedCost > 100) { // Reasonable minimum for a line item
+        cost = parsedCost;
+      }
+    }
+
+    // Try to extract CSI division
+    const divisionMatch = part.match(/\b\d{2}\b/);
+    if (divisionMatch && !division || division === '00') {
+      const divisionNum = parseInt(divisionMatch[0]);
+      if (divisionNum >= 1 && divisionNum <= 49) {
+        division = divisionMatch[0].padStart(2, '0');
+      }
+    }
+
+    // Try to extract contractor/company names
+    const companyMatch = part.match(/([A-Z][a-z]+\s+(?:Construction|Contractors?|Inc\.?|LLC|Corp\.?|Co\.?))/i);
+    if (companyMatch && !subcontractor) {
+      subcontractor = companyMatch[1];
+    }
+
+    // Build description from non-cost parts
+    if (!costMatch || parsedCost < 100) {
+      description += (description ? ' ' : '') + part;
+    }
   }
 
-  const options = contractors[itemName] || ['General Contractor'];
-  return options[Math.floor(Math.random() * options.length)];
+  if (!description || cost === 0) return null;
+
+  return {
+    id: `line-${id}`,
+    division: division,
+    description: description.substring(0, 200), // Limit length
+    cost: cost,
+    unit: extractUnit(line),
+    quantity: extractQuantity(line),
+    unitCost: cost / Math.max(extractQuantity(line) || 1, 1),
+    subcontractor: subcontractor || 'Self-performed',
+    pageRef: pageRef,
+    confidence: calculateLineConfidence(description, cost, division)
+  };
 }
+
+function extractUnit(line) {
+  const unitPatterns = /\b(SF|LF|CY|EA|LS|SY|TON|HR|DAY|SQ|BF|LB)\b/i;
+  const match = line.match(unitPatterns);
+  return match ? match[1].toUpperCase() : 'EA';
+}
+
+function extractQuantity(line) {
+  // Look for quantity patterns like "100 SF" or "25 EA"
+  const qtyMatch = line.match(/(\d+(?:\.\d+)?)\s*(?:SF|LF|CY|EA|LS|SY|TON|HR|DAY|SQ|BF|LB)/i);
+  return qtyMatch ? parseFloat(qtyMatch[1]) : 1;
+}
+
+function calculateLineConfidence(description, cost, division) {
+  let confidence = 0.5; // Base confidence
+
+  if (description && description.length > 10) confidence += 0.2;
+  if (cost > 0) confidence += 0.2;
+  if (division && division !== '00') confidence += 0.1;
+
+  return Math.min(confidence, 1.0);
+}
+
+function calculateParseConfidence(lines) {
+  if (lines.length === 0) return 0;
+
+  const avgConfidence = lines.reduce((sum, line) => sum + line.confidence, 0) / lines.length;
+  return avgConfidence;
+}
+
+function createEmptyFallback() {
+  console.log('No content parsed from document - returning empty result');
+  return [];
+}
+
+// All mock data removed - using only real document processing
