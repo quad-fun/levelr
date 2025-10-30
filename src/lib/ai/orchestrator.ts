@@ -280,7 +280,6 @@ export class AnalysisOrchestrator {
     }
 
     // Cost distribution insights
-    const _totalCost = artifact.analysis.totalAmount;
     const divisions = Object.entries(artifact.analysis.csiBreakdown);
     const topDivisions = divisions
       .sort(([, a], [, b]) => b.cost - a.cost)

@@ -13,7 +13,7 @@ import type { Flags } from '@/lib/flags';
 interface AIAnalysisFlowProps {
   file: File;
   flags: Flags;
-  userId?: string; // eslint-disable-line @typescript-eslint/no-unused-vars
+  userId?: string;
   onComplete?: (artifact: BidArtifact) => void;
   onError?: (error: string) => void;
   onCancel?: () => void;
@@ -22,7 +22,7 @@ interface AIAnalysisFlowProps {
 export default function AIAnalysisFlow({
   file,
   flags,
-  userId,
+  userId: _userId,
   onComplete,
   onError,
   onCancel
