@@ -1,5 +1,5 @@
 // Export router for discipline-specific analysis exports
-import { AnalysisResult } from '@/types/analysis';
+import { AnalysisResult, BidArtifact } from '@/types/analysis';
 import { SavedAnalysis } from '@/lib/storage';
 // Note: Variance explanations are available in the UI via inline tooltips
 // Excel exports focus on raw data and existing comments
@@ -139,6 +139,39 @@ function detectAnalysisDiscipline(analysis: AnalysisResult): 'construction' | 'd
 
   // Default fallback for backward compatibility
   return 'construction';
+}
+
+/**
+ * AI-Native export functions for BidArtifact
+ */
+export function exportBidArtifactToPDF(artifact: BidArtifact): void {
+  // Convert BidArtifact to AnalysisResult format for compatibility
+  const analysis: AnalysisResult = {
+    contractor_name: artifact.analysis.contractorName,
+    total_amount: artifact.analysis.totalAmount,
+    discipline: 'construction', // AI-native artifacts are construction-focused for now
+    csi_divisions: artifact.analysis.csiBreakdown,
+    total_pages: artifact.parsing.totalPages,
+    analysis_date: artifact.meta.createdAt,
+    file_name: artifact.meta.fileName
+  };
+
+  return exportAnalysisToPDF(analysis);
+}
+
+export function exportBidArtifactToExcel(artifact: BidArtifact): void {
+  // Convert BidArtifact to AnalysisResult format for compatibility
+  const analysis: AnalysisResult = {
+    contractor_name: artifact.analysis.contractorName,
+    total_amount: artifact.analysis.totalAmount,
+    discipline: 'construction',
+    csi_divisions: artifact.analysis.csiBreakdown,
+    total_pages: artifact.parsing.totalPages,
+    analysis_date: artifact.meta.createdAt,
+    file_name: artifact.meta.fileName
+  };
+
+  return exportAnalysisToExcel(analysis);
 }
 
 // Re-export construction analysis functions

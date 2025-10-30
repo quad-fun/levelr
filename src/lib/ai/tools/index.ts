@@ -1,5 +1,9 @@
 // src/lib/ai/tools/index.ts
 
+import { analyzeMarketRisks } from './market';
+import { analyzeScheduleRisks } from './schedule';
+import { analyzeContractRisks } from './contract';
+
 export { analyzeMarketRisks, type MarketToolResult } from './market';
 export { analyzeScheduleRisks, type ScheduleToolResult } from './schedule';
 export { analyzeContractRisks, type ContractToolResult } from './contract';

@@ -6,6 +6,8 @@ import DocumentUpload from '@/components/analysis/DocumentUpload';
 import AnalysisResults from '@/components/analysis/AnalysisResults';
 import MultiDisciplineAnalysisResults from '@/components/analysis/MultiDisciplineAnalysisResults';
 import ExportTools from '@/components/analysis/ExportTools';
+import AIAnalysisFlow from '@/components/analysis/AIAnalysisFlow';
+import Artifacts from '@/components/analysis/Artifacts';
 import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
 import RFPBuilder from '@/components/rfp/RFPBuilder';
@@ -15,7 +17,7 @@ import { FeatureGate } from '@/components/common/FeatureGate';
 import { analyzeDocument } from '@/lib/claude-client';
 import { MultiDisciplineAnalyzer } from '@/lib/analysis/multi-discipline-analyzer';
 import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
-import { AnalysisResult, MarketVariance, RiskAssessment } from '@/types/analysis';
+import { AnalysisResult, MarketVariance, RiskAssessment, BidArtifact } from '@/types/analysis';
 import { saveAnalysis, getProject } from '@/lib/storage';
 import { ProcessedDocument } from '@/lib/document-processor';
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
@@ -57,6 +59,14 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
     };
     discipline?: 'construction' | 'design' | 'trade';
   } | null>(null);
+
+  // AI-native flow state
+  const [useAINativeFlow, setUseAINativeFlow] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [aiArtifact, setAiArtifact] = useState<BidArtifact | null>(null);
+
+  // Determine if AI-native flow should be used (when local mode or deterministic scoring is enabled)
+  const shouldUseAINativeFlow = flags.localMode || flags.deterministicScoring || flags.webWorkerParsing;
 
   // Avoid unused variable warning
   if (selectedProjectForRFP) {
@@ -207,6 +217,33 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
     setLastProcessedDoc(null);
     setMarketVariance(null);
     setRiskAssessment(null);
+    setSelectedFile(null);
+    setAiArtifact(null);
+    setUseAINativeFlow(false);
+  };
+
+  // AI-native flow handlers
+  const handleAIFileSelect = (file: File) => {
+    setSelectedFile(file);
+    setUseAINativeFlow(true);
+    setError(null);
+    setAnalysisResult(null);
+  };
+
+  const handleAIAnalysisComplete = (artifact: BidArtifact) => {
+    setAiArtifact(artifact);
+    console.log('AI-native analysis complete:', artifact);
+  };
+
+  const handleAIAnalysisError = (errorMessage: string) => {
+    setError(errorMessage);
+    console.error('AI-native analysis error:', errorMessage);
+  };
+
+  const handleAIAnalysisCancel = () => {
+    setUseAINativeFlow(false);
+    setSelectedFile(null);
+    setError(null);
   };
 
   return (
@@ -446,11 +483,54 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
               </div>
             </div>
 
-            {/* Upload Component */}
-            <DocumentUpload
-              onFileSelect={handleFileSelect}
-              isProcessing={isProcessing}
-            />
+            {/* Upload Component or AI-Native Flow */}
+            {useAINativeFlow && selectedFile ? (
+              <AIAnalysisFlow
+                file={selectedFile}
+                flags={flags}
+                userId={_userId}
+                onComplete={handleAIAnalysisComplete}
+                onError={handleAIAnalysisError}
+                onCancel={handleAIAnalysisCancel}
+              />
+            ) : (
+              <div className="space-y-6">
+                {/* AI-Native Mode Toggle (if available) */}
+                {shouldUseAINativeFlow && (
+                  <div className="max-w-4xl mx-auto">
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-3">
+                          <svg className="h-5 w-5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                          </svg>
+                          <div>
+                            <h3 className="text-sm font-medium text-blue-800">AI-Native Analysis Available</h3>
+                            <p className="text-sm text-blue-700">
+                              Browser-first analysis with deterministic scoring and real-time progress tracking
+                            </p>
+                          </div>
+                        </div>
+                        <label className="flex items-center">
+                          <input
+                            type="checkbox"
+                            checked={useAINativeFlow}
+                            onChange={(e) => setUseAINativeFlow(e.target.checked)}
+                            className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="ml-2 text-sm text-blue-800">Enable</span>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <DocumentUpload
+                  onFileSelect={useAINativeFlow ? (file: File) => handleAIFileSelect(file) : handleFileSelect}
+                  isProcessing={isProcessing}
+                />
+              </div>
+            )}
 
             {/* Error Display */}
             {error && (
@@ -521,9 +601,59 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
               </div>
             </div>
           </div>
+        ) : aiArtifact ? (
+          <div className="space-y-8">
+            {/* AI-Native Results Header */}
+            <div className="flex justify-between items-center">
+              <div>
+                <h1 className="text-3xl font-bold text-gray-900">AI-Native Analysis Complete</h1>
+                <p className="text-gray-600 mt-2">
+                  Browser-first analysis with deterministic scoring - Review results and export when ready
+                </p>
+              </div>
+              <button
+                onClick={resetAnalysis}
+                className="bg-gray-600 hover:bg-gray-700 text-white px-6 py-2 rounded-lg font-semibold transition-colors"
+              >
+                Analyze Another Document
+              </button>
+            </div>
+
+            {/* AI-Native Artifacts Display */}
+            <Artifacts
+              artifact={aiArtifact}
+              insights={[]} // Could add AI insights in Pro mode
+              onExport={(format: 'pdf' | 'excel' | 'json') => {
+                try {
+                  import('@/lib/analysis/exports').then(exports => {
+                    if (format === 'pdf') {
+                      exports.exportBidArtifactToPDF(aiArtifact);
+                    } else if (format === 'excel') {
+                      exports.exportBidArtifactToExcel(aiArtifact);
+                    }
+                  });
+                } catch (error) {
+                  console.error(`Error exporting ${format}:`, error);
+                  alert(`Error exporting ${format}. Please try again.`);
+                }
+              }}
+              onShare={() => {
+                const shareData = {
+                  title: `Analysis: ${aiArtifact.analysis.contractorName}`,
+                  text: `Risk Score: ${aiArtifact.score.overall}/100 - ${aiArtifact.risks.length} risks detected`,
+                  url: window.location.href
+                };
+                if (navigator.share) {
+                  navigator.share(shareData);
+                } else {
+                  navigator.clipboard.writeText(`${shareData.title}\n${shareData.text}\n${shareData.url}`);
+                }
+              }}
+            />
+          </div>
         ) : (
           <div className="space-y-8">
-            {/* Results Header */}
+            {/* Legacy Results Header */}
             <div className="flex justify-between items-center">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900">Analysis Complete</h1>

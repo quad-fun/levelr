@@ -1180,3 +1180,210 @@ function checkPhaseAdvancement(project: ProjectEcosystem): ProjectEcosystem {
     }
   };
 }
+
+// ============================================================================
+// AI-Native Artifact Storage System
+// ============================================================================
+
+import type { BidArtifact, LevelingArtifact, AnalysisArtifact } from '@/types/analysis';
+
+export type StorageDriver = 'local' | 'blob';
+
+interface StorageResult<T> {
+  success: boolean;
+  data?: T;
+  key?: string;
+  url?: string;
+  error?: string;
+}
+
+/**
+ * Unified storage interface for AI-native artifacts
+ * Supports both local (IndexedDB) and cloud (Vercel Blob) drivers
+ */
+export class ArtifactStorage {
+  private driver: StorageDriver;
+
+  constructor(driver: StorageDriver = 'local') {
+    this.driver = driver;
+  }
+
+  /**
+   * Store a bid artifact
+   */
+  async storeBidArtifact(artifact: BidArtifact): Promise<StorageResult<BidArtifact>> {
+    if (this.driver === 'blob') {
+      return this.storeBlobArtifact('bid-artifact', artifact.meta.runId, artifact);
+    } else {
+      return this.storeLocalArtifact(`bid-artifact-${artifact.meta.runId}`, artifact);
+    }
+  }
+
+  /**
+   * Store a leveling artifact
+   */
+  async storeLevelingArtifact(artifact: LevelingArtifact): Promise<StorageResult<LevelingArtifact>> {
+    if (this.driver === 'blob') {
+      return this.storeBlobArtifact('leveling-artifact', artifact.meta.runId, artifact);
+    } else {
+      return this.storeLocalArtifact(`leveling-artifact-${artifact.meta.runId}`, artifact);
+    }
+  }
+
+  /**
+   * Store a complete analysis artifact
+   */
+  async storeAnalysisArtifact(artifact: AnalysisArtifact): Promise<StorageResult<AnalysisArtifact>> {
+    if (this.driver === 'blob') {
+      return this.storeBlobArtifact('analysis-artifact', artifact.meta.runId, artifact);
+    } else {
+      return this.storeLocalArtifact(`analysis-artifact-${artifact.meta.runId}`, artifact);
+    }
+  }
+
+  /**
+   * List stored artifacts by type
+   */
+  async listArtifacts(type: 'bid' | 'leveling' | 'analysis'): Promise<string[]> {
+    if (this.driver === 'blob') {
+      // Note: Blob storage would need a separate index for listing
+      // For now, return empty array
+      return [];
+    } else {
+      return this.listLocalArtifacts(`${type}-artifact-`);
+    }
+  }
+
+  /**
+   * Retrieve an artifact by key
+   */
+  async getArtifact<T>(key: string): Promise<StorageResult<T>> {
+    if (this.driver === 'blob') {
+      // For blob storage, we'd use the URL directly
+      return { success: false, error: 'Use direct blob URL for retrieval' };
+    } else {
+      return this.getLocalArtifact<T>(key);
+    }
+  }
+
+  /**
+   * Store artifact in Vercel Blob (cloud)
+   */
+  private async storeBlobArtifact<T>(
+    kind: string,
+    runId: string,
+    payload: T
+  ): Promise<StorageResult<T>> {
+    try {
+      const response = await fetch('/api/storage/put', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          kind,
+          runId,
+          payload
+        })
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        return { success: false, error: errorData.error || 'Storage failed' };
+      }
+
+      const result = await response.json();
+
+      return {
+        success: true,
+        data: payload,
+        key: result.key,
+        url: result.url
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Storage failed'
+      };
+    }
+  }
+
+  /**
+   * Store artifact in local storage (browser)
+   */
+  private async storeLocalArtifact<T>(key: string, data: T): Promise<StorageResult<T>> {
+    try {
+      // Use existing secureStore function
+      secureStore(key, data);
+
+      return {
+        success: true,
+        data,
+        key
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Local storage failed'
+      };
+    }
+  }
+
+  /**
+   * Get artifact from local storage
+   */
+  private async getLocalArtifact<T>(key: string): Promise<StorageResult<T>> {
+    try {
+      // Use existing secureRetrieve function
+      const data = secureRetrieve<T>(key);
+
+      if (data) {
+        return { success: true, data };
+      } else {
+        return { success: false, error: 'Artifact not found' };
+      }
+
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Local retrieval failed'
+      };
+    }
+  }
+
+  /**
+   * List local artifacts by prefix
+   */
+  private async listLocalArtifacts(prefix: string): Promise<string[]> {
+    try {
+      const keys: string[] = [];
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(prefix)) {
+          keys.push(key);
+        }
+      }
+
+      return keys;
+
+    } catch (error) {
+      console.warn('Failed to list local artifacts:', error);
+      return [];
+    }
+  }
+}
+
+/**
+ * Get the appropriate storage driver based on flags and user tier
+ */
+export function selectStorageDriver(flags: { blobArtifactStorage?: boolean }): StorageDriver {
+  return flags.blobArtifactStorage ? 'blob' : 'local';
+}
+
+/**
+ * Create artifact storage instance with appropriate driver
+ */
+export function createArtifactStorage(driver?: StorageDriver): ArtifactStorage {
+  return new ArtifactStorage(driver);
+}
