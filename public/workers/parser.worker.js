@@ -164,16 +164,10 @@ async function parseContentToLines(processedDoc) {
       }
     }
   } else if (processedDoc.fileType === 'pdf') {
-    // For PDF, we'll need to send to Claude for parsing
-    // For now, create a placeholder that indicates real PDF content
-    lines.push({
-      id: 'pdf-1',
-      division: '00',
-      description: `PDF Document: ${processedDoc.fileName} (requires Claude processing)`,
-      cost: 0,
-      confidence: 0.5,
-      pageRef: 1
-    });
+    // PDFs are processed in the main thread with Claude API
+    // This shouldn't be reached since PDFs bypass the Web Worker
+    console.warn('PDF processing should not reach Web Worker - handled in main thread');
+    return [];
   }
 
   return lines.length > 0 ? lines : createEmptyFallback();

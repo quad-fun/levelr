@@ -140,6 +140,120 @@ export default function AIAnalysisFlow({
     });
   }, [updateStage]);
 
+  const parsePDFWithClaude = useCallback(async (file: File): Promise<CsiLine[]> => {
+    try {
+      // Convert PDF to base64 for Claude processing
+      const base64Data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = () => reject(new Error('Failed to read PDF file'));
+        reader.readAsDataURL(file);
+      });
+
+      updateStage('parsing', {
+        status: 'active',
+        message: 'Sending PDF to Claude for text extraction...',
+        progress: 30
+      });
+
+      // Send PDF to Claude API for text extraction and parsing
+      const response = await fetch('/api/claude', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: base64Data,
+          fileName: file.name,
+          fileType: 'pdf',
+          isBase64: true,
+          prompt: `Extract construction bid line items from this PDF document. For each line item, identify:
+1. Description of work/materials
+2. Cost/price (extract dollar amounts)
+3. CSI Division (if mentioned, format as 2-digit numbers like 03, 04, etc.)
+4. Contractor/subcontractor name (look for company names)
+5. Quantity and unit (SF, LF, CY, EA, etc.)
+
+Return ONLY a JSON array of objects with this exact structure:
+[{
+  "id": "line-1",
+  "description": "description text",
+  "cost": number,
+  "division": "02-digit CSI code or 00 if unknown",
+  "quantity": number or 1,
+  "unit": "unit abbreviation or EA",
+  "subcontractor": "company name or Self-performed",
+  "pageRef": page number or 1,
+  "confidence": decimal between 0 and 1
+}]
+
+Focus on actual construction work items with costs. Ignore headers, footers, and general text.`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Claude API error: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      updateStage('parsing', {
+        status: 'active',
+        message: 'Processing Claude response...',
+        progress: 70
+      });
+
+      // Parse Claude's response to extract line items
+      const lines = parseClaudeResponse(result.response, file.name);
+
+      return lines;
+    } catch (error) {
+      console.error('PDF processing error:', error);
+      throw new Error(`Failed to process PDF: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
+  }, [updateStage]);
+
+  const parseClaudeResponse = (claudeResponse: string, fileName: string): CsiLine[] => {
+    try {
+      // Try to extract JSON from Claude's response
+      const jsonMatch = claudeResponse.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        console.warn('No JSON array found in Claude response');
+        return [];
+      }
+
+      const parsedData = JSON.parse(jsonMatch[0]);
+
+      if (!Array.isArray(parsedData)) {
+        console.warn('Claude response is not an array');
+        return [];
+      }
+
+      // Convert to CsiLine format and validate
+      const lines: CsiLine[] = parsedData
+        .filter(item => item && typeof item === 'object')
+        .map((item, index) => ({
+          id: item.id || `pdf-line-${index + 1}`,
+          description: String(item.description || 'Unknown item').substring(0, 200),
+          cost: Number(item.cost) || 0,
+          division: String(item.division || '00').padStart(2, '0'),
+          quantity: Number(item.quantity) || 1,
+          unit: String(item.unit || 'EA').toUpperCase(),
+          unitCost: Number(item.cost) / Math.max(Number(item.quantity) || 1, 1),
+          subcontractor: String(item.subcontractor || 'Self-performed'),
+          pageRef: Number(item.pageRef) || 1,
+          confidence: Math.min(Math.max(Number(item.confidence) || 0.5, 0), 1)
+        }))
+        .filter(line => line.cost > 0 || line.description.length > 5); // Filter out empty/invalid lines
+
+      console.log(`Extracted ${lines.length} line items from PDF: ${fileName}`);
+      return lines;
+    } catch (error) {
+      console.error('Error parsing Claude response:', error);
+      return [];
+    }
+  };
+
   const runAnalysis = useCallback(async () => {
     if (isRunning) return;
 
@@ -164,7 +278,17 @@ export default function AIAnalysisFlow({
         progress: 0
       });
 
-      const lines = await parseDocumentWithWorker(file);
+      // Check if this is a PDF that needs Claude processing
+      const fileType = file.name.toLowerCase().endsWith('.pdf') ? 'pdf' : 'other';
+      let lines;
+
+      if (fileType === 'pdf') {
+        // Process PDF with Claude API in main thread
+        lines = await parsePDFWithClaude(file);
+      } else {
+        // Use Web Worker for Excel and other file types
+        lines = await parseDocumentWithWorker(file);
+      }
 
       updateStage('parsing', {
         status: 'complete',
