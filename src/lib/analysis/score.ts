@@ -119,11 +119,11 @@ export function calculateScore(
       Quality: risksByCategory.Quality?.length || 0
     },
     avgSeverities: {
-      Schedule: risksByCategory.Schedule?.reduce((sum, r) => sum + r.severity, 0) / (risksByCategory.Schedule?.length || 1),
-      Market: risksByCategory.Market?.reduce((sum, r) => sum + r.severity, 0) / (risksByCategory.Market?.length || 1),
-      Scope: risksByCategory.Scope?.reduce((sum, r) => sum + r.severity, 0) / (risksByCategory.Scope?.length || 1),
-      Contract: risksByCategory.Contract?.reduce((sum, r) => sum + r.severity, 0) / (risksByCategory.Contract?.length || 1),
-      Quality: risksByCategory.Quality?.reduce((sum, r) => sum + r.severity, 0) / (risksByCategory.Quality?.length || 1)
+      Schedule: (risksByCategory.Schedule?.reduce((sum, r) => sum + r.severity, 0) || 0) / (risksByCategory.Schedule?.length || 1),
+      Market: (risksByCategory.Market?.reduce((sum, r) => sum + r.severity, 0) || 0) / (risksByCategory.Market?.length || 1),
+      Scope: (risksByCategory.Scope?.reduce((sum, r) => sum + r.severity, 0) || 0) / (risksByCategory.Scope?.length || 1),
+      Contract: (risksByCategory.Contract?.reduce((sum, r) => sum + r.severity, 0) || 0) / (risksByCategory.Contract?.length || 1),
+      Quality: (risksByCategory.Quality?.reduce((sum, r) => sum + r.severity, 0) || 0) / (risksByCategory.Quality?.length || 1)
     }
   };
 
