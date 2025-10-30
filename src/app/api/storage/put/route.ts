@@ -49,13 +49,8 @@ export async function POST(request: NextRequest) {
     // Upload to Vercel Blob
     const blob = await put(filename, payloadStr, {
       access: 'public', // Artifacts can be publicly accessible via signed URLs
-      contentType: 'application/json',
-      metadata: {
-        kind: body.kind,
-        runId: body.runId,
-        size: payloadSize.toString(),
-        createdAt: new Date().toISOString()
-      }
+      contentType: 'application/json'
+      // Note: Vercel Blob metadata may not be supported in current API version
     });
 
     return NextResponse.json({
