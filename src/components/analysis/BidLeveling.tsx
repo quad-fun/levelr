@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
 import { getArtifacts, onSessionChange, type BidArtifact } from '@/lib/analysis/sessionStore';
-import { buildLeveling, type LevelingResult } from '@/lib/analysis/leveling';
+import { buildLeveling } from '@/lib/analysis/leveling';
 import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS, LEVELING_LABELS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
-import { ComparativeAnalysis, AnalysisResult } from '@/types/analysis';
+import { ComparativeAnalysis, AnalysisResult, EquipmentSpec, DesignDeliverable } from '@/types/analysis';
 import { BarChart3, Download, DollarSign, Search, AlertTriangle, CheckCircle, HelpCircle, Loader2 } from 'lucide-react';
 import { LockedButton } from '@/components/common/LockedButton';
 import type { Flags } from '@/lib/flags';
@@ -253,7 +253,6 @@ interface BidLevelingProps {
 export default function BidLeveling({ projectContext, flags: _flags }: BidLevelingProps = {}) {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
   const [sessionArtifacts, setSessionArtifacts] = useState<BidArtifact[]>([]);
-  const [levelingResult, setLevelingResult] = useState<LevelingResult | null>(null);
   const [selectedBids, setSelectedBids] = useState<string[]>(projectContext?.preselectedBids || []);
   const [sortBy, setSortBy] = useState<'price' | 'risk' | 'date'>('price');
   const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
@@ -278,10 +277,8 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
     if (artifacts.length >= 2) {
       // Build leveling result from session artifacts
       const result = buildLeveling(artifacts, artifacts[0]?.id);
-      setLevelingResult(result);
       console.log('✅ Leveling result built:', result);
     } else {
-      setLevelingResult(null);
       console.log('⏳ Not enough artifacts for leveling');
     }
   };
@@ -307,14 +304,20 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
 
   // Convert session artifacts to SavedAnalysis format for UI compatibility
   const convertArtifactToAnalysis = (artifact: BidArtifact): SavedAnalysis => {
-    // Create a minimal AnalysisResult from the artifact
-    const analysisResult: AnalysisResult = {
-      contractor_name: artifact.fileName.replace('.pdf', ''), // Use filename as contractor name
-      total_amount: artifact.totals.grandTotal,
+    // Start with raw analysis if available, otherwise create minimal structure
+    const baseAnalysis = artifact.rawAnalysis as AnalysisResult || {
+      contractor_name: '',
+      total_amount: 0,
       discipline: artifact.discipline,
-      csi_divisions: {},
-      // Add other required fields
-      ...(artifact.rawAnalysis as any) // Use raw analysis if available
+      csi_divisions: {}
+    };
+
+    // Create a complete AnalysisResult, overriding key fields
+    const analysisResult: AnalysisResult = {
+      ...baseAnalysis,
+      contractor_name: artifact.fileName.replace('.pdf', ''), // Override with filename
+      total_amount: artifact.totals.grandTotal, // Override with calculated total
+      discipline: artifact.discipline, // Ensure discipline is correct
     };
 
     // Convert byDivision back to discipline-specific format
@@ -322,17 +325,27 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
       analysisResult.csi_divisions = Object.entries(artifact.totals.byDivision).reduce((acc, [code, cost]) => {
         acc[code] = { cost, items: [] };
         return acc;
-      }, {} as Record<string, any>);
+      }, {} as Record<string, { cost: number; items: string[] }>);
     } else if (artifact.discipline === 'design') {
       analysisResult.aia_phases = Object.entries(artifact.totals.byDivision).reduce((acc, [phase, cost]) => {
-        acc[phase] = { phase_name: phase, fee_amount: cost, percentage_of_total: 0, deliverables: [] };
+        acc[phase] = {
+          phase_name: phase,
+          fee_amount: cost,
+          percentage_of_total: 0,
+          deliverables: [] as DesignDeliverable[]
+        };
         return acc;
-      }, {} as Record<string, any>);
+      }, {} as Record<string, { phase_name: string; fee_amount: number; percentage_of_total: number; deliverables: DesignDeliverable[] }>);
     } else if (artifact.discipline === 'trade') {
       analysisResult.technical_systems = Object.entries(artifact.totals.byDivision).reduce((acc, [system, cost]) => {
-        acc[system] = { system_name: system, total_cost: cost, category: 'electrical' as any, specifications: [] };
+        acc[system] = {
+          system_name: system,
+          total_cost: cost,
+          category: 'electrical' as 'electrical' | 'mechanical' | 'plumbing' | 'structural' | 'civil' | 'environmental',
+          specifications: [] as EquipmentSpec[]
+        };
         return acc;
-      }, {} as Record<string, any>);
+      }, {} as Record<string, { system_name: string; total_cost: number; category: 'electrical' | 'mechanical' | 'plumbing' | 'structural' | 'civil' | 'environmental'; specifications: EquipmentSpec[] }>);
     }
 
     return {

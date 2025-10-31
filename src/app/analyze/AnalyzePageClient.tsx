@@ -171,7 +171,7 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
               const { debugAutoLeveling } = await import('@/lib/analysis/leveling');
 
               console.log('🔧 MANUAL DEBUG TRIGGER:');
-              const sessionState = debugSessionContents();
+              debugSessionContents();
               const artifacts = getArtifacts();
               const baseline = getBaseline();
 
