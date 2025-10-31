@@ -473,7 +473,6 @@ export class AnalysisOrchestrator {
     const totalAmounts = files.map(f => f.analysis.totalAmount);
     const minAmount = Math.min(...totalAmounts);
     const maxAmount = Math.max(...totalAmounts);
-    const avgAmount = totalAmounts.reduce((a, b) => a + b, 0) / totalAmounts.length;
 
     if (maxAmount > minAmount * 1.5) {
       insights.push(`💰 Significant cost variance: ${((maxAmount - minAmount) / minAmount * 100).toFixed(0)}% spread between highest and lowest bids`);

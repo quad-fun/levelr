@@ -22,7 +22,6 @@ export default function UploadDropzone({
   className = ''
 }: UploadDropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
-  const [dragCounter, setDragCounter] = useState(0);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const remainingSlots = maxFiles - currentFileCount;
@@ -34,7 +33,6 @@ export default function UploadDropzone({
 
     if (!canAddFiles) return;
 
-    setDragCounter(prev => prev + 1);
     if (e.dataTransfer.items && e.dataTransfer.items.length > 0) {
       setIsDragging(true);
     }
@@ -44,13 +42,7 @@ export default function UploadDropzone({
     e.preventDefault();
     e.stopPropagation();
 
-    setDragCounter(prev => {
-      const newCount = prev - 1;
-      if (newCount === 0) {
-        setIsDragging(false);
-      }
-      return newCount;
-    });
+    setIsDragging(false);
   }, []);
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -63,7 +55,6 @@ export default function UploadDropzone({
     e.stopPropagation();
 
     setIsDragging(false);
-    setDragCounter(0);
 
     if (!canAddFiles) return;
 

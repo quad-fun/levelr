@@ -1,7 +1,7 @@
 // src/lib/workers/worker-bridge.ts
 
 import type { CsiLine } from '@/types/analysis';
-import { UploadErrorCode, createUploadError, type UploadError } from '../upload/errors';
+import { UploadErrorCode } from '../upload/errors';
 
 export interface WorkerProgressEvent {
   fileId: string;

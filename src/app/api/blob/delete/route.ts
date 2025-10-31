@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         if (Date.now() - created > maxAge) {
           console.warn('Blob cleanup token expired:', token);
         }
-      } catch (_error) {
+      } catch {
         return NextResponse.json(
           { error: 'Invalid cleanup token' },
           { status: 400 }

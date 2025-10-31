@@ -4,12 +4,12 @@
 
 import { useState, useCallback, useRef, useEffect } from 'react';
 // Multi-file upload component with emoji icons
-import { UploadManager, type UploadSession, DEFAULT_UPLOAD_CONFIG, FileUploadStatus } from '@/lib/upload/ingest';
+import { UploadManager, type UploadSession, type UploadFileInfo, DEFAULT_UPLOAD_CONFIG, FileUploadStatus } from '@/lib/upload/ingest';
+import type { CsiLine } from '@/types/analysis';
 import { WorkerBridge } from '@/lib/workers/worker-bridge';
 import { createEphemeralObject } from '@/lib/upload/blob-client';
 import UploadDropzone from './UploadDropzone';
 import UploadQueueItem from './UploadQueueItem';
-import type { CsiLine } from '@/types/analysis';
 
 interface MultiFileUploadProps {
   onFilesProcessed: (results: Array<{
@@ -99,22 +99,22 @@ export default function MultiFileUpload({
   }, [session]);
 
   // Process individual file
-  const processFile = useCallback(async (fileInfo: any) => {
+  const processFile = useCallback(async (fileInfo: UploadFileInfo) => {
     if (!workerBridgeRef.current) return;
 
     const callbacks = {
-      onProgress: (event: any) => {
+      onProgress: (event: { progress: number }) => {
         // Update file progress
         fileInfo.progress = event.progress;
         setSession(prev => prev ? { ...prev } : null);
       },
 
-      onDisciplineHint: (event: any) => {
+      onDisciplineHint: (event: { disciplineHint: string }) => {
         fileInfo.disciplineHint = event.disciplineHint;
         setSession(prev => prev ? { ...prev } : null);
       },
 
-      onSuccess: (event: any) => {
+      onSuccess: (event: { lines: CsiLine[]; disciplineHint?: string }) => {
         fileInfo.status = FileUploadStatus.COMPLETED;
         fileInfo.progress = 100;
         fileInfo.endTime = Date.now();
@@ -131,7 +131,7 @@ export default function MultiFileUpload({
         setSession(prev => prev ? { ...prev } : null);
       },
 
-      onError: (event: any) => {
+      onError: (event: { message: string }) => {
         fileInfo.status = FileUploadStatus.ERROR;
         fileInfo.error = event.message;
         setSession(prev => prev ? { ...prev } : null);
@@ -167,7 +167,7 @@ export default function MultiFileUpload({
       fileInfo.error = error instanceof Error ? error.message : 'Unknown error';
       setSession(prev => prev ? { ...prev } : null);
     }
-  }, []);
+  }, [processedResults]);
 
   // Check if all files are complete and trigger callbacks
   const checkAllFilesComplete = useCallback(() => {
