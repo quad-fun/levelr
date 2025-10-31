@@ -274,6 +274,15 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
     const artifacts = getArtifacts();
     setSessionArtifacts(artifacts);
 
+    // Auto-switch to the discipline of the artifacts if we have any
+    if (artifacts.length > 0) {
+      const artifactDiscipline = artifacts[0].discipline;
+      if (artifactDiscipline !== activeDiscipline) {
+        console.log(`🔄 Auto-switching discipline from ${activeDiscipline} to ${artifactDiscipline} to match session artifacts`);
+        setActiveDiscipline(artifactDiscipline);
+      }
+    }
+
     if (artifacts.length >= 2) {
       // Build leveling result from session artifacts
       const result = buildLeveling(artifacts, artifacts[0]?.id);
@@ -286,6 +295,11 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
   // Monitor session store changes and load data on mount
   useEffect(() => {
     console.log('🔄 BidLeveling component mounted - loading data...');
+    console.log('🔧 Initial state:', {
+      analysesCount: analyses.length,
+      sessionArtifactsCount: sessionArtifacts.length,
+      activeDiscipline
+    });
 
     // Load both localStorage analyses and session artifacts
     loadAnalyses();
@@ -370,7 +384,20 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
 
     // Combine both sources
     const combined = [...localStorageAnalyses, ...sessionAnalyses];
-    console.log(`📊 Filtered analyses for ${activeDiscipline}: ${localStorageAnalyses.length} from localStorage + ${sessionAnalyses.length} from session = ${combined.length} total`);
+    console.log(`🔍 BidLeveling getFilteredAnalyses() DEBUG:`);
+    console.log(`  📊 Active discipline: ${activeDiscipline}`);
+    console.log(`  💾 localStorage analyses: ${localStorageAnalyses.length}`);
+    console.log(`  🎯 Session artifacts available: ${sessionArtifacts.length}`);
+    console.log(`  🎯 Session artifacts for ${activeDiscipline}: ${sessionAnalyses.length}`);
+    console.log(`  📊 Combined total: ${combined.length}`);
+
+    if (sessionArtifacts.length > 0) {
+      console.log(`  🔧 Session artifacts details:`, sessionArtifacts.map(a => `${a.fileName} (${a.discipline})`));
+    }
+
+    if (combined.length > 0) {
+      console.log(`  ✅ Combined analyses:`, combined.map(a => `${a.result.contractor_name} ($${a.result.total_amount.toLocaleString()})`));
+    }
 
     return combined;
   };
