@@ -177,16 +177,27 @@ export class WorkerBridge {
       abortController
     });
 
-    // Send file to worker
-    this.worker?.postMessage({
-      type: 'parse',
-      fileId,
-      file: {
-        name: file.name,
-        type: file.type,
-        size: file.size,
-        data: file
-      }
+    // Convert File to ArrayBuffer for worker
+    file.arrayBuffer().then(buffer => {
+      const uint8Array = new Uint8Array(buffer);
+
+      // Send file data to worker
+      this.worker?.postMessage({
+        type: 'parse',
+        fileId,
+        file: {
+          name: file.name,
+          type: file.type,
+          size: file.size,
+          data: uint8Array
+        }
+      }, [buffer]); // Transfer ownership of ArrayBuffer to worker
+    }).catch(error => {
+      callbacks.onError?.({
+        fileId,
+        code: UploadErrorCode.READ_FAILED,
+        message: `Failed to read file: ${error.message}`
+      });
     });
 
     // Handle abort
