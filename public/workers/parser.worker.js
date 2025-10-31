@@ -313,6 +313,7 @@ async function processChunkedFile(fileId, fileObj) {
 
     postFileMessage(fileId, 'success', {
       lines,
+      processedDoc: processedDoc, // Include original processed document for API calls
       parseConfidence: calculateParseConfidence(lines),
       totalPages: Math.max(...lines.map(l => l.pageRef || 1))
     });

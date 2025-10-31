@@ -15,7 +15,7 @@ interface MultiFileUploadProps {
   onFilesProcessed: (results: Array<{
     fileId: string;
     fileName: string;
-    lines: CsiLine[];
+    analysis: any; // Full analysis result from discipline-specific API
     disciplineHint?: string;
   }>) => void;
   onAutoLevelingReady?: () => void;
@@ -38,7 +38,7 @@ export default function MultiFileUpload({
   const processedResults = useRef<Map<string, {
     fileId: string;
     fileName: string;
-    lines: CsiLine[];
+    analysis: any; // Full analysis result from discipline-specific API
     disciplineHint?: string;
   }>>(new Map());
 
@@ -114,21 +114,68 @@ export default function MultiFileUpload({
         setSession(prev => prev ? { ...prev } : null);
       },
 
-      onSuccess: (event: { lines: CsiLine[]; disciplineHint?: string }) => {
-        fileInfo.status = FileUploadStatus.COMPLETED;
-        fileInfo.progress = 100;
-        fileInfo.endTime = Date.now();
-
-        // Store processed result
-        processedResults.current.set(fileInfo.id, {
-          fileId: fileInfo.id,
-          fileName: fileInfo.file.name,
-          lines: event.lines,
-          disciplineHint: event.disciplineHint || fileInfo.disciplineHint
-        });
-
-        checkAllFilesComplete();
+      onSuccess: async (event: { lines: CsiLine[]; processedDoc: any; disciplineHint?: string }) => {
+        fileInfo.status = FileUploadStatus.PROCESSING;
         setSession(prev => prev ? { ...prev } : null);
+
+        try {
+          // Use discipline-aware analysis routing with AI-native processedDoc
+          const finalDiscipline = event.disciplineHint || fileInfo.disciplineHint || 'construction';
+          const processedDoc = event.processedDoc; // Use the actual processed document from worker
+
+          let analysisResult;
+
+          // Route to appropriate API endpoint based on discipline
+          if (finalDiscipline === 'design') {
+            const response = await fetch('/api/claude/design', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ processedDoc })
+            });
+            if (!response.ok) throw new Error('Design analysis failed');
+            const { analysis } = await response.json();
+            analysisResult = analysis;
+          } else if (finalDiscipline === 'trade') {
+            const response = await fetch('/api/claude/trade', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ processedDoc })
+            });
+            if (!response.ok) throw new Error('Trade analysis failed');
+            const { analysis } = await response.json();
+            analysisResult = analysis;
+          } else {
+            // Construction - use default endpoint
+            const response = await fetch('/api/claude', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ processedDoc })
+            });
+            if (!response.ok) throw new Error('Construction analysis failed');
+            const { analysis } = await response.json();
+            analysisResult = analysis;
+          }
+
+          fileInfo.status = FileUploadStatus.COMPLETED;
+          fileInfo.progress = 100;
+          fileInfo.endTime = Date.now();
+
+          // Store analysis result instead of raw lines
+          processedResults.current.set(fileInfo.id, {
+            fileId: fileInfo.id,
+            fileName: fileInfo.file.name,
+            analysis: analysisResult,
+            disciplineHint: finalDiscipline
+          });
+
+          checkAllFilesComplete();
+          setSession(prev => prev ? { ...prev } : null);
+
+        } catch (error) {
+          fileInfo.status = FileUploadStatus.ERROR;
+          fileInfo.error = error instanceof Error ? error.message : 'Analysis failed';
+          setSession(prev => prev ? { ...prev } : null);
+        }
       },
 
       onError: (event: { message: string }) => {
