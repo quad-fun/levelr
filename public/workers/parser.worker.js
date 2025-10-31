@@ -209,18 +209,19 @@ async function parseFromUrl(fileId, url, fileName, fileSize, signal) {
 // Get early discipline hint from file sample
 async function getDisciplineHint(fileId, file) {
   try {
+    // file now has structure: { name, type, size, data: Uint8Array }
     const sampleSize = Math.min(2 * 1024 * 1024, file.size); // 2MB sample
-    const sample = file.slice(0, sampleSize);
+    const sampleData = file.data.slice(0, sampleSize);
 
     let text = '';
 
     if (file.type.includes('text') || file.name.toLowerCase().endsWith('.csv')) {
-      text = await sample.text();
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      text = decoder.decode(sampleData);
     } else if (file.name.toLowerCase().endsWith('.xlsx')) {
       // Quick Excel header scan
-      const buffer = await sample.arrayBuffer();
       const decoder = new TextDecoder('utf-8', { fatal: false });
-      text = decoder.decode(buffer);
+      text = decoder.decode(sampleData);
     } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
       // For PDFs, analyze filename and any extractable text hints
       text = file.name; // At minimum, analyze the filename
