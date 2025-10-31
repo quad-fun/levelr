@@ -14,16 +14,32 @@
  * - Claude-optimized preprocessing
  */
 
-// Import PDF.js for true PDF processing - use .js version for importScripts compatibility
-importScripts('https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js');
+// Try to import external libraries with error handling
+let pdfJSAvailable = false;
+let xlsxAvailable = false;
 
-// Configure PDF.js worker
-if (typeof pdfjsLib !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+try {
+  importScripts('https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js');
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    pdfJSAvailable = true;
+    console.log('✅ PDF.js loaded successfully');
+  }
+} catch (error) {
+  console.warn('⚠️ PDF.js failed to load:', error.message);
+  console.log('📄 Will use fallback PDF processing');
 }
 
-// Import XLSX for Excel processing
-importScripts('https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js');
+try {
+  importScripts('https://unpkg.com/xlsx@0.18.5/dist/xlsx.full.min.js');
+  if (typeof XLSX !== 'undefined') {
+    xlsxAvailable = true;
+    console.log('✅ XLSX loaded successfully');
+  }
+} catch (error) {
+  console.warn('⚠️ XLSX failed to load:', error.message);
+  console.log('📊 Will use basic Excel processing');
+}
 
 // File contexts for tracking processing state
 const fileContexts = new Map();
@@ -183,8 +199,8 @@ async function processPDFAINative(fileId, file) {
   console.log(`📄 AI-Native PDF processing for ${file.name}`);
 
   // Check if PDF.js is available
-  if (typeof pdfjsLib === 'undefined') {
-    console.warn('PDF.js not available, using fallback processing');
+  if (!pdfJSAvailable || typeof pdfjsLib === 'undefined') {
+    console.log('📄 PDF.js not available, using intelligent fallback processing');
     return processPDFFallback(fileId, file);
   }
 
@@ -323,47 +339,99 @@ Please analyze the document image for:
 async function processExcelAINative(fileId, file) {
   console.log(`📊 AI-Native Excel processing for ${file.name}`);
 
-  // Convert Uint8Array to ArrayBuffer for XLSX
-  const arrayBuffer = file.data.buffer.slice(
-    file.data.byteOffset,
-    file.data.byteOffset + file.data.byteLength
-  );
-
-  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-  const sheetName = workbook.SheetNames[0];
-  const worksheet = workbook.Sheets[sheetName];
-
-  // Extract structured data
-  const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
-  const lineItems = [];
-  let lineId = 1;
-
-  // Intelligent row processing
-  for (let i = 1; i < jsonData.length; i++) { // Skip header row
-    const row = jsonData[i];
-    if (!row || row.length === 0) continue;
-
-    const lineItem = parseStructuredRow(row, lineId, sheetName);
-    if (lineItem) {
-      lineItems.push(lineItem);
-      lineId++;
-    }
+  if (!xlsxAvailable || typeof XLSX === 'undefined') {
+    console.log('📊 XLSX not available, using basic Excel processing');
+    return processExcelFallback(fileId, file);
   }
 
-  // Convert to text for Claude
-  const structuredText = convertLineItemsToText(lineItems);
+  try {
+    // Convert Uint8Array to ArrayBuffer for XLSX
+    const arrayBuffer = file.data.buffer.slice(
+      file.data.byteOffset,
+      file.data.byteOffset + file.data.byteLength
+    );
+
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const sheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[sheetName];
+
+    // Extract structured data
+    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+    const lineItems = [];
+    let lineId = 1;
+
+    // Intelligent row processing
+    for (let i = 1; i < jsonData.length; i++) { // Skip header row
+      const row = jsonData[i];
+      if (!row || row.length === 0) continue;
+
+      const lineItem = parseStructuredRow(row, lineId, sheetName);
+      if (lineItem) {
+        lineItems.push(lineItem);
+        lineId++;
+      }
+    }
+
+    // Convert to text for Claude
+    const structuredText = convertLineItemsToText(lineItems);
+
+    return {
+      content: structuredText,
+      fileType: 'excel',
+      fileName: file.name,
+      isBase64: false,
+      useBlobStorage: false,
+      metadata: {
+        extractedStructure: {
+          lineItems: lineItems
+        },
+        confidence: calculateExcelConfidence(lineItems),
+        fileSize: file.size,
+        processingRoute: 'worker'
+      }
+    };
+
+  } catch (error) {
+    console.error('Excel processing failed:', error);
+    return processExcelFallback(fileId, file);
+  }
+}
+
+// EXCEL FALLBACK PROCESSING
+async function processExcelFallback(fileId, file) {
+  console.log(`📊 Excel fallback processing for ${file.name}`);
+
+  // Convert to base64 for Claude analysis
+  const base64Data = arrayBufferToBase64(file.data);
+
+  const structuredContent = `Excel Analysis Context:
+Filename: ${file.name}
+Size: ${(file.size / 1024).toFixed(1)}KB
+Format: Excel spreadsheet (processed as base64)
+
+This Excel file requires analysis by Claude as structured parsing was not available.
+Please analyze the spreadsheet for:
+- Cost line items and totals
+- Project phases and breakdowns
+- Vendor/contractor information
+- Quantities and unit costs
+- Any CSI divisions or trade categories`;
 
   return {
-    content: structuredText,
+    content: `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${base64Data}`,
     fileType: 'excel',
     fileName: file.name,
-    isBase64: false,
+    isBase64: true,
     useBlobStorage: false,
     metadata: {
       extractedStructure: {
-        lineItems: lineItems
+        textSections: [{
+          type: 'header',
+          content: structuredContent,
+          relevanceScore: 0.9
+        }]
       },
-      confidence: calculateExcelConfidence(lineItems),
+      confidence: 0.7,
       fileSize: file.size,
       processingRoute: 'worker'
     }
@@ -796,4 +864,6 @@ async function parseFromUrl(fileId, url, fileName, fileSize, signal) {
   }
 }
 
-console.log('🤖 AI-Native Document Processing Worker initialized with PDF.js and XLSX support');
+console.log(`🤖 AI-Native Document Processing Worker initialized`);
+console.log(`📄 PDF.js: ${pdfJSAvailable ? 'Available' : 'Fallback mode'}`);
+console.log(`📊 XLSX: ${xlsxAvailable ? 'Available' : 'Fallback mode'}`);
