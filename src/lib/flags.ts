@@ -7,7 +7,8 @@ export type FlagName =
   | "blVarianceExplanation" | "blVarianceAnalysis" | "blComparativeAnalysis"
   | "exportBidAnalysis" | "exportBidLeveling" | "exportRfp" | "blobStorage"
   | "riskDisciplineAware" | "riskFollowUps" | "riskCrossDiscipline"
-  | "localMode" | "proModeEnabled" | "webWorkerParsing" | "deterministicScoring" | "blobArtifactStorage";
+  | "localMode" | "proModeEnabled" | "webWorkerParsing" | "deterministicScoring" | "blobArtifactStorage"
+  | "multiFileUpload" | "uploadDisciplineHints" | "uploadAutoLeveling" | "uploadChunkedProcessing";
 
 export type Flags = {
   // platform
@@ -53,6 +54,12 @@ export type Flags = {
   webWorkerParsing: boolean;       // Use Web Worker for document parsing
   deterministicScoring: boolean;   // Use new scoring system
   blobArtifactStorage: boolean;    // Store artifacts in Vercel Blob
+
+  // Upload Optimization Flags
+  multiFileUpload: boolean;        // Multi-file drag & drop with auto-leveling
+  uploadDisciplineHints: boolean;  // Early discipline detection during upload
+  uploadAutoLeveling: boolean;     // Automatic bid leveling when 2+ files complete
+  uploadChunkedProcessing: boolean; // Chunked processing for large files
 };
 
 // Environment variable defaults
@@ -101,6 +108,12 @@ function getEnvDefaults(): Flags {
     webWorkerParsing: process.env.NEXT_PUBLIC_ENABLE_WEB_WORKER_PARSING !== 'false', // default true
     deterministicScoring: process.env.NEXT_PUBLIC_ENABLE_DETERMINISTIC_SCORING !== 'false', // default true
     blobArtifactStorage: process.env.NEXT_PUBLIC_ENABLE_BLOB_ARTIFACT_STORAGE === 'true', // default false
+
+    // Upload Optimization Flags - all default true for enhanced UX
+    multiFileUpload: process.env.NEXT_PUBLIC_ENABLE_MULTI_FILE_UPLOAD !== 'false', // default true
+    uploadDisciplineHints: process.env.NEXT_PUBLIC_ENABLE_UPLOAD_DISCIPLINE_HINTS !== 'false', // default true
+    uploadAutoLeveling: process.env.NEXT_PUBLIC_ENABLE_UPLOAD_AUTO_LEVELING !== 'false', // default true
+    uploadChunkedProcessing: process.env.NEXT_PUBLIC_ENABLE_UPLOAD_CHUNKED_PROCESSING !== 'false', // default true
   };
 }
 
@@ -138,6 +151,11 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         webWorkerParsing: true,
         deterministicScoring: true,
         blobArtifactStorage: false,
+        // Upload optimization features
+        multiFileUpload: true,
+        uploadDisciplineHints: true,
+        uploadAutoLeveling: false, // Starter limited to single file analysis
+        uploadChunkedProcessing: true,
       };
 
     case "pro":
@@ -171,6 +189,11 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         webWorkerParsing: true,
         deterministicScoring: true,
         blobArtifactStorage: true, // Pro gets cloud artifact storage
+        // Upload optimization features - Pro gets full upload capabilities
+        multiFileUpload: true,
+        uploadDisciplineHints: true,
+        uploadAutoLeveling: true,
+        uploadChunkedProcessing: true,
       };
 
     case "team":
@@ -202,6 +225,21 @@ function getTierPreset(tier: UserTier): Partial<Flags> {
         exportBidLeveling: true,
         exportRfp: true,
         blobStorage: true,
+        // enhanced risk analysis
+        riskDisciplineAware: true,
+        riskFollowUps: true,
+        riskCrossDiscipline: true,
+        // AI-native features - Enterprise gets everything
+        localMode: true,
+        proModeEnabled: true,
+        webWorkerParsing: true,
+        deterministicScoring: true,
+        blobArtifactStorage: true,
+        // Upload optimization features - Enterprise gets full upload capabilities
+        multiFileUpload: true,
+        uploadDisciplineHints: true,
+        uploadAutoLeveling: true,
+        uploadChunkedProcessing: true,
       };
 
     default:
@@ -286,6 +324,11 @@ function getAdminPreset(): Flags {
     webWorkerParsing: true,
     deterministicScoring: true,
     blobArtifactStorage: true,
+    // Upload optimization features - admin gets everything
+    multiFileUpload: true,
+    uploadDisciplineHints: true,
+    uploadAutoLeveling: true,
+    uploadChunkedProcessing: true,
   };
 }
 

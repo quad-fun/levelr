@@ -7,7 +7,7 @@ import Timeline, { TimelineStage } from '@/components/analysis/Timeline';
 import Artifacts from '@/components/analysis/Artifacts';
 import { AnalysisOrchestrator } from '@/lib/ai/orchestrator';
 import { ArtifactStorage } from '@/lib/storage';
-import type { BidArtifact, CsiLine } from '@/types/analysis';
+import type { BidArtifact, CsiLine, AnalysisResult } from '@/types/analysis';
 import type { Flags } from '@/lib/flags';
 
 interface AIAnalysisFlowProps {
@@ -142,69 +142,53 @@ export default function AIAnalysisFlow({
 
   const parsePDFWithClaude = useCallback(async (file: File): Promise<CsiLine[]> => {
     try {
-      // Convert PDF to base64 for Claude processing
-      const base64Data = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = () => reject(new Error('Failed to read PDF file'));
-        reader.readAsDataURL(file);
+      updateStage('parsing', {
+        status: 'active',
+        message: 'Preparing PDF for Claude processing...',
+        progress: 20
       });
+
+      // Use the document processor to handle file processing (includes blob storage for large files)
+      const { processDocument } = await import('@/lib/document-processor');
+      const processedDoc = await processDocument(file);
 
       updateStage('parsing', {
         status: 'active',
-        message: 'Sending PDF to Claude for text extraction...',
-        progress: 30
+        message: 'Sending PDF to Claude for analysis...',
+        progress: 40
       });
 
-      // Send PDF to Claude API for text extraction and parsing
+      // Send to Claude API using correct format with processedDoc
       const response = await fetch('/api/claude', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: base64Data,
-          fileName: file.name,
-          fileType: 'pdf',
-          isBase64: true,
-          prompt: `Extract construction bid line items from this PDF document. For each line item, identify:
-1. Description of work/materials
-2. Cost/price (extract dollar amounts)
-3. CSI Division (if mentioned, format as 2-digit numbers like 03, 04, etc.)
-4. Contractor/subcontractor name (look for company names)
-5. Quantity and unit (SF, LF, CY, EA, etc.)
-
-Return ONLY a JSON array of objects with this exact structure:
-[{
-  "id": "line-1",
-  "description": "description text",
-  "cost": number,
-  "division": "02-digit CSI code or 00 if unknown",
-  "quantity": number or 1,
-  "unit": "unit abbreviation or EA",
-  "subcontractor": "company name or Self-performed",
-  "pageRef": page number or 1,
-  "confidence": decimal between 0 and 1
-}]
-
-Focus on actual construction work items with costs. Ignore headers, footers, and general text.`
+          processedDoc
         })
       });
 
       if (!response.ok) {
-        throw new Error(`Claude API error: ${response.statusText}`);
+        const errorText = await response.text();
+        throw new Error(`Claude API error: ${response.status} ${response.statusText} - ${errorText}`);
       }
 
       const result = await response.json();
 
       updateStage('parsing', {
         status: 'active',
-        message: 'Processing Claude response...',
-        progress: 70
+        message: 'Processing analysis results...',
+        progress: 80
       });
 
-      // Parse Claude's response to extract line items
-      const lines = parseClaudeResponse(result.response, file.name);
+      // The Claude API now returns structured analysis results
+      if (!result.analysis) {
+        throw new Error('No analysis data received from Claude API');
+      }
+
+      // Extract line items from the analysis result
+      const lines = extractLinesFromAnalysis(result.analysis);
 
       return lines;
     } catch (error) {
@@ -213,43 +197,57 @@ Focus on actual construction work items with costs. Ignore headers, footers, and
     }
   }, [updateStage]);
 
-  const parseClaudeResponse = (claudeResponse: string, fileName: string): CsiLine[] => {
+  const extractLinesFromAnalysis = (analysis: AnalysisResult | BidArtifact): CsiLine[] => {
     try {
-      // Try to extract JSON from Claude's response
-      const jsonMatch = claudeResponse.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        console.warn('No JSON array found in Claude response');
-        return [];
+      // The Claude API returns a structured analysis with line items
+      // Check for different possible locations of line items in the analysis
+      let lines: unknown[] = [];
+
+      if ('csi_divisions' in analysis && analysis.csi_divisions) {
+        // Extract line items from CSI divisions structure
+        for (const [division, divisionData] of Object.entries(analysis.csi_divisions)) {
+          if (divisionData && typeof divisionData === 'object' && 'sub_items' in divisionData) {
+            const subItems = (divisionData as { sub_items?: unknown[] }).sub_items || [];
+            lines.push(...subItems.map((item: unknown, index: number) => ({
+              ...(typeof item === 'object' && item ? item : {}),
+              id: (item as { id?: string })?.id || `div-${division}-${index + 1}`,
+              division: division,
+              pageRef: 1 // Default page ref for now
+            })));
+          }
+        }
+      } else if ('lines' in analysis && Array.isArray(analysis.lines)) {
+        // Direct line items array
+        lines = analysis.lines;
+      } else if ('parsing' in analysis && analysis.parsing && 'lines' in analysis.parsing) {
+        // Line items in parsing section (AI-native format)
+        lines = analysis.parsing.lines;
       }
 
-      const parsedData = JSON.parse(jsonMatch[0]);
+      // Convert to CsiLine format
+      const csiLines: CsiLine[] = lines.map((item: unknown, index: number) => {
+        const typedItem = item as Record<string, unknown>;
+        return {
+          id: typedItem.id as string || `line-${index + 1}`,
+          division: typedItem.division as string || '00',
+          description: typedItem.description as string || 'Unknown item',
+          cost: typeof typedItem.cost === 'number' ? typedItem.cost : 0,
+          unit: typedItem.unit as string || 'EA',
+          quantity: typeof typedItem.quantity === 'number' ? typedItem.quantity : 1,
+          unitCost: typeof typedItem.unit_cost === 'number' ? typedItem.unit_cost :
+            (typeof typedItem.cost === 'number' && typeof typedItem.quantity === 'number'
+              ? typedItem.cost / Math.max(typedItem.quantity, 1)
+              : (typedItem.cost as number) || 0),
+          subcontractor: typedItem.subcontractor as string || 'Self-performed',
+          pageRef: (typedItem.pageRef || typedItem.page_ref) as number || 1,
+          confidence: typeof typedItem.confidence === 'number' ? typedItem.confidence : 0.5
+        };
+      });
 
-      if (!Array.isArray(parsedData)) {
-        console.warn('Claude response is not an array');
-        return [];
-      }
-
-      // Convert to CsiLine format and validate
-      const lines: CsiLine[] = parsedData
-        .filter(item => item && typeof item === 'object')
-        .map((item, index) => ({
-          id: item.id || `pdf-line-${index + 1}`,
-          description: String(item.description || 'Unknown item').substring(0, 200),
-          cost: Number(item.cost) || 0,
-          division: String(item.division || '00').padStart(2, '0'),
-          quantity: Number(item.quantity) || 1,
-          unit: String(item.unit || 'EA').toUpperCase(),
-          unitCost: Number(item.cost) / Math.max(Number(item.quantity) || 1, 1),
-          subcontractor: String(item.subcontractor || 'Self-performed'),
-          pageRef: Number(item.pageRef) || 1,
-          confidence: Math.min(Math.max(Number(item.confidence) || 0.5, 0), 1)
-        }))
-        .filter(line => line.cost > 0 || line.description.length > 5); // Filter out empty/invalid lines
-
-      console.log(`Extracted ${lines.length} line items from PDF: ${fileName}`);
-      return lines;
+      console.log(`Extracted ${csiLines.length} line items from analysis`);
+      return csiLines;
     } catch (error) {
-      console.error('Error parsing Claude response:', error);
+      console.error('Error extracting lines from analysis:', error);
       return [];
     }
   };
@@ -388,7 +386,7 @@ Focus on actual construction work items with costs. Ignore headers, footers, and
     } finally {
       setIsRunning(false);
     }
-  }, [file, flags, isRunning, onComplete, onError, updateStage, parseDocumentWithWorker]);
+  }, [file, flags, isRunning, onComplete, onError, updateStage, parseDocumentWithWorker, parsePDFWithClaude]);
 
   // Auto-start analysis when component mounts
   React.useEffect(() => {

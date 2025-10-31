@@ -16,6 +16,12 @@ export interface OrchestrationResult {
  */
 export class AnalysisOrchestrator {
   private timings: Record<string, number> = {};
+  private sessionState: Map<string, {
+    files: BidArtifact[];
+    completedCount: number;
+    disciplineHints: string[];
+    autoLevelingEnabled: boolean;
+  }> = new Map();
 
   private time<T>(label: string, fn: () => T): T {
     const start = performance.now();
@@ -374,5 +380,176 @@ export class AnalysisOrchestrator {
     }
 
     return insights;
+  }
+
+  /**
+   * Initialize a multi-file upload session
+   */
+  initializeSession(sessionId: string, autoLevelingEnabled = true): void {
+    this.sessionState.set(sessionId, {
+      files: [],
+      completedCount: 0,
+      disciplineHints: [],
+      autoLevelingEnabled
+    });
+  }
+
+  /**
+   * Add a completed file analysis to the session
+   */
+  addFileToSession(sessionId: string, artifact: BidArtifact, disciplineHint?: string): boolean {
+    const session = this.sessionState.get(sessionId);
+    if (!session) {
+      console.warn(`Session ${sessionId} not found`);
+      return false;
+    }
+
+    session.files.push(artifact);
+    session.completedCount++;
+
+    if (disciplineHint) {
+      session.disciplineHints.push(disciplineHint);
+    }
+
+    console.log(`Session ${sessionId}: ${session.completedCount} files completed`);
+    return true;
+  }
+
+  /**
+   * Check if session is ready for auto-leveling
+   */
+  isSessionReadyForLeveling(sessionId: string): boolean {
+    const session = this.sessionState.get(sessionId);
+    if (!session || !session.autoLevelingEnabled) {
+      return false;
+    }
+
+    return session.files.length >= 2;
+  }
+
+  /**
+   * Get session files for leveling
+   */
+  getSessionFiles(sessionId: string): BidArtifact[] {
+    const session = this.sessionState.get(sessionId);
+    return session?.files || [];
+  }
+
+  /**
+   * Get dominant discipline from session hints
+   */
+  getSessionDiscipline(sessionId: string): 'construction' | 'design' | 'trade' | null {
+    const session = this.sessionState.get(sessionId);
+    if (!session || session.disciplineHints.length === 0) {
+      return null;
+    }
+
+    // Count discipline hints
+    const counts = session.disciplineHints.reduce((acc, hint) => {
+      acc[hint] = (acc[hint] || 0) + 1;
+      return acc;
+    }, {} as Record<string, number>);
+
+    // Return most common discipline
+    const dominant = Object.entries(counts)
+      .sort(([, a], [, b]) => b - a)[0];
+
+    return dominant[0] as 'construction' | 'design' | 'trade';
+  }
+
+  /**
+   * Generate comparative insights for multi-file sessions
+   */
+  generateSessionInsights(sessionId: string): string[] {
+    const session = this.sessionState.get(sessionId);
+    if (!session || session.files.length < 2) {
+      return [];
+    }
+
+    const insights: string[] = [];
+    const files = session.files;
+
+    // Cost comparison insights
+    const totalAmounts = files.map(f => f.analysis.totalAmount);
+    const minAmount = Math.min(...totalAmounts);
+    const maxAmount = Math.max(...totalAmounts);
+    const avgAmount = totalAmounts.reduce((a, b) => a + b, 0) / totalAmounts.length;
+
+    if (maxAmount > minAmount * 1.5) {
+      insights.push(`💰 Significant cost variance: ${((maxAmount - minAmount) / minAmount * 100).toFixed(0)}% spread between highest and lowest bids`);
+    }
+
+    // Risk comparison insights
+    const riskScores = files.map(f => f.score.overall);
+    const minRisk = Math.min(...riskScores);
+    const maxRisk = Math.max(...riskScores);
+
+    if (maxRisk - minRisk > 30) {
+      insights.push(`⚠️ Risk levels vary significantly: ${minRisk.toFixed(0)} to ${maxRisk.toFixed(0)} points across bids`);
+    }
+
+    // Discipline consistency
+    const disciplines = files.map(f => f.analysis.discipline);
+    const uniqueDisciplines = [...new Set(disciplines)];
+
+    if (uniqueDisciplines.length > 1) {
+      insights.push(`🎯 Mixed disciplines detected: ${uniqueDisciplines.join(', ')} - consider separate analysis workflows`);
+    } else {
+      insights.push(`✅ Consistent ${uniqueDisciplines[0]} discipline across all bids`);
+    }
+
+    // Contractor diversity
+    const contractors = files.map(f => f.analysis.contractorName);
+    const uniqueContractors = [...new Set(contractors)];
+
+    insights.push(`👥 ${uniqueContractors.length} unique contractor${uniqueContractors.length !== 1 ? 's' : ''} in comparison`);
+
+    return insights;
+  }
+
+  /**
+   * Cleanup session state
+   */
+  cleanupSession(sessionId: string): void {
+    this.sessionState.delete(sessionId);
+  }
+
+  /**
+   * Update session auto-leveling preference
+   */
+  updateSessionAutoLeveling(sessionId: string, enabled: boolean): void {
+    const session = this.sessionState.get(sessionId);
+    if (session) {
+      session.autoLevelingEnabled = enabled;
+    }
+  }
+
+  /**
+   * Get session statistics
+   */
+  getSessionStats(sessionId: string): {
+    totalFiles: number;
+    completedFiles: number;
+    averageRiskScore: number;
+    totalValue: number;
+    dominantDiscipline: string | null;
+  } | null {
+    const session = this.sessionState.get(sessionId);
+    if (!session) return null;
+
+    const files = session.files;
+    const avgRisk = files.length > 0
+      ? files.reduce((sum, f) => sum + f.score.overall, 0) / files.length
+      : 0;
+
+    const totalValue = files.reduce((sum, f) => sum + f.analysis.totalAmount, 0);
+
+    return {
+      totalFiles: files.length,
+      completedFiles: session.completedCount,
+      averageRiskScore: avgRisk,
+      totalValue,
+      dominantDiscipline: this.getSessionDiscipline(sessionId)
+    };
   }
 }
