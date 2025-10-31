@@ -8,7 +8,7 @@ import { UploadManager, type UploadSession, type UploadFileInfo, DEFAULT_UPLOAD_
 import type { AnalysisResult } from '@/types/analysis';
 import { WorkerBridge, type WorkerSuccessEvent, type WorkerProgressEvent, type WorkerErrorEvent } from '@/lib/workers/worker-bridge';
 import { createEphemeralObject } from '@/lib/upload/blob-client';
-import { processDocument, ProcessedDocument, detectFileType } from '@/lib/document-processor';
+// AI-native processing - no longer need legacy imports
 import UploadDropzone from './UploadDropzone';
 import UploadQueueItem from './UploadQueueItem';
 
@@ -52,7 +52,8 @@ export default function MultiFileUpload({
 
     workerBridgeRef.current = new WorkerBridge({
       maxConcurrentFiles: 3,
-      timeoutMs: 10 * 60 * 1000 // 10 minutes
+      timeoutMs: 10 * 60 * 1000, // 10 minutes
+      workerPath: '/workers/ai-native-parser.worker.js' // Use AI-native worker
     });
 
     const newSession = uploadManagerRef.current.createSession(autoLevelingEnabled);
@@ -99,203 +100,140 @@ export default function MultiFileUpload({
     }
   }, [session]);
 
-  // Smart discipline detection function
-  const detectDisciplineFromFile = useCallback((file: File): string => {
-    const fileName = file.name.toLowerCase();
-    const disciplineKeywords = {
-      construction: ['concrete', 'masonry', 'steel', 'framing', 'excavation', 'foundation', 'drywall', 'construction', 'builder', 'contractor'],
-      design: ['schematic design', 'design development', 'aia', 'architectural', 'engineering', 'consultant', 'architect', 'design', 'proposal', 'arch', 'studio', 'firm'],
-      trade: ['electrical', 'hvac', 'plumbing', 'mechanical', 'commissioning', 'controls', 'automation', 'electric', 'tech', 'systems']
+  // AI-native worker handles discipline detection automatically
+
+  // AI-NATIVE UNIFIED PROCESSING: All files go through the intelligent worker
+  const processFile = useCallback(async (fileInfo: UploadFileInfo) => {
+    if (!workerBridgeRef.current) return;
+
+    const callbacks = {
+      onProgress: (event: WorkerProgressEvent) => {
+        fileInfo.progress = event.progress;
+        setSession(prev => prev ? { ...prev } : null);
+      },
+
+      onDisciplineHint: (event: { disciplineHint: string }) => {
+        fileInfo.disciplineHint = event.disciplineHint;
+        setSession(prev => prev ? { ...prev } : null);
+      },
+
+      onSuccess: async (event: WorkerSuccessEvent) => {
+        fileInfo.status = FileUploadStatus.PROCESSING;
+        setSession(prev => prev ? { ...prev } : null);
+
+        try {
+          // The AI-native worker provides both legacy lines and new processedDoc
+          const finalDiscipline = event.disciplineHint || fileInfo.disciplineHint || 'construction';
+          const processedDoc = event.processedDoc;
+
+          console.log(`🔍 File: ${fileInfo.file.name}`);
+          console.log(`📊 AI-Native discipline: ${finalDiscipline}`);
+          console.log(`🎯 Routing to: ${finalDiscipline} analysis`);
+
+          let analysisResult: AnalysisResult;
+
+          // Route to appropriate API endpoint based on discipline
+          if (finalDiscipline === 'design') {
+            console.log('✅ Routing to /api/claude/design');
+            const response = await fetch('/api/claude/design', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ processedDoc })
+            });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Design analysis failed: ${response.status} ${errorText}`);
+            }
+            const { analysis } = await response.json();
+            analysisResult = analysis;
+          } else if (finalDiscipline === 'trade') {
+            console.log('✅ Routing to /api/claude/trade');
+            const response = await fetch('/api/claude/trade', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ processedDoc })
+            });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Trade analysis failed: ${response.status} ${errorText}`);
+            }
+            const { analysis } = await response.json();
+            analysisResult = analysis;
+          } else {
+            console.log('✅ Routing to /api/claude (construction)');
+            const response = await fetch('/api/claude', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ processedDoc })
+            });
+            if (!response.ok) {
+              const errorText = await response.text();
+              throw new Error(`Construction analysis failed: ${response.status} ${errorText}`);
+            }
+            const { analysis } = await response.json();
+            analysisResult = analysis;
+          }
+
+          // Success!
+          fileInfo.status = FileUploadStatus.COMPLETED;
+          fileInfo.progress = 100;
+          fileInfo.endTime = Date.now();
+
+          processedResults.current.set(fileInfo.id, {
+            fileId: fileInfo.id,
+            fileName: fileInfo.file.name,
+            analysis: analysisResult,
+            disciplineHint: finalDiscipline
+          });
+
+          checkAllFilesComplete();
+          setSession(prev => prev ? { ...prev } : null);
+
+        } catch (error) {
+          fileInfo.status = FileUploadStatus.ERROR;
+          fileInfo.error = error instanceof Error ? error.message : 'Analysis failed';
+          setSession(prev => prev ? { ...prev } : null);
+        }
+      },
+
+      onError: (event: WorkerErrorEvent) => {
+        fileInfo.status = FileUploadStatus.ERROR;
+        fileInfo.error = event.message;
+        setSession(prev => prev ? { ...prev } : null);
+      }
     };
 
-    const scores = { construction: 0, design: 0, trade: 0 };
-
-    Object.entries(disciplineKeywords).forEach(([discipline, keywords]) => {
-      keywords.forEach(keyword => {
-        if (fileName.includes(keyword)) {
-          scores[discipline as keyof typeof scores] += keyword.length;
-        }
-      });
-    });
-
-    const maxScore = Math.max(...Object.values(scores));
-    const detectedDiscipline = Object.entries(scores).find(([_, score]) => score === maxScore)?.[0] || 'construction';
-
-    console.log(`🎯 Discipline detection for ${file.name}:`, scores, '→', detectedDiscipline);
-    return detectedDiscipline;
-  }, []);
-
-  // AGGRESSIVE ARCHITECTURE REDESIGN: Smart file processing with proper routing
-  const processFile = useCallback(async (fileInfo: UploadFileInfo) => {
     try {
       fileInfo.status = FileUploadStatus.UPLOADING;
-      fileInfo.progress = 10;
       setSession(prev => prev ? { ...prev } : null);
 
-      const fileType = detectFileType(fileInfo.file.name, fileInfo.file.type);
-      const discipline = detectDisciplineFromFile(fileInfo.file);
+      console.log(`🤖 AI-Native processing: ${fileInfo.file.name}`);
 
-      // Store discipline hint immediately
-      fileInfo.disciplineHint = discipline;
-      setSession(prev => prev ? { ...prev } : null);
+      if (fileInfo.route === 'large') {
+        // Large files: Use blob storage
+        const blobInfo = await createEphemeralObject(fileInfo.file);
+        fileInfo.blobInfo = blobInfo;
 
-      console.log(`🚀 Processing ${fileInfo.file.name} as ${fileType} (${discipline} discipline)`);
-
-      let processedDoc: ProcessedDocument;
-
-      // SMART ROUTING: Different processing paths based on file type
-      if (fileType === 'pdf' || fileType === 'image') {
-        // ROUTE 1: PDFs and Images → Direct main-thread processing (like single-file)
-        console.log(`📄 Route 1: Main-thread processing for ${fileType}`);
-
-        fileInfo.progress = 30;
-        setSession(prev => prev ? { ...prev } : null);
-
-        if (fileInfo.route === 'large') {
-          // Large PDFs: Use blob storage + fetch pattern
-          const blobInfo = await createEphemeralObject(fileInfo.file);
-          fileInfo.blobInfo = blobInfo;
-
-          fileInfo.progress = 50;
-          setSession(prev => prev ? { ...prev } : null);
-
-          processedDoc = {
-            content: blobInfo.getUrl,
-            fileType: fileType,
-            fileName: fileInfo.file.name,
-            isBase64: false,
-            useBlobStorage: true
-          };
-        } else {
-          // Small/medium PDFs: Direct processing
-          fileInfo.progress = 50;
-          setSession(prev => prev ? { ...prev } : null);
-
-          processedDoc = await processDocument(fileInfo.file);
-        }
-      } else {
-        // ROUTE 2: Structured data (Excel, CSV, Text) → Worker processing
-        console.log(`📊 Route 2: Worker processing for ${fileType}`);
-
-        return new Promise<void>((resolve, reject) => {
-          const callbacks = {
-            onProgress: (event: WorkerProgressEvent) => {
-              fileInfo.progress = event.progress;
-              setSession(prev => prev ? { ...prev } : null);
-            },
-
-            onSuccess: async (event: WorkerSuccessEvent) => {
-              try {
-                processedDoc = event.processedDoc as ProcessedDocument;
-                console.log(`✅ Worker processing complete for ${fileInfo.file.name}`);
-                await proceedToAnalysis();
-                resolve();
-              } catch (error) {
-                reject(error);
-              }
-            },
-
-            onError: (event: WorkerErrorEvent) => {
-              reject(new Error(event.message));
-            }
-          };
-
-          if (fileInfo.route === 'large') {
-            createEphemeralObject(fileInfo.file).then(blobInfo => {
-              fileInfo.blobInfo = blobInfo;
-              workerBridgeRef.current?.parseFromUrl(
-                fileInfo.id,
-                blobInfo.getUrl,
-                fileInfo.file.name,
-                fileInfo.file.size,
-                callbacks
-              );
-            }).catch(reject);
-          } else {
-            workerBridgeRef.current?.parseFile(fileInfo.id, fileInfo.file, callbacks);
-          }
-        });
-      }
-
-      // Proceed to analysis (for Route 1, Route 2 calls this in success callback)
-      await proceedToAnalysis();
-
-      async function proceedToAnalysis() {
         fileInfo.status = FileUploadStatus.PROCESSING;
-        fileInfo.progress = 70;
-        setSession(prev => prev ? { ...prev } : null);
-
-        console.log(`🔍 File: ${fileInfo.file.name}`);
-        console.log(`📊 Final discipline: ${discipline}`);
-        console.log(`🎯 Routing to: ${discipline} analysis`);
-
-        // Route to appropriate API endpoint
-        let analysisResult: AnalysisResult;
-
-        if (discipline === 'design') {
-          console.log('✅ Routing to /api/claude/design');
-          const response = await fetch('/api/claude/design', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ processedDoc })
-          });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Design analysis failed: ${response.status} ${errorText}`);
-          }
-          const { analysis } = await response.json();
-          analysisResult = analysis;
-        } else if (discipline === 'trade') {
-          console.log('✅ Routing to /api/claude/trade');
-          const response = await fetch('/api/claude/trade', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ processedDoc })
-          });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Trade analysis failed: ${response.status} ${errorText}`);
-          }
-          const { analysis } = await response.json();
-          analysisResult = analysis;
-        } else {
-          console.log('✅ Routing to /api/claude (construction)');
-          const response = await fetch('/api/claude', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ processedDoc })
-          });
-          if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Construction analysis failed: ${response.status} ${errorText}`);
-          }
-          const { analysis } = await response.json();
-          analysisResult = analysis;
-        }
-
-        // Success!
-        fileInfo.status = FileUploadStatus.COMPLETED;
-        fileInfo.progress = 100;
-        fileInfo.endTime = Date.now();
-
-        processedResults.current.set(fileInfo.id, {
-          fileId: fileInfo.id,
-          fileName: fileInfo.file.name,
-          analysis: analysisResult,
-          disciplineHint: discipline
-        });
-
-        checkAllFilesComplete();
-        setSession(prev => prev ? { ...prev } : null);
+        workerBridgeRef.current.parseFromUrl(
+          fileInfo.id,
+          blobInfo.getUrl,
+          fileInfo.file.name,
+          fileInfo.file.size,
+          callbacks
+        );
+      } else {
+        // Small/medium files: Direct worker processing
+        fileInfo.status = FileUploadStatus.PROCESSING;
+        workerBridgeRef.current.parseFile(fileInfo.id, fileInfo.file, callbacks);
       }
 
     } catch (error) {
       fileInfo.status = FileUploadStatus.ERROR;
-      fileInfo.error = error instanceof Error ? error.message : 'Processing failed';
+      fileInfo.error = error instanceof Error ? error.message : 'Unknown error';
       setSession(prev => prev ? { ...prev } : null);
-      console.error(`❌ File processing failed for ${fileInfo.file.name}:`, error);
     }
-  }, [detectDisciplineFromFile]);
+  }, []);
 
   // Check if all files are complete and trigger callbacks
   const checkAllFilesComplete = useCallback(() => {
