@@ -5,8 +5,8 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 // Multi-file upload component with emoji icons
 import { UploadManager, type UploadSession, type UploadFileInfo, DEFAULT_UPLOAD_CONFIG, FileUploadStatus } from '@/lib/upload/ingest';
-import type { CsiLine } from '@/types/analysis';
-import { WorkerBridge } from '@/lib/workers/worker-bridge';
+import type { AnalysisResult } from '@/types/analysis';
+import { WorkerBridge, type WorkerSuccessEvent, type WorkerProgressEvent, type WorkerErrorEvent, type WorkerDisciplineHintEvent } from '@/lib/workers/worker-bridge';
 import { createEphemeralObject } from '@/lib/upload/blob-client';
 import UploadDropzone from './UploadDropzone';
 import UploadQueueItem from './UploadQueueItem';
@@ -15,7 +15,7 @@ interface MultiFileUploadProps {
   onFilesProcessed: (results: Array<{
     fileId: string;
     fileName: string;
-    analysis: any; // Full analysis result from discipline-specific API
+    analysis: AnalysisResult; // Full analysis result from discipline-specific API
     disciplineHint?: string;
   }>) => void;
   onAutoLevelingReady?: () => void;
@@ -38,7 +38,7 @@ export default function MultiFileUpload({
   const processedResults = useRef<Map<string, {
     fileId: string;
     fileName: string;
-    analysis: any; // Full analysis result from discipline-specific API
+    analysis: AnalysisResult; // Full analysis result from discipline-specific API
     disciplineHint?: string;
   }>>(new Map());
 
@@ -103,18 +103,18 @@ export default function MultiFileUpload({
     if (!workerBridgeRef.current) return;
 
     const callbacks = {
-      onProgress: (event: { progress: number }) => {
+      onProgress: (event: WorkerProgressEvent) => {
         // Update file progress
         fileInfo.progress = event.progress;
         setSession(prev => prev ? { ...prev } : null);
       },
 
-      onDisciplineHint: (event: { disciplineHint: string }) => {
+      onDisciplineHint: (event: WorkerDisciplineHintEvent) => {
         fileInfo.disciplineHint = event.disciplineHint;
         setSession(prev => prev ? { ...prev } : null);
       },
 
-      onSuccess: async (event: { lines: CsiLine[]; processedDoc: any; disciplineHint?: string }) => {
+      onSuccess: async (event: WorkerSuccessEvent) => {
         fileInfo.status = FileUploadStatus.PROCESSING;
         setSession(prev => prev ? { ...prev } : null);
 
@@ -178,7 +178,7 @@ export default function MultiFileUpload({
         }
       },
 
-      onError: (event: { message: string }) => {
+      onError: (event: WorkerErrorEvent) => {
         fileInfo.status = FileUploadStatus.ERROR;
         fileInfo.error = event.message;
         setSession(prev => prev ? { ...prev } : null);

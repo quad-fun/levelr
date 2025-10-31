@@ -2,10 +2,10 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
-import DocumentUpload from '@/components/analysis/DocumentUpload';
+import MultiFileUpload from '@/components/analysis/MultiFileUpload';
 import MultiDisciplineAnalysisResults from '@/components/analysis/MultiDisciplineAnalysisResults';
 import ExportTools from '@/components/analysis/ExportTools';
-import AIAnalysisFlow from '@/components/analysis/AIAnalysisFlow';
+// import AIAnalysisFlow from '@/components/analysis/AIAnalysisFlow'; // Replaced with integrated multi-file upload
 import Artifacts from '@/components/analysis/Artifacts';
 import AnalysisHistory from '@/components/analysis/AnalysisHistory';
 import BidLeveling from '@/components/analysis/BidLeveling';
@@ -15,7 +15,7 @@ import { AuthDebug } from '@/components/debug/AuthDebug';
 import { FeatureGate } from '@/components/common/FeatureGate';
 import { AnalysisResult, BidArtifact } from '@/types/analysis';
 import { getProject } from '@/lib/storage';
-import { ProcessedDocument } from '@/lib/document-processor';
+// import { ProcessedDocument } from '@/lib/document-processor'; // No longer needed with integrated upload
 import { exportAnalysisToPDF, exportAnalysisToExcel } from '@/lib/analysis/exports';
 import type { Flags } from '@/lib/flags';
 
@@ -51,7 +51,7 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
   } | null>(null);
 
   // AI-native flow state (now the only flow)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  // const [selectedFile, setSelectedFile] = useState<File | null>(null); // No longer needed with integrated multi-file upload
   const [aiArtifact, setAiArtifact] = useState<BidArtifact | null>(null);
 
   // Avoid unused variable warning
@@ -88,32 +88,38 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
   const resetAnalysis = () => {
     setAnalysisResult(null);
     setError(null);
-    setSelectedFile(null);
+    // setSelectedFile(null); // No longer needed
     setAiArtifact(null);
   };
 
-  // AI-native flow handlers (now the primary flow)
-  const handleFileSelect = (file: File, _processedDoc: ProcessedDocument) => {
-    setSelectedFile(file);
+  // Multi-file upload handlers
+  const handleMultiFileProcessed = (results: Array<{
+    fileId: string;
+    fileName: string;
+    analysis: AnalysisResult;
+    disciplineHint?: string;
+  }>) => {
     setError(null);
-    setAnalysisResult(null);
-    setAiArtifact(null);
+
+    // For now, handle the first result as the primary analysis
+    // TODO: Implement proper multi-file result display
+    if (results.length > 0) {
+      const firstResult = results[0];
+      setAnalysisResult(firstResult.analysis);
+
+      // TODO: Create proper BidArtifact when needed
+      setAiArtifact(null);
+    }
+
+    console.log(`Processed ${results.length} files:`, results);
   };
 
-  const handleAIAnalysisComplete = (artifact: BidArtifact) => {
-    setAiArtifact(artifact);
-    console.log('AI-native analysis complete:', artifact);
+  const handleAutoLevelingReady = () => {
+    // Automatically switch to leveling tab when 2+ files are processed
+    setActiveTab('leveling');
   };
 
-  const handleAIAnalysisError = (errorMessage: string) => {
-    setError(errorMessage);
-    console.error('AI-native analysis error:', errorMessage);
-  };
-
-  const handleAnalysisCancel = () => {
-    setSelectedFile(null);
-    setError(null);
-  };
+  // Removed unused handlers - now handled by MultiFileUpload component
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -266,21 +272,18 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
               </p>
             </div>
 
-            {/* AI-Native Analysis Flow */}
-            {selectedFile ? (
-              <AIAnalysisFlow
-                file={selectedFile}
-                flags={flags}
-                userId={_userId}
-                onComplete={handleAIAnalysisComplete}
-                onError={handleAIAnalysisError}
-                onCancel={handleAnalysisCancel}
+            {/* Multi-File Upload with integrated analysis */}
+            {flags.multiFileUpload ? (
+              <MultiFileUpload
+                onFilesProcessed={handleMultiFileProcessed}
+                onAutoLevelingReady={handleAutoLevelingReady}
+                maxFiles={flags.uploadAutoLeveling ? 3 : 1}
+                className="max-w-4xl mx-auto"
               />
             ) : (
-              <DocumentUpload
-                onFileSelect={handleFileSelect}
-                isProcessing={false}
-              />
+              <div className="text-center py-12">
+                <p className="text-gray-500">Multi-file upload not available in your plan.</p>
+              </div>
             )}
 
             {/* Error Display */}

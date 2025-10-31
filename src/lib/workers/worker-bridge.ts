@@ -14,6 +14,7 @@ export interface WorkerProgressEvent {
 export interface WorkerSuccessEvent {
   fileId: string;
   lines: CsiLine[];
+  processedDoc: unknown; // Added for AI-native architecture
   parseConfidence: number;
   totalPages: number;
   disciplineHint?: string;
