@@ -291,6 +291,13 @@ export default function MultiFileUpload({
 
   const completedCount = getFileArray().filter(f => f.status === FileUploadStatus.COMPLETED).length;
   const totalFiles = getFileArray().length;
+  // Only count files that are actively preventing new uploads (not completed or errored)
+  const activeFiles = getFileArray().filter(f =>
+    f.status !== FileUploadStatus.COMPLETED &&
+    f.status !== FileUploadStatus.ERROR &&
+    f.status !== FileUploadStatus.CANCELLED
+  );
+  const activeFileCount = activeFiles.length;
 
   return (
     <div className={`space-y-6 ${className}`}>
@@ -299,7 +306,7 @@ export default function MultiFileUpload({
         onFilesSelected={handleFilesSelected}
         disabled={isProcessing}
         maxFiles={maxFiles}
-        currentFileCount={totalFiles}
+        currentFileCount={activeFileCount}
       />
 
       {/* Queue Management */}
