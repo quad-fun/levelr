@@ -92,7 +92,7 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
     setAiArtifact(null);
   };
 
-  // Multi-file upload handlers
+  // Multi-file upload handlers (now handled by session store automatically)
   const handleMultiFileProcessed = (results: Array<{
     fileId: string;
     fileName: string;
@@ -101,23 +101,47 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
   }>) => {
     setError(null);
 
-    // For now, handle the first result as the primary analysis
-    // TODO: Implement proper multi-file result display
+    // Set the first result as the primary analysis display
     if (results.length > 0) {
       const firstResult = results[0];
       setAnalysisResult(firstResult.analysis);
-
-      // TODO: Create proper BidArtifact when needed
       setAiArtifact(null);
     }
 
-    console.log(`Processed ${results.length} files:`, results);
+    console.log(`✅ Multi-file processing complete: ${results.length} files`);
+    console.log('📦 Artifacts are automatically stored in session store for leveling');
   };
 
   const handleAutoLevelingReady = () => {
     // Automatically switch to leveling tab when 2+ files are processed
     setActiveTab('leveling');
   };
+
+  // Auto-leveling with debounced session store monitoring
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+
+    const setupSessionMonitoring = async () => {
+      const { onSessionChange, getArtifacts } = await import('@/lib/analysis/sessionStore');
+      const { debounce } = await import('@/lib/analysis/leveling');
+
+      const debouncedAutoLevel = debounce(() => {
+        const artifacts = getArtifacts();
+        console.log(`📊 Session changed: ${artifacts.length} artifacts`);
+
+        if (artifacts.length >= 2) {
+          console.log('🚀 Auto-leveling triggered - switching to leveling tab');
+          setActiveTab('leveling');
+        }
+      }, 150); // 150ms debounce
+
+      cleanup = onSessionChange(debouncedAutoLevel);
+    };
+
+    setupSessionMonitoring().catch(console.error);
+
+    return () => cleanup?.();
+  }, []);
 
   // Removed unused handlers - now handled by MultiFileUpload component
 

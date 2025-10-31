@@ -174,6 +174,16 @@ export default function MultiFileUpload({
             analysisResult = analysis;
           }
 
+          // SUCCESS: Persist to session store for bid leveling
+          const { upsertArtifact, toBidArtifact } = await import('@/lib/analysis/sessionStore');
+          const artifact = toBidArtifact(
+            fileInfo.id,
+            fileInfo.file.name,
+            analysisResult,
+            finalDiscipline as 'construction' | 'design' | 'trade'
+          );
+          upsertArtifact(artifact);
+
           // Success!
           fileInfo.status = FileUploadStatus.COMPLETED;
           fileInfo.progress = 100;

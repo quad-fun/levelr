@@ -14,16 +14,17 @@
  * - Claude-optimized preprocessing
  */
 
-// Try to import external libraries with error handling
+// Import PDF.js legacy build for workers (boring and reliable)
 let pdfJSAvailable = false;
 let xlsxAvailable = false;
 
 try {
-  importScripts('https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js');
+  importScripts('https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js');
   if (typeof pdfjsLib !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+    // Important: run pdf.js inline in THIS worker (no spawning)
+    pdfjsLib.GlobalWorkerOptions.workerSrc = undefined; // prevents worker spawn
     pdfJSAvailable = true;
-    console.log('✅ PDF.js loaded successfully');
+    console.log('✅ PDF.js legacy loaded successfully (inline mode)');
   }
 } catch (error) {
   console.warn('⚠️ PDF.js failed to load:', error.message);
@@ -208,8 +209,13 @@ async function processPDFAINative(fileId, file) {
     // Convert Uint8Array to proper format for PDF.js
     const pdfData = file.data;
 
-    // Load PDF document
-    const loadingTask = pdfjsLib.getDocument({ data: pdfData });
+    // Load PDF document inline in worker (no DOM, no spawning)
+    const loadingTask = pdfjsLib.getDocument({
+      data: pdfData,
+      disableWorker: true,        // force inline processing
+      useWorkerFetch: false,      // no worker fetch
+      isEvalSupported: true       // allow eval in worker context
+    });
     const pdfDoc = await loadingTask.promise;
 
     console.log(`📖 PDF loaded: ${pdfDoc.numPages} pages`);
