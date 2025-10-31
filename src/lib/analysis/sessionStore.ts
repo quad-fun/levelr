@@ -1,5 +1,7 @@
 // src/lib/analysis/sessionStore.ts
 
+import type { AnalysisResult } from '@/types/analysis';
+
 /**
  * Single source of truth for bid artifacts and leveling session state
  * Bulletproof store contract for multi-file upload and bid leveling
@@ -29,7 +31,7 @@ export type BidArtifact = {
     msg: string;
     source?: { page?: number; cell?: string };
   }>;
-  rawAnalysis?: any; // Store original analysis for reference
+  rawAnalysis?: unknown; // Store original analysis for reference
 };
 
 type SessionState = {
@@ -101,7 +103,7 @@ export function getSessionState() {
 export function toBidArtifact(
   fileId: string,
   fileName: string,
-  analysis: any,
+  analysis: AnalysisResult,
   discipline: 'construction' | 'design' | 'trade'
 ): BidArtifact {
   let totals = { grandTotal: 0, byDivision: {} as Record<string, number> };
@@ -112,8 +114,8 @@ export function toBidArtifact(
       let total = 0;
       const byDivision: Record<string, number> = {};
 
-      Object.entries(analysis.csi_divisions).forEach(([code, data]: [string, any]) => {
-        const cost = data?.cost || 0;
+      Object.entries(analysis.csi_divisions).forEach(([code, data]) => {
+        const cost = data.cost || 0;
         byDivision[code] = cost;
         total += cost;
       });
@@ -124,8 +126,8 @@ export function toBidArtifact(
       let total = 0;
       const byDivision: Record<string, number> = {};
 
-      Object.entries(analysis.aia_phases).forEach(([phase, data]: [string, any]) => {
-        const cost = data?.fee_amount || 0;
+      Object.entries(analysis.aia_phases).forEach(([phase, data]) => {
+        const cost = data.fee_amount || 0;
         byDivision[phase] = cost;
         total += cost;
       });
@@ -136,8 +138,8 @@ export function toBidArtifact(
       let total = 0;
       const byDivision: Record<string, number> = {};
 
-      Object.entries(analysis.technical_systems).forEach(([system, data]: [string, any]) => {
-        const cost = data?.total_cost || 0;
+      Object.entries(analysis.technical_systems).forEach(([system, data]) => {
+        const cost = data.total_cost || 0;
         byDivision[system] = cost;
         total += cost;
       });

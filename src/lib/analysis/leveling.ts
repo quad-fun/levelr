@@ -125,7 +125,7 @@ export function maybeAutoLevel(artifacts: BidArtifact[], baselineId?: string): L
 /**
  * Debounce utility for auto-leveling
  */
-export function debounce<T extends (...args: any[]) => any>(
+export function debounce<T extends (...args: never[]) => unknown>(
   func: T,
   wait: number
 ): (...args: Parameters<T>) => void {
