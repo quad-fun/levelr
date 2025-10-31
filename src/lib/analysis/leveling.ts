@@ -136,3 +136,37 @@ export function debounce<T extends (...args: never[]) => unknown>(
     timeout = setTimeout(() => func(...args), wait);
   };
 }
+
+/**
+ * Debug auto-leveling conditions
+ */
+export function debugAutoLeveling(artifacts: BidArtifact[], baselineId?: string) {
+  console.log('🔍 AUTO-LEVELING DEBUG:');
+  console.log('📊 Artifacts provided:', artifacts.length);
+  console.log('🎯 Baseline ID provided:', baselineId);
+
+  if (artifacts.length < 2) {
+    console.log('❌ Not enough artifacts for leveling (need ≥2)');
+    return null;
+  }
+
+  const baseline = baselineId || artifacts[0]?.id;
+  console.log('🎯 Using baseline:', baseline);
+
+  if (!baseline) {
+    console.log('❌ No baseline found');
+    return null;
+  }
+
+  const result = buildLeveling(artifacts, baseline);
+  console.log('✅ Leveling result:', result ? 'Success' : 'Failed');
+
+  if (result) {
+    console.log('📊 Comparisons:', result.comparisons.length);
+    result.comparisons.forEach((comp, index) => {
+      console.log(`  ${index + 1}. ${comp.fileName}: $${comp.delta.toLocaleString()} (${comp.deltaPercent.toFixed(1)}%)`);
+    });
+  }
+
+  return result;
+}

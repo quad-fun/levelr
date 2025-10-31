@@ -53,7 +53,7 @@ export default function MultiFileUpload({
     workerBridgeRef.current = new WorkerBridge({
       maxConcurrentFiles: 3,
       timeoutMs: 10 * 60 * 1000, // 10 minutes
-      workerPath: '/workers/ai-native-parser.worker.js' // Use AI-native worker
+      workerPath: '/workers/ai-native-parser.worker.js?v=2' // Use AI-native worker with cache bust
     });
 
     const newSession = uploadManagerRef.current.createSession(autoLevelingEnabled);

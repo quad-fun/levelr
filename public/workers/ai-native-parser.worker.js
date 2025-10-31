@@ -21,10 +21,12 @@ let xlsxAvailable = false;
 try {
   importScripts('https://unpkg.com/pdfjs-dist@3.11.174/legacy/build/pdf.min.js');
   if (typeof pdfjsLib !== 'undefined') {
-    // Important: run pdf.js inline in THIS worker (no spawning)
-    pdfjsLib.GlobalWorkerOptions.workerSrc = undefined; // prevents worker spawn
+    // CRITICAL: Completely disable ALL worker features for inline processing
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';  // empty string disables worker
+    pdfjsLib.GlobalWorkerOptions.disableWorker = true;  // extra insurance
     pdfJSAvailable = true;
     console.log('✅ PDF.js legacy loaded successfully (inline mode)');
+    console.log('🔧 PDF.js worker disabled:', pdfjsLib.GlobalWorkerOptions.workerSrc === '');
   }
 } catch (error) {
   console.warn('⚠️ PDF.js failed to load:', error.message);
@@ -210,11 +212,14 @@ async function processPDFAINative(fileId, file) {
     const pdfData = file.data;
 
     // Load PDF document inline in worker (no DOM, no spawning)
+    console.log('🔧 Loading PDF with inline processing settings...');
     const loadingTask = pdfjsLib.getDocument({
       data: pdfData,
       disableWorker: true,        // force inline processing
       useWorkerFetch: false,      // no worker fetch
-      isEvalSupported: true       // allow eval in worker context
+      isEvalSupported: true,      // allow eval in worker context
+      disableStream: true,        // disable streaming
+      disableRange: true          // disable range requests
     });
     const pdfDoc = await loadingTask.promise;
 

@@ -122,16 +122,26 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
     let cleanup: (() => void) | undefined;
 
     const setupSessionMonitoring = async () => {
-      const { onSessionChange, getArtifacts } = await import('@/lib/analysis/sessionStore');
-      const { debounce } = await import('@/lib/analysis/leveling');
+      const { onSessionChange, getArtifacts, debugSessionContents, getBaseline } = await import('@/lib/analysis/sessionStore');
+      const { debounce, debugAutoLeveling } = await import('@/lib/analysis/leveling');
 
       const debouncedAutoLevel = debounce(() => {
         const artifacts = getArtifacts();
+        const baseline = getBaseline();
         console.log(`📊 Session changed: ${artifacts.length} artifacts`);
+
+        // DEBUG: Full session inspection
+        debugSessionContents();
 
         if (artifacts.length >= 2) {
           console.log('🚀 Auto-leveling triggered - switching to leveling tab');
+
+          // DEBUG: Test auto-leveling logic
+          debugAutoLeveling(artifacts, baseline);
+
           setActiveTab('leveling');
+        } else {
+          console.log('⏳ Waiting for more artifacts (need ≥2 for auto-leveling)');
         }
       }, 150); // 150ms debounce
 
@@ -151,6 +161,27 @@ function AnalyzePageContent({ flags, userId: _userId, userTier: _userTier }: Ana
         {/* Debug Authentication Status */}
         <div className="mb-6">
           <AuthDebug />
+        </div>
+
+        {/* Debug Session Store */}
+        <div className="mb-6 flex justify-center">
+          <button
+            onClick={async () => {
+              const { debugSessionContents, getArtifacts, getBaseline } = await import('@/lib/analysis/sessionStore');
+              const { debugAutoLeveling } = await import('@/lib/analysis/leveling');
+
+              console.log('🔧 MANUAL DEBUG TRIGGER:');
+              const sessionState = debugSessionContents();
+              const artifacts = getArtifacts();
+              const baseline = getBaseline();
+
+              console.log('🔧 Testing auto-leveling with current artifacts:');
+              debugAutoLeveling(artifacts, baseline);
+            }}
+            className="px-4 py-2 bg-blue-500 text-white rounded-md text-sm font-medium hover:bg-blue-600"
+          >
+            🔍 Debug Session Store
+          </button>
         </div>
 
         {/* Tab Navigation */}

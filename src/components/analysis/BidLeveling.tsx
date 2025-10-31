@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { getAllAnalyses, SavedAnalysis } from '@/lib/storage';
+import { getArtifacts, onSessionChange, type BidArtifact } from '@/lib/analysis/sessionStore';
+import { buildLeveling, type LevelingResult } from '@/lib/analysis/leveling';
 import { calculateMultiDisciplineRisk } from '@/lib/analysis/risk-analyzer';
 import { CSI_DIVISIONS, LEVELING_LABELS } from '@/lib/analysis/csi-analyzer';
 import { exportBidLevelingToExcel, exportBidLevelingToPDF } from '@/lib/analysis/exports';
@@ -250,6 +252,8 @@ interface BidLevelingProps {
 
 export default function BidLeveling({ projectContext, flags: _flags }: BidLevelingProps = {}) {
   const [analyses, setAnalyses] = useState<SavedAnalysis[]>([]);
+  const [sessionArtifacts, setSessionArtifacts] = useState<BidArtifact[]>([]);
+  const [levelingResult, setLevelingResult] = useState<LevelingResult | null>(null);
   const [selectedBids, setSelectedBids] = useState<string[]>(projectContext?.preselectedBids || []);
   const [sortBy, setSortBy] = useState<'price' | 'risk' | 'date'>('price');
   const [bidComparisons, setBidComparisons] = useState<BidComparison[]>([]);
@@ -266,12 +270,96 @@ export default function BidLeveling({ projectContext, flags: _flags }: BidLeveli
     setAnalyses(savedAnalyses);
   };
 
-  // Filter analyses by discipline
+  const loadSessionData = () => {
+    console.log('🔄 Loading session artifacts for bid leveling...');
+    const artifacts = getArtifacts();
+    setSessionArtifacts(artifacts);
+
+    if (artifacts.length >= 2) {
+      // Build leveling result from session artifacts
+      const result = buildLeveling(artifacts, artifacts[0]?.id);
+      setLevelingResult(result);
+      console.log('✅ Leveling result built:', result);
+    } else {
+      setLevelingResult(null);
+      console.log('⏳ Not enough artifacts for leveling');
+    }
+  };
+
+  // Monitor session store changes and load data on mount
+  useEffect(() => {
+    console.log('🔄 BidLeveling component mounted - loading data...');
+
+    // Load both localStorage analyses and session artifacts
+    loadAnalyses();
+    loadSessionData();
+
+    // Set up session change monitoring
+    const unsubscribe = onSessionChange(() => {
+      console.log('📊 Session changed - reloading bid leveling data...');
+      loadSessionData();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, []);
+
+  // Convert session artifacts to SavedAnalysis format for UI compatibility
+  const convertArtifactToAnalysis = (artifact: BidArtifact): SavedAnalysis => {
+    // Create a minimal AnalysisResult from the artifact
+    const analysisResult: AnalysisResult = {
+      contractor_name: artifact.fileName.replace('.pdf', ''), // Use filename as contractor name
+      total_amount: artifact.totals.grandTotal,
+      discipline: artifact.discipline,
+      csi_divisions: {},
+      // Add other required fields
+      ...(artifact.rawAnalysis as any) // Use raw analysis if available
+    };
+
+    // Convert byDivision back to discipline-specific format
+    if (artifact.discipline === 'construction') {
+      analysisResult.csi_divisions = Object.entries(artifact.totals.byDivision).reduce((acc, [code, cost]) => {
+        acc[code] = { cost, items: [] };
+        return acc;
+      }, {} as Record<string, any>);
+    } else if (artifact.discipline === 'design') {
+      analysisResult.aia_phases = Object.entries(artifact.totals.byDivision).reduce((acc, [phase, cost]) => {
+        acc[phase] = { phase_name: phase, fee_amount: cost, percentage_of_total: 0, deliverables: [] };
+        return acc;
+      }, {} as Record<string, any>);
+    } else if (artifact.discipline === 'trade') {
+      analysisResult.technical_systems = Object.entries(artifact.totals.byDivision).reduce((acc, [system, cost]) => {
+        acc[system] = { system_name: system, total_cost: cost, category: 'electrical' as any, specifications: [] };
+        return acc;
+      }, {} as Record<string, any>);
+    }
+
+    return {
+      id: artifact.id,
+      result: analysisResult,
+      timestamp: new Date().toISOString()
+    };
+  };
+
+  // Filter analyses by discipline (combining localStorage and session artifacts)
   const getFilteredAnalyses = () => {
-    return analyses.filter(analysis => {
+    // Get localStorage analyses
+    const localStorageAnalyses = analyses.filter(analysis => {
       const discipline = analysis.result.discipline || 'construction';
       return discipline === activeDiscipline;
     });
+
+    // Get session artifacts and convert them
+    const sessionAnalyses = sessionArtifacts
+      .filter(artifact => artifact.discipline === activeDiscipline)
+      .map(convertArtifactToAnalysis);
+
+    // Combine both sources
+    const combined = [...localStorageAnalyses, ...sessionAnalyses];
+    console.log(`📊 Filtered analyses for ${activeDiscipline}: ${localStorageAnalyses.length} from localStorage + ${sessionAnalyses.length} from session = ${combined.length} total`);
+
+    return combined;
   };
 
   // Clear selected bids when switching disciplines

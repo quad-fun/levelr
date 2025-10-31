@@ -99,6 +99,24 @@ export function getSessionState() {
   };
 }
 
+// Debug full session contents
+export function debugSessionContents() {
+  console.log('🔍 SESSION STORE DEBUG:');
+  console.log('📊 Artifact count:', Object.keys(state.artifacts).length);
+  console.log('🎯 Baseline ID:', state.baselineId);
+  console.log('📝 All artifacts:');
+
+  Object.values(state.artifacts).forEach((artifact, index) => {
+    console.log(`  ${index + 1}. ${artifact.fileName} (${artifact.id})`);
+    console.log(`     - Discipline: ${artifact.discipline}`);
+    console.log(`     - Grand Total: $${artifact.totals.grandTotal.toLocaleString()}`);
+    console.log(`     - Divisions: ${Object.keys(artifact.totals.byDivision).length}`);
+    console.log(`     - By Division:`, artifact.totals.byDivision);
+  });
+
+  return state;
+}
+
 // Convert analysis result to BidArtifact
 export function toBidArtifact(
   fileId: string,
