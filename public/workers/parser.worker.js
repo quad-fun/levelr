@@ -221,6 +221,10 @@ async function getDisciplineHint(fileId, file) {
       const buffer = await sample.arrayBuffer();
       const decoder = new TextDecoder('utf-8', { fatal: false });
       text = decoder.decode(buffer);
+    } else if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      // For PDFs, analyze filename and any extractable text hints
+      text = file.name; // At minimum, analyze the filename
+      console.log(`🔍 PDF discipline hint check for: ${file.name}`);
     }
 
     return analyzeDiscipline(text);
@@ -258,9 +262,9 @@ function analyzeDiscipline(text) {
 
   // Discipline keyword sets
   const disciplineKeywords = {
-    construction: ['concrete', 'masonry', 'steel', 'framing', 'excavation', 'foundation', 'drywall'],
-    design: ['schematic design', 'design development', 'aia', 'architectural', 'engineering', 'consultant'],
-    trade: ['electrical', 'hvac', 'plumbing', 'mechanical', 'commissioning', 'controls', 'automation']
+    construction: ['concrete', 'masonry', 'steel', 'framing', 'excavation', 'foundation', 'drywall', 'construction', 'builder', 'contractor'],
+    design: ['schematic design', 'design development', 'aia', 'architectural', 'engineering', 'consultant', 'architect', 'design', 'proposal', 'arch', 'studio', 'firm'],
+    trade: ['electrical', 'hvac', 'plumbing', 'mechanical', 'commissioning', 'controls', 'automation', 'electric', 'tech', 'systems']
   };
 
   const scores = {};
@@ -276,9 +280,19 @@ function analyzeDiscipline(text) {
 
   // Return highest scoring discipline
   const maxScore = Math.max(...Object.values(scores));
-  if (maxScore === 0) return null;
 
-  return Object.entries(scores).find(([, score]) => score === maxScore)?.[0] || null;
+  console.log(`🎯 Discipline analysis for text: "${text.substring(0, 100)}..."`);
+  console.log(`📊 Scores:`, scores);
+  console.log(`🏆 Max score: ${maxScore}`);
+
+  if (maxScore === 0) {
+    console.log(`❌ No discipline detected (all scores 0)`);
+    return null;
+  }
+
+  const detected = Object.entries(scores).find(([, score]) => score === maxScore)?.[0] || null;
+  console.log(`✅ Detected discipline: ${detected}`);
+  return detected;
 }
 
 // Cancel file processing

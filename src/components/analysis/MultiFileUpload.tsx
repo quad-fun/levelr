@@ -123,6 +123,19 @@ export default function MultiFileUpload({
           const finalDiscipline = event.disciplineHint || fileInfo.disciplineHint || 'construction';
           const processedDoc = event.processedDoc; // Use the actual processed document from worker
 
+          // Debug logging for discipline routing
+          console.log(`🔍 File: ${fileInfo.file.name}`);
+          console.log(`📊 Discipline hints: event=${event.disciplineHint}, fileInfo=${fileInfo.disciplineHint}, final=${finalDiscipline}`);
+          console.log(`🎯 Routing to: ${finalDiscipline} analysis`);
+
+          if (finalDiscipline === 'design') {
+            console.log('✅ Routing to /api/claude/design');
+          } else if (finalDiscipline === 'trade') {
+            console.log('✅ Routing to /api/claude/trade');
+          } else {
+            console.log('✅ Routing to /api/claude (construction)');
+          }
+
           let analysisResult;
 
           // Route to appropriate API endpoint based on discipline
