@@ -387,7 +387,19 @@ ${processedDoc.isBase64 ? 'Document content (image/PDF):' : 'Document content:'}
     // Robust JSON sanitization with string masking
     const sanitizedJson = sanitizeJsonStringMinimal(correctedJsonString);
     console.log(`About to parse length=${sanitizedJson.length}, tail=${sanitizedJson.slice(-120)}`);
+    // Debug: Log first part of JSON to see structure
+    console.log('🔍 DEBUG: JSON head (first 500 chars):', sanitizedJson.slice(0, 500));
     const analysisResult: AnalysisResult = JSON.parse(sanitizedJson);
+
+    // Debug: Log the parsed structure to identify extraction issues
+    console.log('🔍 DEBUG: Parsed analysis structure:');
+    console.log('  contractor_name:', analysisResult.contractor_name);
+    console.log('  total_amount:', analysisResult.total_amount);
+    console.log('  csi_divisions keys:', Object.keys(analysisResult.csi_divisions || {}));
+    console.log('  csi_divisions costs:', Object.entries(analysisResult.csi_divisions || {}).map(([k, v]) => `${k}: $${v.cost}`));
+    console.log('  project_overhead:', analysisResult.project_overhead?.total_overhead || 'undefined');
+    console.log('  allowances_total:', analysisResult.allowances_total || 'undefined');
+    console.log('  subcontractors count:', analysisResult.subcontractors?.length || 0);
     
     // Validate required fields
     if (!analysisResult.contractor_name || !analysisResult.total_amount) {
